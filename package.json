@@ -1,13 +1,14 @@
-
 {
   "name": "rudi_media_drv",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "dependencies": {
-      "express": "^4.16.4",
-      "winston": "^3.2.1",
-      "msgpack5": "^4.2.1"
+    "express": "^4.16.4",
+    "md5": "^2.3.0",
+    "msgpack5": "^4.2.1",
+    "uuid": "^8.3.2",
+    "winston": "^3.2.1"
   },
   "devDependencies": {
     "nodemon": "^2.0.1"
