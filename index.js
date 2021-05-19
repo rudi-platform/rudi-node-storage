@@ -243,9 +243,11 @@ HttpService.prototype.generateContext = function(req) {
  */
 HttpService.prototype.optionCors = function(req, res) {
     //console.log('OPTION: '+util.inspect(req.headers));
+    const baseHeaderList = 'Content-Type, Authorization, Content-Length, X-Requested-With, file_metadata, Media-Access-Method';
+    const extendedHeaderList = 'Cache-Control, Pragma, Sec-GPC';
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With, file_metadata, Media-Access-Method');
+    res.header('Access-Control-Allow-Headers', baseHeaderList +', '+ extendedHeaderList);
     res.status(200);
     res.end();
 }

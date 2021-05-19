@@ -47,7 +47,7 @@ function MongoService(srv, dbname, schemaSet, mediaSchema, eventSchema) {
  * @param {function}   done      - the success callback
  */
 MongoService.prototype.open = function(err_cb, done) {
-    this.mongoClient.connect(this.mongoServerURL,  this.mongoOptions, async function(err, db) {
+    this.mongoClient.connect(this.mongoServerURL,  this.mongoOptions, function(err, db) {
         if (err) { this.service.currentError = err; if (err_cb) err_cb(this.service, err); return; }
 
         const errFct  = function(reason) {
@@ -64,26 +64,41 @@ MongoService.prototype.open = function(err_cb, done) {
 
         this.service.mongodb = db;
         this.service.db = db.db(this.service.dbname);
-        this.service.mediaColl = this.service.db.collection(this.service.mediaCollName);
-        await this.service.mediaColl.drop();
-        this.service.mediaColl.createIndex({ 'uuid':1 });
-        this.service.mediaColl.createIndex({ 'zone':1, 'uuid':1 });
+        this.service.db.listCollections().toArray(async function(err, colList) {
+            if (err) { errFct(err); return; }
+            var hasMedia = false, hasEvents = false;
+            for (ci in colList) {
+                const c = colList[ci];
+                hasMedia  |= (c.name == this.service.mediaCollName);
+                hasEvents |= (c.name == this.service.eventCollName);
+            }
+            if (hasMedia) {
+                this.service.mediaColl = this.service.db.collection(this.service.mediaCollName);
+                await this.service.mediaColl.drop();
+            }
+            if (hasEvents) {
+                this.service.eventColl = this.service.db.collection(this.service.eventCollName);
+                await this.service.eventColl.drop();
+            }
 
-        this.service.eventColl = this.service.db.collection(this.service.eventCollName);
-        await this.service.eventColl.drop();
-        this.service.eventColl.createIndex({ 'uuid':1 });
-        this.service.eventColl.createIndex({ 'uuid':1, 'date':1 });
+            // Command CollMod returns nothing according to the doc....
+            //console.log(this.service.schemaSet.toBson(this.service.mediaSchema));
+            this.service.mediaColl = this.service.db.collection(this.service.mediaCollName);
+            this.service.mediaColl.createIndex({ 'uuid':1 });
+            this.service.mediaColl.createIndex({ 'zone':1, 'uuid':1 });
+            this.service.db.command({ collMod: this.service.mediaCollName,
+                                      validator: { "$jsonSchema": this.service.schemaSet.toBson(this.service.mediaSchema) },
+                                      validationLevel: 'strict',
+                                      validationAction: 'error' }).then(doneFct, errFct);
 
-        // Command CollMod returns nothing according to the doc....
-        //console.log(this.service.schemaSet.toBson(this.service.mediaSchema));
-        this.service.db.command({ collMod: this.service.mediaCollName,
-                                  validator: { "$jsonSchema": this.service.schemaSet.toBson(this.service.mediaSchema) },
-                                  validationLevel: 'strict',
-                                  validationAction: 'error' }).then(doneFct, errFct);
-        this.service.db.command({ collMod: this.service.eventCollName,
-                                  validator: { "$jsonSchema": this.service.schemaSet.toBson(this.service.eventSchema) },
-                                  validationLevel: 'strict',
-                                  validationAction: 'error' }).then(doneFct, errFct);
+            this.service.eventColl = this.service.db.collection(this.service.eventCollName);
+            this.service.eventColl.createIndex({ 'uuid':1 });
+            this.service.eventColl.createIndex({ 'uuid':1, 'date':1 });
+            this.service.db.command({ collMod: this.service.eventCollName,
+                                      validator: { "$jsonSchema": this.service.schemaSet.toBson(this.service.eventSchema) },
+                                      validationLevel: 'strict',
+                                      validationAction: 'error' }).then(doneFct, errFct);
+        }.bind({service:this.service}));
     }.bind({service:this}));
 }
 

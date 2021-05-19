@@ -192,7 +192,6 @@ BasicFileDB.prototype.loadCSV = function(csvFile, none, done) {
                 const line = entries[index];
                 if (!line || line == '') continue;
                 this.service.buildEntry(zone, context, none, done, line);
-                break;
             }
             if (done) { if (done) done(this.service.db); return; }
         }.bind({service:this.service}));

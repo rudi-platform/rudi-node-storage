@@ -72,7 +72,8 @@ The header *media-access-method* value can be one of the following :
 {"url":"https://data-rudi.aqmo.org/media/storage/55643808-dd0c-48d9-941e-c21736d5e4e5"}
 ```
 
-- *GET* https://data-rudi.aqmo.org/media/download/UUID [in header: *media-access-method*: [Optional] access mode ]
+- *GET* https://data-rudi.aqmo.org/media/download/UUID
+Shortcut for the standard media get with the *media-access-method* header set to **Direct** mode
 
 3. All requests returns a status in Json with the format:
 ```json
