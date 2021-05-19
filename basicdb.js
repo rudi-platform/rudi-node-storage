@@ -18,31 +18,121 @@ const BasicFileEntry = require('./basicfile.js');
  * it as to be located in the media directory (list.csv).
  * 
  * @param {string} mediaDir - The media directory path
- * @param {string=} csvFile - The initialization CSV file
+ * @param {object} logger   - The logging interface
+ * @param {object} mongodb  - The mongo database interface
  */
-function BasicFileDB(mediaDir, csvFile, logger) {
+function BasicFileDB(mediaDir, logger, mongodb, timeout) {
     this.mediaDir = mediaDir;
-    this.csvFile = csvFile;
-    this.lw = logger;
-    this.connectorTimeout = 60 * 1;
-    if (csvFile === undefined) {
-        this.csvFile = this.mediaDir + '/list.csv';
-    }
+    this.wl = logger;
+    this.connectorTimeout = timeout;
 
     this.storageId = {};
     this.db = {};
-    this.loadCSV(this.csvFile);
+    this.mongodb = mongodb;
+}
+
+/**
+ * Close the file database, and flush all pending events.
+ *
+ * @param {function=} none        - An callback with the error if problems while closing.
+ * @param {function=} done        - An callback with the entry when done.
+ */
+BasicFileDB.prototype.close = function(none, done) {
+    const errFct = function(err) {
+        this.wl.logReq('Could not update DB: '+err);
+        if (none) none('Could not close file database: '+err);
+    };
+    if (Object.keys(this.storageId).length > 0) {
+        var pl = [];
+        for (fileid in this.storageId) {
+            pl.push(new Promise(function(resolve, reject) { this.service.deleleteFileId(this.fileid, { source: 'interruption' }, reject, resolve); }.bind({service:this, fileid:fileid})));
+        }
+        Promise.all(pl).then(done, errFct.bind({wl:this.wl}));
+    }
+    else done();
 }
 
 /**
  * Compute the real file path from the file and the zone.
  *
+ * @private
  * @param {string}    filename,   - The media base filename.
  * @param {string}    zone        - The name of the zone. Currently a subdirectory.
  */
 BasicFileDB.prototype.getPathFromConnector = function(filename, zone) {
     if (zone === undefined) zone = '';
     return this.mediaDir + (zone == '' ?  '/' :  '/'+zone+'/' ) + filename;
+}
+
+/**
+ * Low level append a new basic media entry.
+ *
+ * @private
+ * @param {string}    zone        - The name of the storage and access control zone.
+ * @param {object}    context     - The request context.
+ * @param {function=} none        - An callback with the error if meta-data are malformed.
+ * @param {function=} done        - An callback with the entry when done.
+ * @param {string}    line        - The description line from a CSV file.
+ * @param {json}      metadata    - The meta-data dictionary.
+ * @param {string}    filename    - The media base filename.
+ * @param {integer}   size        - The file size.
+ * @param {string}    hash        - The md5sum of the file content.
+ */
+BasicFileDB.prototype.buildEntry = function(zone, context, none, done, line, metadata, filename, size, hash) {
+    try {
+        const entry = new BasicFileEntry(line, zone, context, metadata, filename, size, hash);
+        const opdesc = { operation: 'add_media', uuid: entry.uuid, ref: entry.uuid, zone: zone, context: context, value: entry };
+        this.db[entry.uuid] = entry;
+        this.wl.logReq(opdesc);
+        const errFct = function(err) {
+            this.wl.logReq('Could not update DB: '+err+' with '+JSON.stringify(this.desc));
+            if (none) none(err);
+        };
+        this.mongodb.addMedia(entry, errFct.bind({wl:this.wl,desc:entry}), function(mongodb) {
+            this.mongodb.addEvent(opdesc, errFct.bind({wl:this.wl,desc:opdesc}), function(mongodb) {
+                if (this.done) this.done(opdesc);
+            }.bind({wl:this.wl,done:this.done}));
+        }.bind({wl:this.wl,mongodb:this.mongodb,done:done}));
+    }
+    catch(err) {
+        this.wl.logger.error('Invalid media entry: '+err+' metadata: '+metadata);
+        if (none) none(err);
+    }
+}
+
+/**
+ * Generate a Json Schema for an *event* with the proper registering URL.
+ *
+ * @param {string}     contextRef - The name of the context schema.
+ * @returns {string}              - The name Json schema.
+ */
+BasicFileDB.eventSchema = function(contextRef) {
+    return {
+        "title": "The RUDI media DB event Schema",
+        "description": "The descriptor of an event associated to a RUDI media DB access.",
+        "type": "object",
+        "properties": {
+            "operation": {
+                "description": "The operation done",
+                "type": "string",
+                "enum": [ "add_media", "new_conn", "del_conn", "acc_conn" ]
+            },
+            "uuid": {
+                "description": "The open storage access uuid",
+                "type": "string",
+            },
+            "ref": {
+                "description": "The media-id",
+                "type": "string",
+            },
+            "value": {
+                "description": "The object manipulated by the operation",
+                "type": "object"
+            },
+            "context": {"description":"The creaction context", "$ref":contextRef }
+        },
+        "required": [ "operation", "uuid", "ref" ]
+    }
 }
 
 /**
@@ -55,7 +145,7 @@ BasicFileDB.prototype.getPathFromConnector = function(filename, zone) {
  */
 BasicFileDB.prototype.addEntry = function(metadata, context, filecontent, none, done) {
     if (!('media_id' in metadata)) {
-        this.lw.logger.error('Missing media UUID: '+ metadata);
+        this.wl.logger.error('Missing media UUID: '+ metadata);
         if (none) none('Missing media UUID');
         return;
     }
@@ -68,21 +158,13 @@ BasicFileDB.prototype.addEntry = function(metadata, context, filecontent, none, 
     const path = this.getPathFromConnector(filename, zone);
     fs.writeFile(path, filecontent, { flag:'w'}, function(err, data) {
         if (err) {
-            this.lw.logger.error('could not write file: '+path);
+            this.service.wl.logger.error('could not write file: '+path);
             if (none) none(err);
             return;
         }
-        try {
-            const entry = new BasicFileEntry(null, metadata, context, filename, zone, size, hash);
-            this.db[entry.uuid] = entry;
-            this.lw.logReq({ operation: 'add_media', value: entry });
-            done(entry);
-        }
-        catch(err) {
-            this.lw.logger.error('Invalid media entry: '+err+' metadata: '+metadata);
-            if (none) none(err);
-        }
-    }.bind({db:this.db, lw:this.lw}));
+        this.service.buildEntry(zone, context, none, done, null, metadata, filename, size, hash);
+
+    }.bind({service:this}));
 }
 
 /**
@@ -98,27 +180,23 @@ BasicFileDB.prototype.loadCSV = function(csvFile, none, done) {
         if (err) return;
         fs.readFile(csvFile, { encoding:"utf8", flag:'r'}, function(err, data) {
             if (err) {
-                this.lw.logger.error('could not open CSV file: '+csvFile);
+                this.service.wl.logger.error('could not open CSV file: '+csvFile);
                 if (none) none(err);
                 return;
             }
 
+            const zone = '';
+            const context = { source:'CSV', filename:csvFile };
             const entries = data.split('\n');
             for (var index in entries) {
                 const line = entries[index];
-                try {
-                    if (!line || line == '') continue;
-                    const entry = new BasicFileEntry(line);
-                    this.db[entry.uuid] = entry;
-                    this.lw.logReq({ operation: 'add_media', value: entry });
-                }
-                catch(err) {
-                    this.lw.logger.error('Invalid media: '+err+' line ignored: '+line);
-                }
+                if (!line || line == '') continue;
+                this.service.buildEntry(zone, context, none, done, line);
+                break;
             }
-            if (done) { if (done) done(this.db); return; }
-        }.bind({db:this.db, lw:this.lw}));
-    }.bind({db:this.db, lw:this.lw}));
+            if (done) { if (done) done(this.service.db); return; }
+        }.bind({service:this.service}));
+    }.bind({service:this}));
 }
 
 /**
@@ -139,16 +217,33 @@ BasicFileDB.prototype.get = function(uuid, context) {
     if ( 'timeout' in niddesc) {
         connectorTimeout = niddesc['timeout'];
     }
-    this.storageId[niddesc.id] = niddesc;
-    this.lw.logReq({ operation: 'new_conn', value: niddesc });
+    this.storageId[niddesc.fileid] = niddesc;
+    const opdesc = { operation: 'new_conn', uuid: niddesc.fileid, ref: uuid, zone: niddesc.zone, context: context };
+    this.wl.logReq(opdesc);
+
+    const errFct = function(err) { this.wl.logReq('Could not update DB: '+err+' with '+JSON.stringify(this.desc)); };
+    this.mongodb.addEvent(opdesc, errFct.bind({wl:this.wl,desc:opdesc}), function(mongodb) {});
 
     setTimeout(function() {
-        if (niddesc.id in this.db.storageId) {
-            delete this.db.storageId[niddesc.id];
-            this.db.lw.logReq({ operation: 'del_conn', value: niddesc });
-        }
-    }.bind({'db':this, niddesc: niddesc}), connectorTimeout * 1000);
-    return niddesc.id;
+        this.db.deleleteFileId(this.fileid, context, errFct, function(mongodb) {});
+    }.bind({'db':this, fileid: niddesc.fileid}), connectorTimeout * 1000);
+    return niddesc.fileid;
+}
+
+/**
+ * Delete a storage connector.
+ * 
+ * @private
+ * @param   {string}   fileid  - The file UUID.
+ */
+BasicFileDB.prototype.deleleteFileId = function(fileid, context, none, done) {
+    if (fileid in this.storageId) {
+        const niddesc = this.storageId[fileid];
+        delete this.storageId[fileid];
+        const opdesc = { operation: 'del_conn', uuid: niddesc.fileid, ref: niddesc.ref, zone: niddesc.zone, context: context, value: niddesc };
+        this.wl.logReq(opdesc);
+        this.mongodb.addEvent(opdesc, none.bind({wl:this.wl,desc:opdesc}), done);
+    }
 }
 
 /**
@@ -162,22 +257,26 @@ BasicFileDB.prototype.get = function(uuid, context) {
 BasicFileDB.prototype.find = function(fileid, context, none, done) {
     if (!(fileid in this.storageId)) {
         const errmsg = 'media connector id "'+fileid+'" not found';
-        this.lw.logger.error(errmsg+' request context: '+JSON.stringify(context));
+        this.wl.logger.error(errmsg+' request context: '+JSON.stringify(context));
         if (none) none(new Error(errmsg));
         return;
     }
+    const now = new Date();
     const iddesc = this.storageId[fileid];
-    const accessEntry = { date:Date(), client: context};
-    this.lw.logReq({ operation: 'acc_conn', value: iddesc.id, context: accessEntry });
+    const accessEntry = { date:now, client: context};
+    const opdesc = { operation: 'acc_conn', uuid: iddesc.fileid, ref:iddesc.ref, zone: iddesc.zone, context: accessEntry };
+    this.wl.logReq(opdesc);
+    const errFct = function(err) { this.wl.logReq('Could not update DB: '+err+' with '+JSON.stringify(this.desc)); };
+    this.mongodb.addEvent(opdesc, errFct.bind({wl:this.wl,desc:opdesc}), function(mongodb) {});
     iddesc.count += 1;
     iddesc.access.push(accessEntry);
 
     // Load the data asynchronously
-    const media = this.db[iddesc.uuid];
+    const media = this.db[iddesc.ref];
     media.getFile(iddesc, context, function(err) {
-        this.lw.logger.error('could not load file: '+err+' request context: '+JSON.stringify(context));
+        this.wl.logger.error('could not load file: '+err+' request context: '+JSON.stringify(context));
         if (none) none(err);
-    }.bind({lw:this.lw}), done);
+    }.bind({wl:this.wl}), done);
 }
 
 module.exports = BasicFileDB;

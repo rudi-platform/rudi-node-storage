@@ -19,33 +19,105 @@ const { v4: uuidv4 } = require('uuid');
  *
  *  The complete meta-data can also be provided to the constructor.
  *
- * @param {string} descline - The description line from a CSV file.
+ * @param {string}   descline  - The description line from a CSV file.
+ * @param {string}   zone      - The name of the storage and access control zone.
+ * @param {object}   context   - The request context.
+ * @param {json}     metadata  - The meta-data dictionary.
+ * @param {string}   filename  - The media base filename.
+ * @param {integer}  size      - The file size.
+ * @param {string}   md5       - The md5sum of the file content.
  */
-function BasicFileEntry(descline, metadata, context, filename, zone, size, md5) {
+function BasicFileEntry(descline, zone, context, metadata, filename, size, md5, date) {
     if (metadata === undefined) {
         const [ md5, uuid, filetype, encoding, date, size] = descline.split(';');
         if (size === undefined) throw new Error('Could not parse '+descline);
         const [ filename, mimetype ] = filetype.split(':');
         this.md5=md5; this.uuid=uuid;
-        this.filename=filename; this.mimetype=mimetype.trim(); this.encoding=encoding;
-        this.date=date; this.size=size;
-        this.zone = '';
+        this.filename=filename; this.mimetype=mimetype.trim(); this.encoding=encoding.trim();
+        this.date=parseInt(date)*1000; this.size=parseInt(size);
     }
     else {
         try {
+            const now = new Date();
             this.uuid     = metadata.media_id;
             this.mimetype = metadata.file_type;
             this.filename = filename;
-            this.zone     = zone;
             this.size     = size;
             this.md5      = md5;
             this.encoding = 'charset=us-ascii';
-            this.date     = Date(0);
+            this.date     = date === undefined ? new Date(0) : new Date(date);
             this.metadata = metadata;
-            this.context = context;
         }
         catch(err) { throw new Error('invalid meta-data: '+err+' value: '+metadata); }
     }
+    this.zone = zone;
+    this.context = context;
+    this.date = new Date(this.date);
+}
+
+/**
+ * Generate the Json Schema for a *file* with the proper registering URL.
+ *
+ * @param {string}     contextRef - The name of the context schema.
+ * @param {string}     metaRef    - The name of the meta schema.
+ * @returns {string}              - The name Json schema.
+ */
+BasicFileEntry.fileSchema = function(contextRef, metaRef) {
+    return {
+        "title": "The RUDI media DB file Schema",
+        "description": "The descriptor of a file associated to a RUDI media.",
+        "type": "object",
+        "properties": {
+            "uuid": {
+                "description": "A unique UUID-V4 identifier",
+                "type": "string"
+            },
+            "zone": {
+                "description": "The name of the storage zone",
+                "type": "string"
+            },
+            "context": {
+                "description":"The creaction context",
+                "$ref":contextRef
+            },
+            "filename": {
+                "description": "The base file name of the media, find with the zone",
+                "type": "string"
+            },
+            "mimetype": {
+                "description": "The mime-type of the file content",
+                "type": "string"
+            },
+            "encoding": {
+                "description": "The text encoding, if applicable depending on the mime-type",
+                "type": "string"
+            },
+            "md5": {
+                "description": "MD5 checksum of the file",
+                "type": "string"
+            },
+            "size": {
+                "description": "The file size",
+                "type": "integer"
+            },
+            "date": {
+                "description": "The last modification UTC timestamp",
+                "type": "string",
+                "format": "date-time"
+            },
+            "metadata": {
+                "description": "The RUDI metara",
+                "$ref": metaRef
+            }
+        },
+        "required": [
+            "uuid",
+            "zone",
+            "context",
+            "filename",
+            "mimetype"
+        ]
+    };
 }
 
 /**
@@ -55,7 +127,7 @@ function BasicFileEntry(descline, metadata, context, filename, zone, size, md5) 
  */
 BasicFileEntry.prototype.generateFileId = function() {
     return {
-        uuid:this.uuid, id: uuidv4(),
+        ref:this.uuid, fileid: uuidv4(),
         count: 0, access: [], cdate:Date(),
         zone:this.zone, basefile:this.filename,
         type:this.mimetype
@@ -76,7 +148,7 @@ BasicFileEntry.prototype.getFile = function(idesc, context, none, done) {
     }
     fs.readFile(idesc.source, { encoding:"utf8", flag:'r'}, function(err, data) {
         if (err) {
-            console.log('--------- FAIL LOAD '+idesc.source+' -----------');
+            console.error('Error: critical failure: could not load '+idesc.source);
             if (none) none(new Error('loading media: file error'));
             return;
         }

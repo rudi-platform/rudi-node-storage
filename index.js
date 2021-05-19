@@ -6,12 +6,18 @@
  */
 const express = require('express');
 const process = require('process');
+const fs = require('fs');
 const util = require('util');
+const ini = require('ini');
 const argv = require('minimist')(process.argv.slice(2));
 
 var WebLogger = require('./weblogger.js');
 const AccessControl = require('./access.js');
+const BasicFileEntry = require('./basicfile.js');
 const basicdb = require('./basicdb.js');
+const mongodb = require('./db.js');
+const schemaSet = require('./schema.js');
+const DEFAULT_CONF = require('./configuration.js');
 
 /**
  * The code express based HTTP server.
@@ -19,40 +25,79 @@ const basicdb = require('./basicdb.js');
  *  - a route for requesting a connector for a media UUID 
  *  - a route for loading the data loaded from a media UUID.
  *
+ * The configuration used:
  * @class 
- * @param {integer} port     - The listening port.
- * @param {integer} mediaDir - The media library directory.
- * @param {string}  logName  - The logger prefix value.
- * @param {string}  logDir   - The logger storage directory.
+ * @param {object}  configuration - The listening port.
  */
-function HttpService(port, mediaDir, logName, logDir) {
-    this.server = 'https://shared-rudi.aqmo.org';
-    this.httpPrefix = '/media/';
+function HttpService(configuration) {
+    this.port = configuration.server.listening_port;
+    this.netInterface = configuration.server.listening_address;
+    this.server = configuration.server.server_url;
+    this.httpPrefix = configuration.server.server_prefix;
+    this.authorizedVersion = JSON.parse(JSON.stringify(configuration.server.authorized_version));
+    this.authorizedUsers = JSON.parse(JSON.stringify(configuration.server.authorized_users));
+    this.revision = configuration.logging.revision
+
     this.httpServer = express();
 
-    this.authorizedUsers=[
-        [ 'rudiadmin', 'sysadminisgreat!', 'r--' ], // 
-        [ 'rudiprod', 'sysadminisgreat!', '-wx' ], // 
-    ];
-    this.authorizedVersion=[
-        '9bdf6d99e8b7f053f417bc4018b2f540'
-    ];
+    const schemaURL  = this.server+this.httpPrefix+'schema';
+    const schemaBase = configuration.schemas.schema_basename;
+    const contextRef = schemaBase + configuration.schemas.schema_context;
+    const metaRef    = schemaBase + configuration.schemas.schema_meta;
+    const eventRef   = schemaBase + configuration.schemas.schema_event;
+    const fileRef    = schemaBase + configuration.schemas.schema_file;
+    this.schemaSet = new schemaSet(schemaURL);
+    this.schemaSet.addSchema(contextRef, HttpService.contextSchema());
+    this.schemaSet.addSchema(metaRef, HttpService.metaSchema());
+    this.schemaSet.addSchema(eventRef, basicdb.eventSchema(contextRef));
+    this.schemaSet.addSchema(fileRef, BasicFileEntry.fileSchema(contextRef, metaRef));
 
-    this.wl = new WebLogger(logName, logDir, null);
+    this.wl = new WebLogger(configuration.logging.app_name, configuration.logging.log_dir, null);
     this.ac = new AccessControl(this.authorizedVersion, this.authorizedUsers, this.wl.logger);
     this.wl.ac = this.ac;
     this.icon = new Buffer.from('AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACe7OkFqNqYQ6jZlKWo2ZTjpdiR+5bQgvuc04Pj5PWgovv/qED4/6cEAAAAAAAAAAAAAAAAAAAAAAAAAACb7/wSm+/7h6Hlyeyo2pb/qNmU/6XYkv+W0IL/ndOD/+n4of/5/6fq+P+ng/j/pxAAAAAAAAAAAAAAAACa7/sQm+/7oZvv+/2b7/j/ouTG/6jalv+m2JH/ltCC/53Tg//p+KH/+f+n//j/p/34/6eb+P+mDgAAAACf7voBm+/7e5vv+/yb7/v/m+/8/5vu+P+i5MX/pdiT/5bQgv+d04P/6fih//n/p//4/6f/+P+n+/j9p3UAAAAAnPD7MZvw++Cb7/v/m+/7/5vv+/+b8Pz/nO/4/5/iwv+V0IT/ndOD/+n4of/5/6f/+P+n//j7qP/35qvc9tStLJPl+YWV5/n+lef5/5Xn+f+V5/n/lef5/5bo+viY7PbSj9mq053Tg/jp96H/+f+n//j8p//35av/9tat/fbWrX1+yfPEfsnz/37J8/9+yfP/fsr0/37K9PqAy/SHkOj/FITcuhWk14eN6vii+/n9qP/35av/9tat//bWrf/21q28fMfz33zH8/98x/P/fMfz/3zF8/+AqOvYgpDmGgAAAAAAAAAA4/efHfb7p9z35qv/9tat//bWrf/21q3/9tat2HzH8958x/P/fMfz/3zG8/+BoOr/iXTf2Z173hwAAAAAAAAAAPnuqh/346vd9tet//bWrf/21q3/9tat//bWrdh8x/PCfMfz/3zH8/+Boer/h3Lf/5R43/vJpOOP5a3TGuWTrhvzya2S9M6t/PTOrf/0zq3/9M6t//TOrf/00K26fMfzgnzH8/6Bour/iHPf/4du3v+Ved//zqjk+dup2Nnfg7La4oit+uKKrf/iiq3/4oqt/+KKrf/iiq3944+te3zK8y6Boerdh3Tf/4hu3v+Hbt7/lXnf/86o5P/TqeP/0YnI/917rv/eeq3/3nqt/956rf/eeq3/3nqt2t55rSoAAAAAiHDedohu3vuIb97/h27e/5V53//OqOT/0qrj/8SS3v/Phcf/3Xyu/957rf/ee63/3nut+t57rXAAAAAAAAAAAIdu3g2Ib96aiG/e/Idu3v+Ved//zqjk/9Kq4//Ekt//wo7d/9CFxv/dfK7/3nut/N57rZXee60MAAAAAAAAAAAAAAAAiG7eD4hv3n+Hbt7nlXnf/86o5P/SqeP/xJLf/8KP3v/Dj93/0YXF5d57rXvfeqwOAAAAAAAAAADT0c4F09HOBeHjyASwotIGjHXdQJp/357PquPd0qrj+MST3/jCkN7dw5LencSV3D7Tr8cG0N/VBNPRzgXT0c4F+B8AAOAHAADAAwAAwAMAAIABAAAAAQAAAYAAAAPAAAADwAAAAYAAAAABAACAAQAAwAMAAMADAADwDwAA+B8AAA==', 'base64');
-    this.db = new basicdb(mediaDir, mediaDir + '/list.csv', this.wl);
 
+    this.mongodb = new mongodb(configuration.database.db_url, configuration.database.db_name, this.schemaSet, fileRef, eventRef);
+    this.db = new basicdb(configuration.storage.media_dir, this.wl, this.mongodb, configuration.storage.acc_timeout);
+
+    this.mongodb.open(function(service, err) { this.wl.logger.error('DB initialization failed: '+err); }.bind({wl:this.wl}),
+                      function(db) {
+                          this.wl.logger.info('DB initialized');
+                          for (filen in configuration.storage.media_files) {
+                              this.db.loadCSV(configuration.storage.media_files[filen]);
+                          }
+                      }.bind({wl:this.wl,db:this.db}));
 
     this.httpServer.get(this.httpPrefix+'favicon.ico', function(req, res) { service.favicon(req,res); }.bind({'service':this}));
+    this.httpServer.get(this.httpPrefix+'revision', function(req, res) { service.getRevision(req,res); }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'', function(req, res) { service.root(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'logs', function(req, res) { service.wl.logContent(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'logs/:name', function(req, res) { service.wl.logFile(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'storage/:fileid', function(req, res) { service.fileService(req, res) }.bind({'service':this}));
     this.httpServer.post(this.httpPrefix+'post', function(req, res) { service.postFile(req, res) }.bind({'service':this}));
+    this.httpServer.get(this.httpPrefix+'post', function(req, res) { service.postFile(req, res) }.bind({'service':this}));
+    this.httpServer.get(this.httpPrefix+'schema/:name', function(req, res) { service.schemas(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+':uuid', function(req, res) { service.media(req, res) }.bind({'service':this}));
-    this.httpServer.listen(p);
+    this.httpServer.get(this.httpPrefix+'download/:uuid', function(req, res) { service.direct(req, res) }.bind({'service':this}));
+    this.httpServer.options(this.httpPrefix+'storage/:fileid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
+    this.httpServer.options(this.httpPrefix+'post', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
+    this.httpServer.options(this.httpPrefix+':uuid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
+    this.httpServer.options(this.httpPrefix+'download/:uuid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
+    this.listen = this.httpServer.listen(this.port, this.netInterface);
+}
+
+/**
+ * Flush and stop the database, and close the server.
+ *
+ */
+HttpService.prototype.close = function(err, done) {
+    const closeFileDB = function() {
+        const closeMongoDB = function() {
+            this.service.mongodb.close(this.err, this.done);
+        }
+        this.service.db.close(this.err, closeMongoDB.bind({service:service, done:this.done, err:this.err}));
+    }
+    this.listen.close(closeFileDB.bind({service:service, done:done, err:err}));
 }
 
 /**
@@ -67,6 +112,19 @@ HttpService.prototype.favicon = function(req, res) {
     res.setHeader("Cache-Control", "public, max-age=2592000");                // expiration: after a month
     res.setHeader("Expires", new Date(Date.now() + 2592000000).toUTCString());
     res.end(this.icon);
+}
+
+/**
+ * Serves the value of the current application revision.
+ *
+ * The revision shall be provided in the command line.
+ * @param {object} req - the HTTP request
+ * @param {object} res - the HTTP response.
+ */
+HttpService.prototype.getRevision = function(req, res) {
+    res.statusCode = 200;
+    res.type('text/plain');
+    res.end(this.revision);
 }
 
 /**
@@ -86,6 +144,86 @@ HttpService.prototype.root = function(req, res){
 }
 
 /**
+ * Generate a Json Schema for a *context* with the proper registering URL.
+ *
+ * @returns {json}                - The Json schema.
+ */
+HttpService.contextSchema = function() {
+    return {
+        "title": "The RUDI media DB context Schema",
+        "description": "The descriptor of context associated to a RUDI media DB access.",
+        "type": "object",
+        "properties": {
+            "source": {
+                "description": "The request source",
+                "type": "string"
+            },
+            "ip": {
+                "description": "The IP address of the request client",
+                "type": "string",
+                "format": "ipv4"
+            },
+            "filename": {
+                "description": "The CSV source file",
+                "type": "string"
+            }
+        },
+        "required": [ "source" ]
+    };
+}
+
+/**
+ * Generate a Json Schema for a *metadata* with the proper registering URL.
+ *
+ * @returns {array}               - The Json schema.
+ */
+HttpService.metaSchema = function() {
+    return {
+        "title": "The RUDI media DB metadata Schema",
+        "description": "The descriptor shall use the RUDI standard scheme.",
+        "type": "object",
+        "properties": {
+            "media_type": {
+                "description": "The media type, currently only FILE, STREAM in  the future",
+                "type": "string",
+                "enum": [ "FILE" ]
+            },
+            "media_name": {
+                "description": "The media name, typically used for the filename",
+                "type": "string"
+            },
+            "media_id": {
+                "description": "The media UUID as set in the RUDI API",
+                "type": "string"
+            },
+            "lastmodification_date": {
+                "description": "The media last modification date",
+                "type": "string"
+            }
+        },
+        "required": [ "media_id", "media_type", "media_name" ]
+    };
+}
+
+/**
+ * Serves a post of a new media.
+ * The post HTTP header must contain the ":file_metadata" with all necessary fields.
+ *
+ * @param {object} req - the HTTP request
+ * @param {object} res - the HTTP response.
+ */
+HttpService.prototype.schemas = function(req, res) {
+    const name = req.params.name;
+    const mimetype = 'application/json';
+    const content = this.schemaSet.toJSON(name);
+    if (!content) { res.status(404).send('Schema not found'); res.end(); return; }
+    //console.log('REF:'+JSON.stringify(content));
+    res.type(mimetype);
+    res.send(content);
+    res.end();
+}
+
+/**
  * Create a request context.
  * The context is used to process requests,
  *   and contains basic information about the sender.
@@ -94,7 +232,22 @@ HttpService.prototype.root = function(req, res){
 HttpService.prototype.generateContext = function(req) {
     const srcip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     //console.log('from:'+ip);
-    return { ip: srcip };
+    return { source:'API', ip: srcip };
+}
+
+/**
+ * Serves an OPTION for CORS enable entries.
+ *
+ * @param {object} req - the HTTP request
+ * @param {object} res - the HTTP response.
+ */
+HttpService.prototype.optionCors = function(req, res) {
+    //console.log('OPTION: '+util.inspect(req.headers));
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Content-Length, X-Requested-With, file_metadata, Media-Access-Method');
+    res.status(200);
+    res.end();
 }
 
 /**
@@ -108,6 +261,7 @@ HttpService.prototype.postFile = function(req, res) {
     const access = this.ac ? this.ac.checkAccessRights(req, res) : null;
     if (!access) return;
     if (access[1] != 'w') { res.status(401).send('Write access not set for user'); return; }
+    res.header("Access-Control-Allow-Origin", "*");
 
     var content= {};
     if (!('file_metadata' in req.headers)) {
@@ -163,8 +317,28 @@ HttpService.prototype.media = function(req, res) {
     const nid = this.db.get(uuid, context);
     if (!nid) content = { status: 'error', msg:'invalid request' };
     else      content = { url:this.server + this.httpPrefix+'storage/'+ nid };
-    res.send(content);
-    res.end();
+
+    //console.log('OPTION: '+util.inspect(req.headers));
+    const access_mode = req.headers['media-access-method'];
+    if (access_mode == 'Direct') {
+        req.params.fileid = nid;
+        this.fileService(req,res);
+    }
+    else {
+        res.header("Access-Control-Allow-Origin", "*");
+        res.send(content);
+        res.end();
+    }
+};
+
+/**
+ * Serves a direct access through the media connector.
+ * @param {object} req - the HTTP request
+ * @param {object} res - the HTTP response.
+ */
+HttpService.prototype.direct = function(req, res) {
+    req.headers['media-access-method'] = 'Direct';
+    this.media(req, res);
 };
 
 /**
@@ -176,6 +350,7 @@ HttpService.prototype.fileService = function(req, res) {
     var content= {};
     const fileid = req.params.fileid;
     const context = this.generateContext(req);
+    res.header("Access-Control-Allow-Origin", "*");
 
     this.db.find(fileid, context, function(err) {
         res.type('application/json');
@@ -190,23 +365,88 @@ HttpService.prototype.fileService = function(req, res) {
 };
 
 /**
- * Parse command line arguments
- * @param {integer} - the default port
+ * Recursive function updating a base structure with a given structure
+ * @private
+ * @param {object} base    - the base structure
+ * @param {object} updated - the source of updated data
  */
-function parseArguments(port) {
-    if (argv["p"]) {
-        var np = parseInt(argv["p"], 10);
-        if (np != NaN) p = np;
+function updateProperty(base, updated) {
+    var newo = {};
+    for (e in base) {
+        if (e in updated) {
+            if ((typeof updated[e]) == 'object') newo[e] = updateProperty(base[e], updated[e]);
+            if ((typeof base[e]) == 'number')    newo[e] = parseInt(updated[e]);
+            else                                 newo[e] = updated[e];
+        }
+        else newo[e] = base[e];
     }
-    const mediaDir = process.env.HOME + '/media';
-
-    // Error mgmt.
-    if (p < 80 ) {
-        console.log('Incorrect port provided: '+p);
-        process.exit(-1);
-    }
-    return [ p, mediaDir ]
+    return newo;
 }
 
-const [ port, mediaDir ] = parseArguments(3201);
-service = new HttpService(p, mediaDir, 'RudiMedia-', './logs/');
+/**
+ * Fetch ini-file & parse command line arguments
+ *
+ * @param {object} conf_default  - the default configuration
+ * @param {object} conf_filename - the defaut init file
+ */
+function fetchAndParseArguments(conf_default, conf_filename) {
+    if (argv["ini"]) {
+        conf_filename = argv["ini"];
+    }
+
+    var configuration = conf_default;
+    try {
+        const configfile = ini.parse(fs.readFileSync(conf_filename, 'utf-8'));
+        configuration = updateProperty(conf_default, configfile);
+    }
+    catch (err) { console.error('warning: configuration file ignored: '+err); }
+
+    if (argv["p"]) {
+        var np = parseInt(argv["p"], 10);
+        if (np != NaN) configuration.server.port = np;
+    }
+    if (argv["revision"]) {
+        configuration.logging.revision = argv["revision"].slice(0,40);
+    }
+    //console.log('RES: '+JSON.stringify(configuration,false,4));
+
+    // Error mgmt.
+    if (configuration.server.port < 80 ) {
+        console.log('Incorrect port provided: '+configuration.server.port);
+        process.exit(-1);
+    }
+    return configuration;
+}
+
+/**
+ * A Signal handler, close in a clean way, with a timeout
+ *
+ * @class 
+ * @param {object}  timeout - The closing sequence timeout.
+ * @param {object}  service - The service to close.
+ */
+function SignalCleaner(timeout, service) {
+    this.service = service;
+    this.timeout = timeout;
+    process.on('SIGINT',  this.interruption.bind({sc:this}));
+    process.on('SIGTERM', this.interruption.bind({sc:this}));
+}
+SignalCleaner.prototype.interruption = function(signal) {
+    const service = this.sc.service;
+    this.sc.service = null;
+    if (service) {
+        service.close(function(err) { console.error('Error closing session: '+err); process.exit(1); },
+                      function()    { process.exit(0); });
+    }
+    else setTimeout(function() { console.error('Warning: timeout while closing, terminated'); process.exit(0); }, 1000 * this.sc.timeout);
+}
+
+/*
+ * Main application function, loads configuration and launch service.
+ */
+const run = function() {
+    const configuration = fetchAndParseArguments(DEFAULT_CONF, './rudi_media_custom.ini');
+    service = new HttpService(configuration);
+    sc = new SignalCleaner(configuration.server.close_timeout, service);
+}
+run();

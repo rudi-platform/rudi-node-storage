@@ -5,7 +5,8 @@
  * @version: 1.0.0
  */
 
-var util=require('util');
+const util = require('util');
+const crypto = require('crypto');
 
 /**
  * A simple authorization filter for express.
@@ -21,6 +22,36 @@ function AccessControl(authorizedVersion, authorizedUsers, logger) {
     this.authorizedUsers = authorizedUsers;
     this.logger = logger;
 }
+
+/**
+ * Perform a password hash. Currently SHA-512 only is supported.
+ *
+ * @param {object}   p      - the reference password
+ * @param {object}   input  - the given password
+ * @returns {string}        - passwords matches
+ */
+AccessControl.prototype.checkPassword = function (p, input) {
+    if (p.slice(0,3) == '$1$' && p[p.length-1] == '$') {
+        p = p.slice(3, p.length-1)
+        var sha512 = crypto.createHash('md5');
+        data = sha512.update(input, 'utf-8');
+        input = data.digest('hex');
+    }
+    else if (p.slice(0,3) == '$5$' && p[p.length-1] == '$') {
+        p = p.slice(3, p.length-1)
+        var sha512 = crypto.createHash('sha256');
+        data = sha512.update(input, 'utf-8');
+        input = data.digest('hex');
+    }
+    else if (p.slice(0,3) == '$6$' && p[p.length-1] == '$') {
+        p = p.slice(3, p.length-1)
+        var sha512 = crypto.createHash('sha512');
+        data = sha512.update(input, 'utf-8');
+        input = data.digest('hex');
+    }
+    return p == input;
+}
+
 
 /**
  * Check the access rights and prepare a proper HTTP response.
@@ -93,7 +124,7 @@ AccessControl.prototype.getAccessRights = function (header, cver=false) {
         const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':')
         for (i in this.authorizedUsers) {
             const [u, p, a] = this.authorizedUsers[i];
-            if (login == u && password == p) {
+            if (login == u && this.checkPassword(p, password)) {
                 a[2] = (a[2] == 'x') ? execute : '-';
                 return a;
             }

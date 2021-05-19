@@ -28,6 +28,7 @@ const winston = require('winston');
  * @param {AccessControl}  ac     - The web access control.
  */
 function WebLogger(logp, logDir = './logs/', ac) {
+    if (logDir[logDir.length] != '/') logDir += '/';
     this.logRotationSec = 8 * 60 * 60;
     this.logPrefix;
     this.myLogRe;
