@@ -26,6 +26,9 @@ function BasicFileDB(mediaDir, logger, mongodb, timeout) {
     this.wl = logger;
     this.connectorTimeout = timeout;
 
+    this.default_zone = 'zone1';
+    await fs.promises.mkdir(this.mediaDir + '/' + this.default_zone, { recursive: true });
+
     this.storageId = {};
     this.db = {};
     this.mongodb = mongodb;
@@ -154,7 +157,7 @@ BasicFileDB.prototype.addEntry = function(metadata, context, filecontent, none, 
     const hash = md5sum(filecontent);
     const size = filecontent.length;
     const filename = metadata.media_id + '_' + name;
-    const zone = 'zone1';
+    const zone = this.service.default_zone;
     const path = this.getPathFromConnector(filename, zone);
     fs.writeFile(path, filecontent, { flag:'w'}, function(err, data) {
         if (err) {

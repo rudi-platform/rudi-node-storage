@@ -406,9 +406,14 @@ function updateProperty(base, updated) {
     var newo = {};
     for (e in base) {
         if (e in updated) {
-            if ((typeof updated[e]) == 'object') newo[e] = updateProperty(base[e], updated[e]);
-            if ((typeof base[e]) == 'number')    newo[e] = parseInt(updated[e]);
-            else                                 newo[e] = updated[e];
+            if ((typeof updated[e]) == 'object')   newo[e] = updateProperty(base[e], updated[e]);
+            else if ((typeof base[e]) == 'number') newo[e] = parseInt(updated[e]);
+            else {
+                try { newo[e] = JSON.parse(updated[e]); }
+                catch(e) {
+                    newo[e] = updated[e];
+                }
+            }
         }
         else newo[e] = base[e];
     }
