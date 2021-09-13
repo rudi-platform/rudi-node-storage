@@ -27,7 +27,7 @@ function BasicFileDB(mediaDir, logger, mongodb, timeout) {
     this.connectorTimeout = timeout;
 
     this.default_zone = 'zone1';
-    await fs.promises.mkdir(this.mediaDir + '/' + this.default_zone, { recursive: true });
+    fs.promises.mkdirSync(this.mediaDir + '/' + this.default_zone, { recursive: true });
 
     this.storageId = {};
     this.db = {};
