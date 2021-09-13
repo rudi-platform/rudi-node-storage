@@ -1,5 +1,5 @@
 /**
- * RUDI media access driver.
+ * RUDI media access driver for media data.
  *
  * @author: Laurent Morin
  * @version: 1.0.0
@@ -10,6 +10,7 @@ const fs = require('fs');
 const util = require('util');
 const ini = require('ini');
 const argv = require('minimist')(process.argv.slice(2));
+const zlib = require('zlib');
 
 var WebLogger = require('./weblogger.js');
 const AccessControl = require('./access.js');
@@ -79,10 +80,12 @@ function HttpService(configuration) {
     this.httpServer.get(this.httpPrefix+'schema/:name', function(req, res) { service.schemas(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+':uuid', function(req, res) { service.media(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'download/:uuid', function(req, res) { service.direct(req, res) }.bind({'service':this}));
+    this.httpServer.get(this.httpPrefix+'zdownload/:uuid', function(req, res) { service.compress(req, res) }.bind({'service':this}));
     this.httpServer.options(this.httpPrefix+'storage/:fileid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
     this.httpServer.options(this.httpPrefix+'post', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
     this.httpServer.options(this.httpPrefix+':uuid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
     this.httpServer.options(this.httpPrefix+'download/:uuid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
+    this.httpServer.options(this.httpPrefix+'zdownload/:uuid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
     this.listen = this.httpServer.listen(this.port, this.netInterface);
 }
 
@@ -344,12 +347,22 @@ HttpService.prototype.direct = function(req, res) {
 };
 
 /**
+ * Serves a direct access through the media connector.
+ * @param {object} req - the HTTP request
+ * @param {object} res - the HTTP response.
+ */
+HttpService.prototype.compress = function(req, res) {
+    req.headers['media-access-method'] = 'Direct';
+    req.headers['media-access-compression'] = 'true';
+    this.media(req, res);
+};
+
+/**
  * Serves the access to the media content from a connector.
  * @param {object} req - the HTTP request
  * @param {object} res - the HTTP response.
  */
 HttpService.prototype.fileService = function(req, res) {
-    var content= {};
     const fileid = req.params.fileid;
     const context = this.generateContext(req);
     res.header("Access-Control-Allow-Origin", "*");
@@ -359,10 +372,21 @@ HttpService.prototype.fileService = function(req, res) {
         res.status(401).send({ status: 'error', msg:"could not get media content"});
         res.end();
     }, function(data, mimetype) {
-        content = data;
-        res.type(mimetype);
-        res.send(content);
-        res.end();
+        const compression_mode = req.headers['media-access-compression'];
+        const content = data;
+        if (compression_mode && compression_mode.toLowerCase() == 'true') {
+            zlib.gzip(data, function(err, buffer) {
+                if (err) { res.type('application/octet-stream'); res.send(content); }
+                else     { res.type('application/gzip'); res.send(buffer); }
+                res.end();
+            });
+            res.type('application/octet-stream'); res.send(content);
+        }
+        else {
+            res.type(mimetype);
+            res.send(content);
+            res.end();
+        }
     });
 };
 
