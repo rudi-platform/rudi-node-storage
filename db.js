@@ -83,21 +83,30 @@ MongoService.prototype.open = function(err_cb, done) {
 
             // Command CollMod returns nothing according to the doc....
             //console.log(this.service.schemaSet.toBson(this.service.mediaSchema));
-            this.service.mediaColl = this.service.db.collection(this.service.mediaCollName);
-            this.service.mediaColl.createIndex({ 'uuid':1 });
-            this.service.mediaColl.createIndex({ 'zone':1, 'uuid':1 });
-            this.service.db.command({ collMod: this.service.mediaCollName,
-                                      validator: { "$jsonSchema": this.service.schemaSet.toBson(this.service.mediaSchema) },
-                                      validationLevel: 'strict',
-                                      validationAction: 'error' }).then(doneFct, errFct);
+            //this.service.mediaColl = this.service.db.collection(this.service.mediaCollName);
+            this.service.db.createCollection(this.service.mediaCollName, function(err, col) {
+                if (err) { errFct(err); return; }
+                this.service.mediaColl = col;
+                this.service.mediaColl.createIndex({ 'uuid':1 });
+                this.service.mediaColl.createIndex({ 'zone':1, 'uuid':1 });
+                this.service.db.command({ collMod: this.service.mediaCollName,
+                                          validator: { "$jsonSchema": this.service.schemaSet.toBson(this.service.mediaSchema) },
+                                          validationLevel: 'strict',
+                                          validationAction: 'error' }).then(doneFct, errFct);
+            }.bind({service:this.service}));
 
-            this.service.eventColl = this.service.db.collection(this.service.eventCollName);
-            this.service.eventColl.createIndex({ 'uuid':1 });
-            this.service.eventColl.createIndex({ 'uuid':1, 'date':1 });
-            this.service.db.command({ collMod: this.service.eventCollName,
-                                      validator: { "$jsonSchema": this.service.schemaSet.toBson(this.service.eventSchema) },
-                                      validationLevel: 'strict',
-                                      validationAction: 'error' }).then(doneFct, errFct);
+            //this.service.eventColl = this.service.db.collection(this.service.eventCollName);
+            this.service.db.createCollection(this.service.eventCollName, function(err, col) {
+                if (err) { errFct(err); return; }
+                this.service.eventColl = col;
+                this.service.eventColl.createIndex({ 'uuid':1 });
+                this.service.eventColl.createIndex({ 'uuid':1, 'date':1 });
+                this.service.db.command({ collMod: this.service.eventCollName,
+                                          validator: { "$jsonSchema": this.service.schemaSet.toBson(this.service.eventSchema) },
+                                          validationLevel: 'strict',
+                                          validationAction: 'error' }).then(doneFct, errFct);
+            }.bind({service:this.service}));
+
         }.bind({service:this.service}));
     }.bind({service:this}));
 }

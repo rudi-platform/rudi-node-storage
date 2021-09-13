@@ -39,10 +39,16 @@ function HttpService(configuration) {
     this.authorizedUsers = JSON.parse(JSON.stringify(configuration.server.authorized_users));
     this.revision = configuration.logging.revision
 
+    if (this.httpPrefix == '' || this.httpPrefix[0] != '/' ) {
+        console.log("Error: the http prefix cannot be null and shall start with '/'");
+        process.exit(-1);
+    }
+
     this.httpServer = express();
 
     const schemaURL  = this.server+this.httpPrefix+'schema';
     const schemaBase = configuration.schemas.schema_basename;
+    console.log('Base URL: '+schemaURL+' schema base: '+schemaBase);
     const contextRef = schemaBase + configuration.schemas.schema_context;
     const metaRef    = schemaBase + configuration.schemas.schema_meta;
     const eventRef   = schemaBase + configuration.schemas.schema_event;
