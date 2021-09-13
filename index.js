@@ -39,7 +39,7 @@ function HttpService(configuration) {
     this.authorizedUsers = JSON.parse(JSON.stringify(configuration.server.authorized_users));
     this.revision = configuration.logging.revision
 
-    if (this.httpPrefix == '' || this.httpPrefix[0] != '/' ) {
+    if (!this.httpPrefix || this.httpPrefix == '' || this.httpPrefix[0] != '/' ) {
         console.log("Error: the http prefix cannot be null and shall start with '/'");
         process.exit(-1);
     }
@@ -410,7 +410,7 @@ function updateProperty(base, updated) {
             else if ((typeof base[e]) == 'number') newo[e] = parseInt(updated[e]);
             else {
                 try { newo[e] = JSON.parse(updated[e]); }
-                catch(e) {
+                catch(err) {
                     newo[e] = updated[e];
                 }
             }
