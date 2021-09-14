@@ -386,7 +386,6 @@ HttpService.prototype.fileService = function(req, res) {
                 else     { res.type('application/gzip'); res.send(buffer); }
                 res.end();
             });
-            res.type('application/octet-stream'); res.send(content);
         }
         else {
             res.type(mimetype);

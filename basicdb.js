@@ -157,7 +157,7 @@ BasicFileDB.prototype.addEntry = function(metadata, context, filecontent, none, 
     const hash = md5sum(filecontent);
     const size = filecontent.length;
     const filename = metadata.media_id + '_' + name;
-    const zone = this.service.default_zone;
+    const zone = this.default_zone;
     const path = this.getPathFromConnector(filename, zone);
     fs.writeFile(path, filecontent, { flag:'w'}, function(err, data) {
         if (err) {
