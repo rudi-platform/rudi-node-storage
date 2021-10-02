@@ -28,13 +28,36 @@ function BasicFileDB(mediaDir, logger, mongodb, timeout) {
     this.connectorTimeout = timeout;
 
     this.default_zone = 'zone1';
+    this.default_csvFile = '_file.csv';
     fs.mkdirSync(this.mediaDir + '/' + this.default_zone, { recursive: true });
 
     this.storageId = {};
     this.db = {};
     this.by_zone_db = {};
-    this.by_zone_db[this.default_zone] = [];
+    this.by_zone_db[this.default_zone] = {};
     this.mongodb = mongodb;
+}
+
+/**
+ * Initialize the file database with existing zones.
+ *
+ * @param {list}      media_files - The list of files/zones to load.
+ * @param {function=} none        - An callback with the error if problems while closing.
+ * @param {function=} done        - An callback with the entry when done.
+ */
+BasicFileDB.prototype.init = function(media_files, none, done) {
+    const errFct = function(err) {
+        this.wl.logReq('Could not initialize DB: '+err);
+        if (none) none('Could not load initial file database: '+err);
+    }.bind({wl:this.wl});
+    for (filen in media_files) {
+        this.loadCSV(media_files[filen], '', errFct);
+    }
+    for (zone in this.by_zone_db) {
+        const path = this.getPathFromConnector(this.default_csvFile, zone);
+        //this.wl.info('Load ZONE '+zone+' => '+path);
+        this.loadCSV(path, zone, errFct, done);
+    }
 }
 
 /**
@@ -48,7 +71,7 @@ BasicFileDB.prototype.close = function(none, done) {
         this.wl.logReq('Could not update DB: '+err);
         if (none) none('Could not close file database: '+err);
     };
-    this.saveCSV('file.csv');
+    //this.saveCSV(this.default_csvFile);
     if (Object.keys(this.storageId).length > 0) {
         var pl = [];
         for (fileid in this.storageId) {
@@ -87,7 +110,7 @@ BasicFileDB.prototype.getPathFromConnector = function(filename, zone) {
  */
 BasicFileDB.prototype.buildEntry = function(zone, context, none, done, line, metadata, filename, size, hash) {
     try {
-        if (!(zone in this.by_zone_db)) { this.by_zone_db[zone] = []; }
+        if (!(zone in this.by_zone_db)) { this.by_zone_db[zone] = {}; }
         const entry = new BasicFileEntry(line, zone, context, metadata, filename, size, hash);
         const opdesc = { operation: 'add_media', uuid: entry.uuid, ref: entry.uuid, zone: zone, context: context, value: entry };
         this.db[entry.uuid] = entry;
@@ -102,6 +125,10 @@ BasicFileDB.prototype.buildEntry = function(zone, context, none, done, line, met
                 if (this.done) this.done(opdesc);
             }.bind({wl:this.wl,done:this.done}));
         }.bind({wl:this.wl,mongodb:this.mongodb,done:done}));
+
+        if ('source' in context && context.source == 'API') {
+            this.saveZoneCSV(zone, this.default_csvFile);
+        }
     }
     catch(err) {
         this.wl.logger.error('Invalid media entry: '+err+' metadata: '+metadata);
@@ -160,17 +187,19 @@ BasicFileDB.prototype.addEntry = function(metadata, context, filecontent, none, 
     }
     if (!('file_type' in metadata)) {
         metadata.file_type = 'application/octet-stream';
-        const info = magic.filetypeinfo(buffer);
-        if (info.length && 'mime' in info[0]) { // Take the 1st matching.
-            metadata.file_type = info[0].mime;
+        const info = magic.filetypeinfo(filecontent);
+        //this.wl.logger.info('Filetype: '+ JSON.stringify(info, null, 4));
+        if (info.length) { // Take the 1st matching.
+            if ('mime' in info[0]) metadata.file_type = info[0].mime;
+            else if ('typename' in info[0]) metadata.file_type = 'application/' + info[0].typename;
         }
     }
     const name = ('media_name' in metadata) ? metadata.media_name : 'media';
     const hash = md5sum(filecontent);
     const size = filecontent.length;
-    const filename = metadata.media_id + '_' + name;
+    const filename = name;
     const zone = this.default_zone;
-    const path = this.getPathFromConnector(filename, zone);
+    const path = this.getPathFromConnector(metadata.media_id + '_' + filename, zone);
     fs.writeFile(path, Uint8Array.from(filecontent), { flag:'w'}, function(err, data) {
         if (err) {
             this.service.wl.logger.error('could not write file: '+path);
@@ -186,11 +215,12 @@ BasicFileDB.prototype.addEntry = function(metadata, context, filecontent, none, 
  * Load a CSV describing the media found in the directory.
  * Errors are ignored if a line within the CSV is incorrect.
  *
- * @param {string}   csvFile - The filename of the CSV file. The format must be parsable by {BasicFileEntry} entries.
- * @param {function=} none   - An optional callback with the error if no CSV was found.
- * @param {function=} done   - An optional callback with the DB when done.
+ * @param {string}    csvFile - The filename of the CSV file. The format must be parsable by {BasicFileEntry} entries.
+ * @param {string}    zone    - The zone used to store the dataset.
+ * @param {function=} none    - An optional callback with the error if no CSV was found.
+ * @param {function=} done    - An optional callback with the DB when done.
  */
-BasicFileDB.prototype.loadCSV = function(csvFile, none, done) {
+BasicFileDB.prototype.loadCSV = function(csvFile, zone, none, done) {
     fs.stat(csvFile, function(err,stats) {
         if (err) return;
         fs.readFile(csvFile, { encoding:"utf8", flag:'r'}, function(err, data) {
@@ -200,7 +230,6 @@ BasicFileDB.prototype.loadCSV = function(csvFile, none, done) {
                 return;
             }
 
-            const zone = '';
             const context = { source:'CSV', filename:csvFile };
             const entries = data.split('\n');
             for (var index in entries) {
@@ -216,20 +245,42 @@ BasicFileDB.prototype.loadCSV = function(csvFile, none, done) {
 /**
  * Save in a CSV all the media registered for the zone.
  *
+ * @param {string}   zone    - The zone name
  * @param {string}   csvFile - The filename of the CSV file. The format must be parsable by {BasicFileEntry} entries.
+ */
+BasicFileDB.prototype.saveZoneCSV = function(zone, csvFile) {
+    if (!(zone in this.by_zone_db)) {
+        this.wl.logger.warn('zone not found: '+zone);
+        return;
+    }
+    //this.wl.logger.info('**** PROCESS ZONE : '+zone+' *********');
+    const path = this.getPathFromConnector(csvFile, zone);
+    const elist = this.by_zone_db[zone];
+    var content = '';
+    for (uuid in elist) {
+        const entry = elist[uuid];
+        //if ('source' in entry.context && entry.context.source == 'CSV') continue;
+        //this.wl.logger.info('entry: '+entry.filename);
+        content += entry.getCSVline() + '\n';
+    }
+
+    if (content != '') {
+        fs.writeFile(path, content, { encoding:"utf8", flag:'w'}, function(err, data) {
+            if (err) { this.wl.logger.warn('Could not save DB file '+this.path+' for zone '+zone+': '+err); }
+            else this.wl.logger.info('saved: '+path);
+        }.bind({wl:this.wl, path:path, content:content, zone:zone}));
+        //this.wl.logger.info('content: '+content);
+    }
+}
+
+/**
+ * Save in all zone CSV.
+ *
+ * @param {string}   csvFile - The filename of the CSV file.
  */
 BasicFileDB.prototype.saveCSV = function(csvFile) {
     for (zone in this.by_zone_db) {
-        const path = this.getPathFromConnector(csvFile, zone);
-        const elist = this.by_zone_db[zone];
-        var content = '';
-        for (uuid in elist) {
-            const entry = elist[uuid];
-            content += entry.getCSVline() + '\n';
-        }
-        fs.writeFile(path, content, { encoding:"utf8", flag:'w'}, function(err, data) {
-            if (err) { this.wl.logReq('Could not save DB file '+csvFile+' for zone '+zone+': '+err); }
-        });
+        this.saveZoneCSV(zone, csvFile);
     }
 }
 
@@ -286,7 +337,7 @@ BasicFileDB.prototype.deleleteFileId = function(fileid, context, none, done) {
  * 
  * @param   {string}   uuid - The connector UUID.
  * @param {function=} none   - An optional callback with the error.
- * @param {function}  done   - An callback with the media content and the mime type.
+ * @param {function}  done   - An callback with the media content, the name, and the mime type.
  */
 BasicFileDB.prototype.find = function(fileid, context, none, done) {
     if (!(fileid in this.storageId)) {

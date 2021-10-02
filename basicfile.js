@@ -44,8 +44,9 @@ function BasicFileEntry(descline, zone, context, metadata, filename, size, md5, 
             this.filename = filename;
             this.size     = size;
             this.md5      = md5;
-            this.encoding = 'charset=us-ascii';
-            this.date     = date === undefined ? new Date(0) : new Date(date);
+            this.encoding = 'charset' in metadata ? metadata.charset : 'charset=binary';
+            this.date     = date === undefined ? 'date' in metadata ?
+                new Date(metadata.date) :new Date(0) : new Date(date);
             this.metadata = metadata;
         }
         catch(err) { throw new Error('invalid meta-data: '+err+' value: '+metadata); }
@@ -60,10 +61,10 @@ function BasicFileEntry(descline, zone, context, metadata, filename, size, md5, 
  *
  * @returns {string}              - The CSV line.
  */
-BasicFileEntry.getCSVline = function() {
+BasicFileEntry.prototype.getCSVline = function() {
     var filetype = this.filename +': '+ this.mimetype +'; '+ this.encoding;
     var s = ';';
-    return this.md5 +s+ this.uuid +s+ filetype +s+ this.encoding +s+ this.date +s+ this.size;
+    return '' + this.md5 +s+ this.uuid +s+ filetype +s+ (this.date/1000) +s+ this.size;
 }
 
 /**
@@ -140,7 +141,8 @@ BasicFileEntry.prototype.generateFileId = function() {
     return {
         ref:this.uuid, fileid: uuidv4(),
         count: 0, access: [], cdate:Date(),
-        zone:this.zone, basefile:this.filename,
+        zone:this.zone, basefile:this.uuid + '_' + this.filename,
+        filename: this.filename, // Usage filename
         type:this.mimetype
     };
 }
@@ -152,7 +154,7 @@ BasicFileEntry.prototype.generateFileId = function() {
  * @param {accessDesc}   context - The media access context.
  * @param {function=}    none    - An optional callback with the error if no CSV was found.
  * @param {function}     done    - A callback with the file when done.
- *                                 Returns an array with the content and the mime type.
+ *                                 Returns an array with the content, then name, and the mime type.
  */
 BasicFileEntry.prototype.getFile = function(idesc, context, none, done) {
     if (!('source' in idesc)) {
@@ -165,7 +167,7 @@ BasicFileEntry.prototype.getFile = function(idesc, context, none, done) {
             if (none) none(new Error('loading media: file error'));
             return;
         }
-        if (done) done(data, idesc.type);
+        if (done) done(data, idesc.filename, idesc.type);
     });
 }
 

@@ -70,9 +70,7 @@ function HttpService(configuration) {
     this.mongodb.open(function(service, err) { this.wl.logger.error('DB initialization failed: '+err); }.bind({wl:this.wl}),
                       function(db) {
                           this.wl.logger.info('DB initialized');
-                          for (filen in configuration.storage.media_files) {
-                              this.db.loadCSV(configuration.storage.media_files[filen]);
-                          }
+                          this.db.init(configuration.storage.media_files);
                       }.bind({wl:this.wl,db:this.db}));
 
     this.httpServer.get(this.httpPrefix+'favicon.ico', function(req, res) { service.favicon(req,res); }.bind({'service':this}));
@@ -377,13 +375,18 @@ HttpService.prototype.fileService = function(req, res) {
         res.type('application/json');
         res.status(401).send({ status: 'error', msg:"could not get media content"});
         res.end();
-    }, function(data, mimetype) {
+    }, function(data, name, mimetype) {
         const compression_mode = req.headers['media-access-compression'];
         const content = data;
+        res.setHeader("Content-Disposition",'attachment; filename="' + name + '"');
         if (compression_mode && compression_mode.toLowerCase() == 'true') {
             zlib.gzip(data, function(err, buffer) {
                 if (err) { res.type('application/octet-stream'); res.send(content); }
-                else     { res.type('application/gzip'); res.send(buffer); }
+                else     {
+                    res.setHeader("Content-Disposition",'attachment; filename="' + name + '.gz"');
+                    res.type('application/gzip');
+                    res.send(buffer);
+                }
                 res.end();
             });
         }
