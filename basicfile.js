@@ -56,6 +56,17 @@ function BasicFileEntry(descline, zone, context, metadata, filename, size, md5, 
 }
 
 /**
+ * Generate the CSV line for the media.
+ *
+ * @returns {string}              - The CSV line.
+ */
+BasicFileEntry.getCSVline = function() {
+    var filetype = this.filename +': '+ this.mimetype +'; '+ this.encoding;
+    var s = ';';
+    return this.md5 +s+ this.uuid +s+ filetype +s+ this.encoding +s+ this.date +s+ this.size;
+}
+
+/**
  * Generate the Json Schema for a *file* with the proper registering URL.
  *
  * @param {string}     contextRef - The name of the context schema.
@@ -137,16 +148,18 @@ BasicFileEntry.prototype.generateFileId = function() {
 /**
  * Load the media content.
  * The data is loaded and processed if necessary before beeing sent.
- * @param {function=} none   - An optional callback with the error if no CSV was found.
- * @param {function} done    - A callback with the file when done.
- *                             Returns an array with the content and the mime type.
+ * @param {connector ID} iddesc  - The media access descriptor.
+ * @param {accessDesc}   context - The media access context.
+ * @param {function=}    none    - An optional callback with the error if no CSV was found.
+ * @param {function}     done    - A callback with the file when done.
+ *                                 Returns an array with the content and the mime type.
  */
 BasicFileEntry.prototype.getFile = function(idesc, context, none, done) {
     if (!('source' in idesc)) {
         if (none) none(new Error('loading media: source missing in context'));
         return;
     }
-    fs.readFile(idesc.source, { encoding:"utf8", flag:'r'}, function(err, data) {
+    fs.readFile(idesc.source, { flag:'r'}, function(err, data) {
         if (err) {
             console.error('Error: critical failure: could not load '+idesc.source);
             if (none) none(new Error('loading media: file error'));

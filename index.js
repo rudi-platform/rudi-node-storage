@@ -292,16 +292,16 @@ HttpService.prototype.postFile = function(req, res) {
     }
 
     // Bufferize file data
-    var filecontent = '';
+    var filecontent = [];
     req.on('readable', function() {
         var chunk;
         while (null !== (chunk = req.read())) {
-            filecontent += chunk;
+            filecontent = filecontent.concat(Array.from(chunk));
         }
     });
     // Build the entry, Close the request
     req.on('end', function() {
-        this.service.wl.logger.debug('content: '+filecontent);
+        //this.service.wl.logger.debug('content: '+filecontent);
 
         const context = this.service.generateContext(req);
         const nid = this.service.db.addEntry(metadata, context, filecontent, function() {
