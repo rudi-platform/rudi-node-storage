@@ -8,6 +8,7 @@ const fs = require('fs');
 const util = require('util');
 const md5sum = require('md5');
 const BasicFileEntry = require('./basicfile.js');
+const magic = require('magic-bytes.js');
 
 /**
  * Represents a basic media DB.
@@ -157,7 +158,13 @@ BasicFileDB.prototype.addEntry = function(metadata, context, filecontent, none, 
         if (none) none('Missing media UUID');
         return;
     }
-    if (!('file_type' in metadata)) { metadata.file_type = 'application/octet-stream'; }
+    if (!('file_type' in metadata)) {
+        metadata.file_type = 'application/octet-stream';
+        const info = magic.filetypeinfo(buffer);
+        if (info.length && 'mime' in info[0]) { // Take the 1st matching.
+            metadata.file_type = info[0].mime;
+        }
+    }
     const name = ('media_name' in metadata) ? metadata.media_name : 'media';
     const hash = md5sum(filecontent);
     const size = filecontent.length;
