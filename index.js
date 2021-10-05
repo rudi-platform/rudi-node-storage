@@ -271,10 +271,11 @@ HttpService.prototype.postFile = function(req, res) {
     if (!access) return;
     if (access[1] != 'w') { res.status(401).send('Write access not set for user'); return; }
     res.header("Access-Control-Allow-Origin", "*");
+    res.send('[');
 
-    var content= {};
+    var content= [];
     if (!('file_metadata' in req.headers)) {
-        content = { status: 'error', msg:'no meta-data provided' };
+        content = '{ "status": "error", "msg":"no meta-data provided" } ]';
         res.send(content);
         res.end();
         return;
@@ -282,7 +283,7 @@ HttpService.prototype.postFile = function(req, res) {
     var metadata = req.headers.file_metadata;
     try { metadata = JSON.parse(metadata); }
     catch(err) {
-        content = { status: 'error', msg:'malformed metadata' };
+        content = '{ "status": "error", "msg":"malformed metadata" } ]';
         this.wl.logger.error('malformed metadata: '+req.params.file_metadata);
         res.send(content);
         res.end();
@@ -293,8 +294,10 @@ HttpService.prototype.postFile = function(req, res) {
     var filecontent = [];
     req.on('readable', function() {
         var chunk;
+        content = '{ "status" "ongoing" }, ';
         while (null !== (chunk = req.read())) {
             filecontent = filecontent.concat(Array.from(chunk));
+            res.send(content);
         }
     });
     // Build the entry, Close the request
@@ -303,11 +306,11 @@ HttpService.prototype.postFile = function(req, res) {
 
         const context = this.service.generateContext(req);
         const nid = this.service.db.addEntry(metadata, context, filecontent, function() {
-            content = { status: 'error', msg:'invalid request' };
+            content = '{ "status": "error", "msg":"invalid request" } ]';
             res.send(content);
             res.end();
         }, function() {
-            content = { status: 'OK' };
+            content = '{ "status": "OK" } ]';
             res.send(content);
             res.end();
         });
