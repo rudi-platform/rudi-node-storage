@@ -297,7 +297,7 @@ HttpService.prototype.postFile = function(req, res) {
         content = '{ "status" "ongoing" }, ';
         while (null !== (chunk = req.read())) {
             filecontent = filecontent.concat(Array.from(chunk));
-            res.send(content);
+            //res.send(content);
         }
     });
     // Build the entry, Close the request
