@@ -271,7 +271,7 @@ HttpService.prototype.postFile = function(req, res) {
     if (!access) return;
     if (access[1] != 'w') { res.status(401).send('Write access not set for user'); return; }
     res.header("Access-Control-Allow-Origin", "*");
-    res.send('[');
+    //res.send('[');
 
     var content= [];
     if (!('file_metadata' in req.headers)) {
