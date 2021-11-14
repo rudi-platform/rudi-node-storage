@@ -30,8 +30,8 @@ const DEFAULT_CONF = {
         schema_file: 'file.json'
     },
     storage: {
-        media_dir: process.env.HOME + '/media',
-        media_files: [ process.env.HOME + '/media/list.csv' ],
+        media_dir: process.env.HOME + '/_media',
+        media_files: [ process.env.HOME + '/_media/list2.csv' ],
         acc_timeout: 60 * 2,
     },
     database: {
@@ -42,6 +42,14 @@ const DEFAULT_CONF = {
         revision: '-',
         app_name: 'RudiMedia-',
         log_dir: './logs/'
+    },
+    log_server: {
+        path: "127.0.0.1"
+    },
+    log_local: {
+        prefix: 'RudiMedia-',
+        console: true,
+        consoleData: false
     }
 };
 

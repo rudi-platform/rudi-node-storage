@@ -8,6 +8,7 @@
 const fs = require('fs');
 const util = require('util');
 const winston = require('winston');
+const logger = require('rudilogger');
 
 /**
  * A web logger supporting web access and log rotation.
@@ -35,9 +36,21 @@ function WebLogger(logp, logDir = './logs/', ac) {
     this.dataLogger;
     this.logger;
     this.logDir = logDir;
-    this.setLogPattern(logp);
-    this.updateLogs();
+    //this.setLogPattern(logp);
+    //this.updateLogs();
     this.ac = ac;
+
+    this.syslog = new logger.RudiLogger('media','1.0', { log_local: { consoleData:false } });
+    this.local = this.syslog.getWebInterface();
+    if (this.local)
+        this.local.setWebAccessControlInterface(ac);
+    this.logger = this.syslog;
+}
+
+WebLogger.prototype.setWebAccessControlInterface = function (ac) {
+    this.ac = ac;
+    if (this.local)
+        this.local.setWebAccessControlInterface(ac);
 }
 
 /**
@@ -58,8 +71,35 @@ WebLogger.prototype.setLogPattern = function (prefix) {
  * @param {object}   data - the data to record
  */
 WebLogger.prototype.logReq = function(data) {
-    this.logger.info("Reception: "+util.inspect(data));
-    this.dataLogger.info(data);
+    const header = 'do='+data.operation+' uuid='+data.uuid;
+    var extra = '';
+    var context = undefined;
+    if (data.operation === 'add_media') {
+        extra = ' file='+data.value.filename;
+        context = {
+            subject:data.operation+':'+data.context.source,
+            client_id: data.uuid,
+            req_ip: '-'
+        };
+    }
+    else if (data.operation === 'new_conn' || data.operation === 'del_conn') {
+        context = {
+            subject:'SYS/'+data.operation,
+            client_id: data.uuid,
+            req_ip: '-'
+        };
+    }
+    else if (data.operation === 'acc_conn') {
+        context = {
+            subject:data.operation+':'+data.context.client.source,
+            client_id: data.uuid,
+            req_ip: data.context.client.ip
+        };
+    }
+
+    this.syslog.info(header+extra, 'db', context, undefined, data);
+    //this.logger.info("Reception: "+util.inspect(data));
+    //this.dataLogger.info(data);
 }
 
 /**
@@ -71,6 +111,9 @@ WebLogger.prototype.logReq = function(data) {
  * @param {object} res - the HTTP response.
  */
 WebLogger.prototype.logContent = function(req, res) {
+    this.local.logContent(req,res);
+    return ;
+    
     const access = this.ac ? this.ac.checkAccessRights(req, res) : 'r--';
     if (!access) return;
     if (access[0] != 'r') { res.status(401).send('Read access not set for user'); return; }
@@ -109,6 +152,9 @@ WebLogger.prototype.logContent = function(req, res) {
  * @param {object} res - the HTTP response.
  */
 WebLogger.prototype.logFile = function(req, res) {
+    this.local.logFile(req,res);
+    return ;
+
     const access = this.ac ? this.ac.checkAccessRights(req, res) : 'r--';
     if (!access) return;
     if (access[0] != 'r') { res.status(401).send('Read access not set for user'); return; }
@@ -204,6 +250,8 @@ WebLogger.prototype.createLogger = function () {
  *
  */
 WebLogger.prototype.updateLogs = function () {
+    return;
+
     this.dataLogger = this.createDataLogger();
     this.logger = this.createLogger();
     this.logger.warn('Updated logging files... ');

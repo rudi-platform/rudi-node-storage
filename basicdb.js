@@ -131,7 +131,7 @@ BasicFileDB.prototype.buildEntry = function(zone, context, none, done, line, met
         }
     }
     catch(err) {
-        this.wl.logger.error('Invalid media entry: '+err+' metadata: '+metadata);
+        this.wl.logger.error('Invalid media entry: '+err+' metadata: '+metadata, 'db');
         if (none) none(err);
     }
 }
@@ -181,7 +181,7 @@ BasicFileDB.eventSchema = function(contextRef) {
  */
 BasicFileDB.prototype.addEntry = function(metadata, context, filecontent, none, done) {
     if (!('media_id' in metadata)) {
-        this.wl.logger.error('Missing media UUID: '+ metadata);
+        this.wl.logger.error('Missing media UUID: '+ metadata, 'db');
         if (none) none('Missing media UUID');
         return;
     }
@@ -202,7 +202,7 @@ BasicFileDB.prototype.addEntry = function(metadata, context, filecontent, none, 
     const path = this.getPathFromConnector(metadata.media_id + '_' + filename, zone);
     fs.writeFile(path, Uint8Array.from(filecontent), { flag:'w'}, function(err, data) {
         if (err) {
-            this.service.wl.logger.error('could not write file: '+path);
+            this.service.wl.logger.error('could not write file: '+path, 'db');
             if (none) none(err);
             return;
         }
@@ -225,7 +225,7 @@ BasicFileDB.prototype.loadCSV = function(csvFile, zone, none, done) {
         if (err) return;
         fs.readFile(csvFile, { encoding:"utf8", flag:'r'}, function(err, data) {
             if (err) {
-                this.service.wl.logger.error('could not open CSV file: '+csvFile);
+                this.service.wl.logger.error('could not open CSV file: '+csvFile, 'db');
                 if (none) none(err);
                 return;
             }
@@ -250,7 +250,7 @@ BasicFileDB.prototype.loadCSV = function(csvFile, zone, none, done) {
  */
 BasicFileDB.prototype.saveZoneCSV = function(zone, csvFile) {
     if (!(zone in this.by_zone_db)) {
-        this.wl.logger.warn('zone not found: '+zone);
+        this.wl.logger.warn('zone not found: '+zone, 'db');
         return;
     }
     //this.wl.logger.info('**** PROCESS ZONE : '+zone+' *********');
@@ -266,8 +266,8 @@ BasicFileDB.prototype.saveZoneCSV = function(zone, csvFile) {
 
     if (content != '') {
         fs.writeFile(path, content, { encoding:"utf8", flag:'w'}, function(err, data) {
-            if (err) { this.wl.logger.warn('Could not save DB file '+this.path+' for zone '+zone+': '+err); }
-            else this.wl.logger.info('saved: '+path);
+            if (err) { this.wl.logger.warn('Could not save DB file '+this.path+' for zone '+zone+': '+err, 'db'); }
+            else this.wl.logger.info('saved: '+path, 'db');
         }.bind({wl:this.wl, path:path, content:content, zone:zone}));
         //this.wl.logger.info('content: '+content);
     }
@@ -342,7 +342,7 @@ BasicFileDB.prototype.deleleteFileId = function(fileid, context, none, done) {
 BasicFileDB.prototype.find = function(fileid, context, none, done) {
     if (!(fileid in this.storageId)) {
         const errmsg = 'media connector id "'+fileid+'" not found';
-        this.wl.logger.error(errmsg+' request context: '+JSON.stringify(context));
+        this.wl.logger.error(errmsg+' request context: '+JSON.stringify(context), 'db');
         if (none) none(new Error(errmsg));
         return;
     }
@@ -359,7 +359,7 @@ BasicFileDB.prototype.find = function(fileid, context, none, done) {
     // Load the data asynchronously
     const media = this.db[iddesc.ref];
     media.getFile(iddesc, context, function(err) {
-        this.wl.logger.error('could not load file: '+err+' request context: '+JSON.stringify(context));
+        this.wl.logger.error('could not load file: '+err+' request context: '+JSON.stringify(context), 'db');
         if (none) none(err);
     }.bind({wl:this.wl}), done);
 }

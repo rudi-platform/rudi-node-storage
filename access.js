@@ -64,13 +64,19 @@ AccessControl.prototype.checkPassword = function (p, input) {
  * @returns {string}        - the access rights.
  */
 AccessControl.prototype.checkAccessRights = function (req, res, cver=false) {
-    var access = this.getAccessRights(req.headers);
+    var [ access, user ] = this.getAccessRights(req.headers);
     var code = 200;
-    var errMsg = "access";
+    var errMsg = "access granted";
+
     switch(access) {
     case 'E01':
         res.set('WWW-Authenticate', 'Basic realm="Authentication required"');
         code = 401; errMsg = 'Authentication required';
+        access = null;
+        /* */ break;
+    case 'E02':
+        res.set('WWW-Authenticate', 'Basic realm="Authentication required"');
+        code = 401; errMsg = 'Authentication failed: invalid password';
         access = null;
         /* */ break;
     case 'E12':
@@ -84,7 +90,7 @@ AccessControl.prototype.checkAccessRights = function (req, res, cver=false) {
         access = null;
         /* */ break;
     }
-    this.logAccess(code, errMsg, req, res);
+    this.logAccess(code, errMsg, req, res, user);
     return access;
 }
 
@@ -103,7 +109,7 @@ AccessControl.prototype.checkAccessRights = function (req, res, cver=false) {
  */
 AccessControl.prototype.getAccessRights = function (header, cver=false) {
     if (!('authorization' in header)) {
-        return 'E01'; // http 401
+        return [ 'E01', '-' ]; // http 401
     }
 
     var execute = '-';
@@ -116,7 +122,7 @@ AccessControl.prototype.getAccessRights = function (header, cver=false) {
             }
         }
     }
-    if (cver && execute != 'x') return 'E12'; // http 412
+    if (cver && execute != 'x') return [ 'E12', '-' ]; // http 412
 
     const authorization = header['authorization'];
     const [authType, b64auth] = (authorization.split(' ') || '');
@@ -124,14 +130,17 @@ AccessControl.prototype.getAccessRights = function (header, cver=false) {
         const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':')
         for (i in this.authorizedUsers) {
             const [u, p, a] = this.authorizedUsers[i];
-            if (login == u && this.checkPassword(p, password)) {
-                a[2] = (a[2] == 'x') ? execute : '-';
-                return a;
+            if (login == u) {
+                if (this.checkPassword(p, password)) {
+                    a[2] = (a[2] == 'x') ? execute : '-';
+                    return [ a, login ];
+                }
+                else return [ 'E02', login ]; // http 401
             }
         }
     }
-    else return 'E05'; // http 405
-    return 'E01'; // http 401
+    else return [ 'E05', '-' ]; // http 405
+    return [ 'E01', '-' ]; // http 401
 }
 
 /**
@@ -144,14 +153,28 @@ AccessControl.prototype.getAccessRights = function (header, cver=false) {
  * @param {object} req    - the HTTP request
  * @param {object} res    - the HTTP response.
  */
-AccessControl.prototype.logAccess = function(code, errMsg, req, res) {
+AccessControl.prototype.logAccess = function(code, errMsg, req, res, user) {
     const authorization = ('authorization' in req.header) ? req.header['authorization'] : '';
     if (!this.logger) return;
+    const context = this.generateContext(req, user);
     if (code != 200) {
-        this.logger.error(errMsg+": "+req.hostname+":"+req.originalUrl+":"+req.ip+":"+util.inspect(req.params)+":"+authorization);
+        this.logger.error(errMsg+": "+req.hostname+":"+req.originalUrl+":"+req.ip+":"+util.inspect(req.params)+":"+authorization, 'ac', context);
         res.status(code).send(errMsg);
     }
-    else this.logger.debug(errMsg+": "+req.hostname+":"+req.originalUrl+":"+req.ip+":"+util.inspect(req.params)+":"+authorization);
+    else this.logger.notice(errMsg+": "+req.hostname+":"+req.originalUrl+":"+req.ip+":"+util.inspect(req.params)+":"+authorization, 'ac', context);
+}
+
+/**
+ * Create a request context.
+ * The context is used to process requests,
+ *   and contains basic information about the sender.
+ * @param {object} req  - the HTTP request
+ * @param {string} user - the HTTP user if found.
+ */
+AccessControl.prototype.generateContext = function(req, user) {
+    const srcip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    //console.log('from:'+ip);
+    return { subject:req.originalUrl, client_id: user, req_ip: srcip };
 }
 
 
