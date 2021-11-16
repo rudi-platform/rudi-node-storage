@@ -15,12 +15,12 @@ const crypto = require('crypto');
  * @class 
  * @param {json}      authorizedVersion - The list of authorized version.
  * @param {json}      authorizedUsers   - The list of authorized users.
- * @param {weblogger} logger            - The access logger.
+ * @param {logger}    logger            - The access logger.
  */
 function AccessControl(authorizedVersion, authorizedUsers, logger) {
     this.authorizedVersion = authorizedVersion;
     this.authorizedUsers = authorizedUsers;
-    this.logger = logger;
+    this.syslog = logger;
 }
 
 /**
@@ -155,13 +155,13 @@ AccessControl.prototype.getAccessRights = function (header, cver=false) {
  */
 AccessControl.prototype.logAccess = function(code, errMsg, req, res, user) {
     const authorization = ('authorization' in req.header) ? req.header['authorization'] : '';
-    if (!this.logger) return;
+    if (!this.syslog) return;
     const context = this.generateContext(req, user);
     if (code != 200) {
-        this.logger.error(errMsg+": "+req.hostname+":"+req.originalUrl+":"+req.ip+":"+util.inspect(req.params)+":"+authorization, 'ac', context);
+        this.syslog.error(errMsg+": "+req.hostname+":"+req.originalUrl+":"+req.ip+":"+util.inspect(req.params)+":"+authorization, 'ac', context);
         res.status(code).send(errMsg);
     }
-    else this.logger.notice(errMsg+": "+req.hostname+":"+req.originalUrl+":"+req.ip+":"+util.inspect(req.params)+":"+authorization, 'ac', context);
+    else this.syslog.notice(errMsg+": "+req.hostname+":"+req.originalUrl+":"+req.ip+":"+util.inspect(req.params)+":"+authorization, 'ac', context);
 }
 
 /**

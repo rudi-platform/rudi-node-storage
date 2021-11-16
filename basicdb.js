@@ -24,7 +24,8 @@ const magic = require('magic-bytes.js');
  */
 function BasicFileDB(mediaDir, logger, mongodb, timeout) {
     this.mediaDir = mediaDir;
-    this.wl = logger;
+    this.syslog = logger;
+    this.logid = 'db';
     this.connectorTimeout = timeout;
 
     this.default_zone = 'zone1';
@@ -39,6 +40,63 @@ function BasicFileDB(mediaDir, logger, mongodb, timeout) {
 }
 
 /**
+ * Generate a logger context.
+ *
+ * @param {object}    data - The error message.
+ */
+BasicFileDB.prototype.convertContext = function(opname, id, context) {
+    const subject = (context.source !== undefined) ? opname +':'+ context.source : opname;
+    const rip     = (context.ip !== undefined)     ? context.ip                  : '-';
+    const cid     = (id !== undefined)             ? id                          : '-';
+    return  {
+        subject: subject,
+        req_ip: rip,
+        client_id: cid
+    };
+}
+
+/**
+ * Interface the error logger
+ *
+ * @param {string}    message - The error message.
+ */
+BasicFileDB.prototype.error = function(message) {
+    this.syslog.error(message, this.logid);
+}
+
+/**
+ * Interface the error logger with contexts.
+ *
+ * @param {string}    message - The error message.
+ * @param {string}    context - The context.
+ */
+BasicFileDB.prototype.errorCtx = function(message, name, cid, ctx) {
+    this.syslog.error(message, this.logid, this.convertContext(name, cid, ctx), undefined);
+}
+
+/**
+ * Interface the data info logger in order to describe data sets.
+ *
+ * @param {object}    data - The error message.
+ */
+BasicFileDB.prototype.logReq = function(data) {
+    const header = 'do='+data.operation+' uuid='+data.uuid;
+    var extra = '';
+    var context = undefined;
+    if (data.operation === 'add_media') {
+        extra = ' file='+data.value.filename;
+        context = this.convertContext(data.operation, data.uuid, data.context);
+    }
+    else  if (data.operation === 'new_conn' || data.operation === 'del_conn') {
+        context = this.convertContext(data.operation, data.uuid, data.context);
+    }
+    else if (data.operation === 'acc_conn') {
+        context = this.convertContext(data.operation, data.uuid, data.context.client);
+    }
+    this.syslog.info(header+extra, this.logid, context, undefined, data);
+}
+
+/**
  * Initialize the file database with existing zones.
  *
  * @param {list}      media_files - The list of files/zones to load.
@@ -47,15 +105,15 @@ function BasicFileDB(mediaDir, logger, mongodb, timeout) {
  */
 BasicFileDB.prototype.init = function(media_files, none, done) {
     const errFct = function(err) {
-        this.wl.logReq('Could not initialize DB: '+err);
+        this.service.error('Could not initialize DB: '+err);
         if (none) none('Could not load initial file database: '+err);
-    }.bind({wl:this.wl});
+    }.bind({service:this});
     for (filen in media_files) {
         this.loadCSV(media_files[filen], '', errFct);
     }
     for (zone in this.by_zone_db) {
         const path = this.getPathFromConnector(this.default_csvFile, zone);
-        //this.wl.info('Load ZONE '+zone+' => '+path);
+        //this.syslog.info('Load ZONE '+zone+' => '+path, this.logid);
         this.loadCSV(path, zone, errFct, done);
     }
 }
@@ -68,16 +126,18 @@ BasicFileDB.prototype.init = function(media_files, none, done) {
  */
 BasicFileDB.prototype.close = function(none, done) {
     const errFct = function(err) {
-        this.wl.logReq('Could not update DB: '+err);
+        this.service.error('Could not close DB: '+err);
         if (none) none('Could not close file database: '+err);
     };
     //this.saveCSV(this.default_csvFile);
     if (Object.keys(this.storageId).length > 0) {
         var pl = [];
         for (fileid in this.storageId) {
-            pl.push(new Promise(function(resolve, reject) { this.service.deleleteFileId(this.fileid, { source: 'interruption' }, reject, resolve); }.bind({service:this, fileid:fileid})));
+            pl.push(new Promise(function(resolve, reject) {
+                this.service.deleleteFileId(this.fileid, { source: 'interruption' }, reject, resolve);
+            }.bind({service:this, fileid:fileid})));
         }
-        Promise.all(pl).then(done, errFct.bind({wl:this.wl}));
+        Promise.all(pl).then(done, errFct.bind({service:this}));
     }
     else done();
 }
@@ -115,23 +175,23 @@ BasicFileDB.prototype.buildEntry = function(zone, context, none, done, line, met
         const opdesc = { operation: 'add_media', uuid: entry.uuid, ref: entry.uuid, zone: zone, context: context, value: entry };
         this.db[entry.uuid] = entry;
         this.by_zone_db[zone][entry.uuid] = entry;
-        this.wl.logReq(opdesc);
+        this.logReq(opdesc);
         const errFct = function(err) {
-            this.wl.logReq('Could not update DB: '+err+' with '+JSON.stringify(this.desc));
+            this.service.error('Could not update DB: '+err+' with '+JSON.stringify(this.desc));
             if (none) none(err);
         };
-        this.mongodb.addMedia(entry, errFct.bind({wl:this.wl,desc:entry}), function(mongodb) {
-            this.mongodb.addEvent(opdesc, errFct.bind({wl:this.wl,desc:opdesc}), function(mongodb) {
+        this.mongodb.addMedia(entry, errFct.bind({service:this,desc:entry}), function(mongodb) {
+            this.mongodb.addEvent(opdesc, errFct.bind({service:this.service,desc:opdesc}), function(mongodb) {
                 if (this.done) this.done(opdesc);
-            }.bind({wl:this.wl,done:this.done}));
-        }.bind({wl:this.wl,mongodb:this.mongodb,done:done}));
+            }.bind({service:this.service,done:this.done}));
+        }.bind({service:this,mongodb:this.mongodb,done:done}));
 
         if ('source' in context && context.source == 'API') {
             this.saveZoneCSV(zone, this.default_csvFile);
         }
     }
     catch(err) {
-        this.wl.logger.error('Invalid media entry: '+err+' metadata: '+metadata, 'db');
+        this.errorCtx('Invalid media entry: '+err+' metadata: '+metadata, 'add_media', '-', context);
         if (none) none(err);
     }
 }
@@ -181,14 +241,14 @@ BasicFileDB.eventSchema = function(contextRef) {
  */
 BasicFileDB.prototype.addEntry = function(metadata, context, filecontent, none, done) {
     if (!('media_id' in metadata)) {
-        this.wl.logger.error('Missing media UUID: '+ metadata, 'db');
+        this.errorCtx('Missing media UUID: '+ metadata, 'add_media', '-', context);
         if (none) none('Missing media UUID');
         return;
     }
     if (!('file_type' in metadata)) {
         metadata.file_type = 'application/octet-stream';
         const info = magic.filetypeinfo(filecontent);
-        //this.wl.logger.info('Filetype: '+ JSON.stringify(info, null, 4));
+        //this.syslog.info('Filetype: '+ JSON.stringify(info, null, 4), this.logid);
         if (info.length) { // Take the 1st matching.
             if ('mime' in info[0]) metadata.file_type = info[0].mime;
             else if ('typename' in info[0]) metadata.file_type = 'application/' + info[0].typename;
@@ -202,7 +262,7 @@ BasicFileDB.prototype.addEntry = function(metadata, context, filecontent, none, 
     const path = this.getPathFromConnector(metadata.media_id + '_' + filename, zone);
     fs.writeFile(path, Uint8Array.from(filecontent), { flag:'w'}, function(err, data) {
         if (err) {
-            this.service.wl.logger.error('could not write file: '+path, 'db');
+            this.service.errorCtx('could not write file: '+path, 'add_media', metadata.media_id, context);
             if (none) none(err);
             return;
         }
@@ -225,7 +285,7 @@ BasicFileDB.prototype.loadCSV = function(csvFile, zone, none, done) {
         if (err) return;
         fs.readFile(csvFile, { encoding:"utf8", flag:'r'}, function(err, data) {
             if (err) {
-                this.service.wl.logger.error('could not open CSV file: '+csvFile, 'db');
+                this.service.error('could not open CSV file: '+csvFile);
                 if (none) none(err);
                 return;
             }
@@ -250,26 +310,26 @@ BasicFileDB.prototype.loadCSV = function(csvFile, zone, none, done) {
  */
 BasicFileDB.prototype.saveZoneCSV = function(zone, csvFile) {
     if (!(zone in this.by_zone_db)) {
-        this.wl.logger.warn('zone not found: '+zone, 'db');
+        this.syslog.warn('zone not found: '+zone, this.logid);
         return;
     }
-    //this.wl.logger.info('**** PROCESS ZONE : '+zone+' *********');
+    //this.syslog.info('**** PROCESS ZONE : '+zone+' *********', this.logid);
     const path = this.getPathFromConnector(csvFile, zone);
     const elist = this.by_zone_db[zone];
     var content = '';
     for (uuid in elist) {
         const entry = elist[uuid];
         //if ('source' in entry.context && entry.context.source == 'CSV') continue;
-        //this.wl.logger.info('entry: '+entry.filename);
+        //this.syslog.info('entry: '+entry.filename, this.logid);
         content += entry.getCSVline() + '\n';
     }
 
     if (content != '') {
         fs.writeFile(path, content, { encoding:"utf8", flag:'w'}, function(err, data) {
-            if (err) { this.wl.logger.warn('Could not save DB file '+this.path+' for zone '+zone+': '+err, 'db'); }
-            else this.wl.logger.info('saved: '+path, 'db');
-        }.bind({wl:this.wl, path:path, content:content, zone:zone}));
-        //this.wl.logger.info('content: '+content);
+            if (err) { this.syslog.warn('Could not save DB file '+this.path+' for zone '+zone+': '+err, 'db'); }
+            else this.syslog.info('saved: '+path, 'db');
+        }.bind({syslog:this.syslog, path:path, content:content, zone:zone}));
+        //this.syslog.info('content: '+content);
     }
 }
 
@@ -304,14 +364,14 @@ BasicFileDB.prototype.get = function(uuid, context) {
     }
     this.storageId[niddesc.fileid] = niddesc;
     const opdesc = { operation: 'new_conn', uuid: niddesc.fileid, ref: uuid, zone: niddesc.zone, context: context };
-    this.wl.logReq(opdesc);
+    this.logReq(opdesc);
 
-    const errFct = function(err) { this.wl.logReq('Could not update DB: '+err+' with '+JSON.stringify(this.desc)); };
-    this.mongodb.addEvent(opdesc, errFct.bind({wl:this.wl,desc:opdesc}), function(mongodb) {});
+    const errFct = function(err) { this.service.error('Could not update DB: '+err+' with '+JSON.stringify(this.desc)); };
+    this.mongodb.addEvent(opdesc, errFct.bind({service:this,desc:opdesc}), function(mongodb) {});
 
     setTimeout(function() {
         this.db.deleleteFileId(this.fileid, context, errFct, function(mongodb) {});
-    }.bind({'db':this, fileid: niddesc.fileid}), connectorTimeout * 1000);
+    }.bind({db:this, fileid: niddesc.fileid}), connectorTimeout * 1000);
     return niddesc.fileid;
 }
 
@@ -326,8 +386,8 @@ BasicFileDB.prototype.deleleteFileId = function(fileid, context, none, done) {
         const niddesc = this.storageId[fileid];
         delete this.storageId[fileid];
         const opdesc = { operation: 'del_conn', uuid: niddesc.fileid, ref: niddesc.ref, zone: niddesc.zone, context: context, value: niddesc };
-        this.wl.logReq(opdesc);
-        this.mongodb.addEvent(opdesc, none.bind({wl:this.wl,desc:opdesc}), done);
+        this.logReq(opdesc);
+        this.mongodb.addEvent(opdesc, none.bind({service:this,desc:opdesc}), done);
     }
 }
 
@@ -342,7 +402,8 @@ BasicFileDB.prototype.deleleteFileId = function(fileid, context, none, done) {
 BasicFileDB.prototype.find = function(fileid, context, none, done) {
     if (!(fileid in this.storageId)) {
         const errmsg = 'media connector id "'+fileid+'" not found';
-        this.wl.logger.error(errmsg+' request context: '+JSON.stringify(context), 'db');
+        //+' request context: '+JSON.stringify(context)
+        this.errorCtx(errmsg, 'get_media', fileid, context);
         if (none) none(new Error(errmsg));
         return;
     }
@@ -350,18 +411,19 @@ BasicFileDB.prototype.find = function(fileid, context, none, done) {
     const iddesc = this.storageId[fileid];
     const accessEntry = { date:now, client: context};
     const opdesc = { operation: 'acc_conn', uuid: iddesc.fileid, ref:iddesc.ref, zone: iddesc.zone, context: accessEntry };
-    this.wl.logReq(opdesc);
-    const errFct = function(err) { this.wl.logReq('Could not update DB: '+err+' with '+JSON.stringify(this.desc)); };
-    this.mongodb.addEvent(opdesc, errFct.bind({wl:this.wl,desc:opdesc}), function(mongodb) {});
+    this.logReq(opdesc);
+    const errFct = function(err) { this.service.error('Could not update DB: '+err+' with '+JSON.stringify(this.desc)); };
+    this.mongodb.addEvent(opdesc, errFct.bind({service:this,desc:opdesc}), function(mongodb) {});
     iddesc.count += 1;
     iddesc.access.push(accessEntry);
 
     // Load the data asynchronously
     const media = this.db[iddesc.ref];
     media.getFile(iddesc, context, function(err) {
-        this.wl.logger.error('could not load file: '+err+' request context: '+JSON.stringify(context), 'db');
+        // +' request context: '+JSON.stringify(context)
+        this.service.errorCtx('could not load file: '+err, 'get_media', fileid, context);
         if (none) none(err);
-    }.bind({wl:this.wl}), done);
+    }.bind({service:this}), done);
 }
 
 module.exports = BasicFileDB;
