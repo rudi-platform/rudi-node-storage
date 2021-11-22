@@ -61,7 +61,7 @@ function HttpService(configuration) {
     this.schemaSet.addSchema(fileRef, BasicFileEntry.fileSchema(contextRef, metaRef));
 
     //this.wl = new WebLogger(configuration.logging.app_name, configuration.logging.log_dir, null);
-    this.syslog = new logger.RudiLogger('media', this.revision, configuration);
+    this.syslog = new logger.RudiLogger(configuration.logging.app_name, this.revision, configuration);
     this.logweb = this.syslog.getWebInterface();
     this.ac = new AccessControl(this.authorizedVersion, this.authorizedUsers, this.syslog);
     if (this.logweb) this.logweb.setWebAccessControlInterface(this.ac);

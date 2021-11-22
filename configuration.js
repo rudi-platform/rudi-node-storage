@@ -40,8 +40,7 @@ const DEFAULT_CONF = {
     },
     logging: {
         revision: '-',
-        app_name: 'RudiMedia-',
-        log_dir: './logs/'
+        app_name: 'media'
     },
     log_server: {
         path: "127.0.0.1"
