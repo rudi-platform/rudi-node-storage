@@ -177,6 +177,14 @@ HttpService.contextSchema = function() {
                 "type": "string",
                 "format": "ipv4"
             },
+            "user": {
+                "description": "The user id used for the request",
+                "type": "string"
+            },
+            "access": {
+                "description": "The access mode used for the request",
+                "type": "string"
+            },
             "filename": {
                 "description": "The CSV source file",
                 "type": "string"
@@ -243,10 +251,10 @@ HttpService.prototype.schemas = function(req, res) {
  *   and contains basic information about the sender.
  * @param {object} req - the HTTP request
  */
-HttpService.prototype.generateContext = function(req) {
+HttpService.prototype.generateContext = function(req, access, user) {
     const srcip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     //console.log('from:'+ip);
-    return { source:'API', ip: srcip };
+    return { source:'API', ip: srcip, access:access, user:user };
 }
 
 /**
@@ -274,9 +282,9 @@ HttpService.prototype.optionCors = function(req, res) {
  * @param {object} res - the HTTP response.
  */
 HttpService.prototype.postFile = function(req, res) {
-    const access = this.ac ? this.ac.checkAccessRights(req, res) : null;
+    const [ access, user ] = this.ac ? this.ac.checkAccessRights(req, res, '-w-') : null;
     if (!access) return;
-    if (access[1] != 'w') { res.status(401).send('Write access not set for user'); return; }
+    if (access[1] != 'w') { res.status(401).send('Write access not set for user ('+user+':'+access+')'); return; }
     res.header("Access-Control-Allow-Origin", "*");
     //res.send('[');
 
@@ -311,7 +319,7 @@ HttpService.prototype.postFile = function(req, res) {
     req.on('end', function() {
         //this.service.wl.logger.debug('content: '+filecontent, 'core');
 
-        const context = this.service.generateContext(req);
+        const context = this.service.generateContext(req, access, user);
         const nid = this.service.db.addEntry(metadata, context, filecontent, function() {
             content = '{ "status": "error", "msg":"invalid request" } ]';
             res.send(content);
@@ -330,9 +338,12 @@ HttpService.prototype.postFile = function(req, res) {
  * @param {object} res - the HTTP response.
  */
 HttpService.prototype.media = function(req, res) {
+    const [ access, user ] = this.ac ? this.ac.checkAccessRights(req, res) : null;
+    if (!access) return;
+
     var content= {};
     var uuid = req.params.uuid;
-    const context = this.generateContext(req);
+    const context = this.generateContext(req, access, user);
     const nid = this.db.get(uuid, context);
     if (!nid) content = { status: 'error', msg:'invalid request' };
     else      content = { url:this.server + this.httpPrefix+'storage/'+ nid };
@@ -377,8 +388,11 @@ HttpService.prototype.compress = function(req, res) {
  * @param {object} res - the HTTP response.
  */
 HttpService.prototype.fileService = function(req, res) {
+    const [ access, user ] = this.ac ? this.ac.checkAccessRights(req, res) : null;
+    if (!access) return;
+
     const fileid = req.params.fileid;
-    const context = this.generateContext(req);
+    const context = this.generateContext(req, access, user);
     res.header("Access-Control-Allow-Origin", "*");
 
     this.db.find(fileid, context, function(err) {

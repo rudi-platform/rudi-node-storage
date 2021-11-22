@@ -44,14 +44,15 @@ function BasicFileDB(mediaDir, logger, mongodb, timeout) {
  *
  * @param {object}    data - The error message.
  */
-BasicFileDB.prototype.convertContext = function(opname, id, context) {
-    const subject = (context.source !== undefined) ? opname +':'+ context.source : opname;
+BasicFileDB.prototype.convertContext = function(opname, cid, context) {
+    const source  = (context.source !== undefined) ? opname +':'+ context.source : opname;
+    const optype  = (context.access !== undefined) ? source +':'+ context.access : source;
+    const user    = (context.user !== undefined)   ? context.user                : '-';
     const rip     = (context.ip !== undefined)     ? context.ip                  : '-';
-    const cid     = (id !== undefined)             ? id                          : '-';
-    return  {
-        subject: subject,
-        req_ip: rip,
-        client_id: cid
+    const id      = (cid !== undefined)            ? cid                         : '-';
+    return {
+        auth: { clientApp:'-', userId: user, reqIP: rip },
+        operation: { opType:source, statusCode: 200, id:id  }
     };
 }
 
@@ -113,7 +114,7 @@ BasicFileDB.prototype.init = function(media_files, none, done) {
     }
     for (zone in this.by_zone_db) {
         const path = this.getPathFromConnector(this.default_csvFile, zone);
-        //this.syslog.info('Load ZONE '+zone+' => '+path, this.logid);
+        //this.syslog.debug('Load ZONE '+zone+' => '+path, this.logid);
         this.loadCSV(path, zone, errFct, done);
     }
 }
@@ -248,7 +249,7 @@ BasicFileDB.prototype.addEntry = function(metadata, context, filecontent, none, 
     if (!('file_type' in metadata)) {
         metadata.file_type = 'application/octet-stream';
         const info = magic.filetypeinfo(filecontent);
-        //this.syslog.info('Filetype: '+ JSON.stringify(info, null, 4), this.logid);
+        //this.syslog.debug('Filetype: '+ JSON.stringify(info, null, 4), this.logid);
         if (info.length) { // Take the 1st matching.
             if ('mime' in info[0]) metadata.file_type = info[0].mime;
             else if ('typename' in info[0]) metadata.file_type = 'application/' + info[0].typename;
@@ -290,7 +291,7 @@ BasicFileDB.prototype.loadCSV = function(csvFile, zone, none, done) {
                 return;
             }
 
-            const context = { source:'CSV', filename:csvFile };
+            const context = { source:'CSV', filename:csvFile, user:'<admin>', access:'rwx' };
             const entries = data.split('\n');
             for (var index in entries) {
                 const line = entries[index];
@@ -313,23 +314,23 @@ BasicFileDB.prototype.saveZoneCSV = function(zone, csvFile) {
         this.syslog.warn('zone not found: '+zone, this.logid);
         return;
     }
-    //this.syslog.info('**** PROCESS ZONE : '+zone+' *********', this.logid);
+    //this.syslog.debug('**** PROCESS ZONE : '+zone+' *********', this.logid);
     const path = this.getPathFromConnector(csvFile, zone);
     const elist = this.by_zone_db[zone];
     var content = '';
     for (uuid in elist) {
         const entry = elist[uuid];
         //if ('source' in entry.context && entry.context.source == 'CSV') continue;
-        //this.syslog.info('entry: '+entry.filename, this.logid);
+        //this.syslog.debug('entry: '+entry.filename, this.logid);
         content += entry.getCSVline() + '\n';
     }
 
     if (content != '') {
         fs.writeFile(path, content, { encoding:"utf8", flag:'w'}, function(err, data) {
             if (err) { this.syslog.warn('Could not save DB file '+this.path+' for zone '+zone+': '+err, 'db'); }
-            else this.syslog.info('saved: '+path, 'db');
+            else this.syslog.debug('saved: '+path, 'db');
         }.bind({syslog:this.syslog, path:path, content:content, zone:zone}));
-        //this.syslog.info('content: '+content);
+        //this.syslog.debug('content: '+content);
     }
 }
 

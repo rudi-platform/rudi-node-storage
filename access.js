@@ -52,7 +52,6 @@ AccessControl.prototype.checkPassword = function (p, input) {
     return p == input;
 }
 
-
 /**
  * Check the access rights and prepare a proper HTTP response.
  * Access rights take the form of the standard UNIX format RWX
@@ -60,11 +59,12 @@ AccessControl.prototype.checkPassword = function (p, input) {
  *
  * @param {object}   req    - the HTTP request
  * @param {object}   res    - the HTTP response.
- * @param {object}   cver   - access requiring execution rights.
- * @returns {string}        - the access rights.
+ * @param {object}   amode  - access mode, requiring read, write, of execution rights.
+ * @returns {string}        - the access rights, null if none provided.
+ * @returns {string}        - the user operating the request.
  */
-AccessControl.prototype.checkAccessRights = function (req, res, cver=false) {
-    var [ access, user ] = this.getAccessRights(req.headers);
+AccessControl.prototype.checkAccessRights = function (req, res, amode='---') {
+    var [ access, user ] = this.getAccessRights(req.headers, amode);
     var code = 200;
     var errMsg = "access granted";
 
@@ -76,12 +76,17 @@ AccessControl.prototype.checkAccessRights = function (req, res, cver=false) {
         /* */ break;
     case 'E02':
         res.set('WWW-Authenticate', 'Basic realm="Authentication required"');
-        code = 401; errMsg = 'Authentication failed: invalid password';
+        code = 401; errMsg = 'Authentication failed: invalid user/password';
+        access = null;
+        /* */ break;
+    case 'E03':
+        res.set('WWW-Authenticate', 'Basic realm="Authentication required"');
+        code = 401; errMsg = 'Access not granted: the user miss one or several credentials';
         access = null;
         /* */ break;
     case 'E12':
-        req.session.error = 'Incorrect version';
-        code = 412; errMsg = 'Incorrect version';
+        //req.session.error = 'Incorrect version';
+        code = 412; errMsg = 'Incorrect API version, or version unspecified';
         access = null;
         /* */ break;
     case 'E05':
@@ -90,8 +95,8 @@ AccessControl.prototype.checkAccessRights = function (req, res, cver=false) {
         access = null;
         /* */ break;
     }
-    this.logAccess(code, errMsg, req, res, user);
-    return access;
+    this.logAccess(code, errMsg, req, res, user, amode);
+    return [ access, user ];
 }
 
 /*
@@ -104,14 +109,11 @@ AccessControl.prototype.checkAccessRights = function (req, res, cver=false) {
  *
  * Access rights take the form of the standard UNIX format RWX
  * @param {object}   header - the HTTP header
- * @param {object}   cver   - access requiring execution rights.
+ * @param {object}   amode  - access mode, requiring read, write, of execution rights.
  * @returns {string}        - either the access rights or an HTTP error.
  */
-AccessControl.prototype.getAccessRights = function (header, cver=false) {
-    if (!('authorization' in header)) {
-        return [ 'E01', '-' ]; // http 401
-    }
-
+AccessControl.prototype.getAccessRights = function (header, amode='---') {
+    /* Check API version compatibility */
     var execute = '-';
     if ('version' in header) {
         const version = header['version'];
@@ -122,25 +124,38 @@ AccessControl.prototype.getAccessRights = function (header, cver=false) {
             }
         }
     }
-    if (cver && execute != 'x') return [ 'E12', '-' ]; // http 412
+    if (amode[2] == 'x' && execute != amode[2]) return [ 'E12', '-' ]; // http 412
 
-    const authorization = header['authorization'];
-    const [authType, b64auth] = (authorization.split(' ') || '');
-    if (authType.toLowerCase() == 'basic') {
-        const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':')
-        for (i in this.authorizedUsers) {
-            const [u, p, a] = this.authorizedUsers[i];
-            if (login == u) {
-                if (this.checkPassword(p, password)) {
-                    a[2] = (a[2] == 'x') ? execute : '-';
-                    return [ a, login ];
+    var userId = '-';
+    var userAcc = '---';
+    if ('authorization' in header) {
+        const authorization = header['authorization'];
+        const [authType, b64auth] = (authorization.split(' ') || '');
+        if (authType.toLowerCase() == 'basic') {
+            const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':')
+            for (i in this.authorizedUsers) {
+                const [u, p, a] = this.authorizedUsers[i];
+                if (login == u) {
+                    if (this.checkPassword(p, password)) {
+                        userId = login;
+                        userAcc = a;
+                        break;
+                    }
                 }
-                else return [ 'E02', login ]; // http 401
             }
         }
+        else return [ 'E05', '-' ]; // http 405
     }
-    else return [ 'E05', '-' ]; // http 405
-    return [ 'E01', '-' ]; // http 401
+
+    /* Check Authorizations */
+    if (amode[0] == '-' && amode[1] == '-') return [ userAcc, userId ]; // no restriction specified, http OK
+    else if (!('authorization' in header))  return [ 'E01', userId ]; // http 401, no login
+    else if (userId === '-')                return [ 'E02', userId ]; // http 401, wrong user/pass
+    else if (amode[0] != '-' && amode[0] != userAcc[0]) return [ 'E03', userId ]; // http 401, no credentials
+    else if (amode[1] != '-' && amode[1] != userAcc[1]) return [ 'E03', userId ]; // http 401, no credentials
+
+    // Access granted but some restrictions may still apply depending on calling function.
+    return [ userAcc, userId ]; // http OK
 }
 
 /**
@@ -153,10 +168,10 @@ AccessControl.prototype.getAccessRights = function (header, cver=false) {
  * @param {object} req    - the HTTP request
  * @param {object} res    - the HTTP response.
  */
-AccessControl.prototype.logAccess = function(code, errMsg, req, res, user) {
+AccessControl.prototype.logAccess = function(code, errMsg, req, res, user, amode) {
     const authorization = ('authorization' in req.header) ? req.header['authorization'] : '';
     if (!this.syslog) return;
-    const context = this.generateContext(req, user);
+    const context = this.generateContext(req, user, code, amode);
     if (code != 200) {
         this.syslog.error(errMsg+": "+req.hostname+":"+req.originalUrl+":"+req.ip+":"+util.inspect(req.params)+":"+authorization, 'ac', context);
         res.status(code).send(errMsg);
@@ -171,10 +186,12 @@ AccessControl.prototype.logAccess = function(code, errMsg, req, res, user) {
  * @param {object} req  - the HTTP request
  * @param {string} user - the HTTP user if found.
  */
-AccessControl.prototype.generateContext = function(req, user) {
+AccessControl.prototype.generateContext = function(req, user, code, amode) {
     const srcip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     //console.log('from:'+ip);
-    return { subject:req.originalUrl, client_id: user, req_ip: srcip };
+    return { auth: { clientApp:'media/ac', userId: user, reqIP: srcip },
+             operation: { opType:req.originalUrl+':'+amode, statusCode: code }
+           };
 }
 
 
