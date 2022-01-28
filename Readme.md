@@ -93,6 +93,25 @@ Defines the data recorded for each media file.
 * *Event* schema: [schema/rudi-media-db-event.json](https://data-rudi.aqmo.org/media/schema/rudi-media-db-event.json)
 Defines the data recorded for an event associated with a media file.
 
+#### Local File DB format
+
+A permanent file '_file.csv' is created and updated in all storage
+zones. This file can be used to setup the media database when it
+restarts.
+
+The current permanent's file format used for the "basic" file database
+is based on an header-less, ';' based, CSV file. The exact format is the following:
+```bash
+      <md5sum>;<uuid>;<filename>: <mimetype>; <encoding>;<creation date>;<size>
+```
+
+The following bash command can rebuild the file.
+```bash
+      for F in *-*-* ; do CRC=$(md5sum $F|cut -b1-32); FT=$(file -i $F) ; ST=$(stat -c '%Y;%s' $F) ; file=$(echo $FT | sed 's/^[^_]*_//' ); id=$(echo $FT | sed 's/^\([^_]*\)_.*/\1/') ; echo "$CRC;$id;$file;$ST"; done
+```
+You can concatenate or create a file using the output of this line.
+
+
 #### Application configuration management
 
 The management of the configuration of the application is based on a
