@@ -20,19 +20,22 @@ const basicdb = require('./basicdb.js');
  * @param {string}      mediaSchema  - the name of the media schema
  * @param {string}      eventSchema - the name of the event schema
  */
-function MongoService(srv, dbname, schemaSet, mediaSchema, eventSchema) {
+function MongoService(srv, dbname, schemaSet, mediaSchema, urlSchema, eventSchema) {
     this.mongoClient = mongodb.MongoClient;
     this.schemaSet = schemaSet;
     this.mediaSchema = mediaSchema;
+    this.urlSchema = urlSchema;
     this.eventSchema = eventSchema;
     this.mongoServerURL = (srv === undefined ? "mongodb://localhost:27017/" : srv);
     this.dbname = (dbname === undefined ? "rudi_media" : dbname);
     this.mongoOptions = { useUnifiedTopology: true };
     this.mediaCollName = 'media';
+    this.urlCollName = 'url';
     this.eventCollName = 'media_events';
     this.mongodb = null;
     this.db  = null;
     this.mediaColl  = null;
+    this.urlColl  = null;
     this.eventColl  = null;
     this.currentError = null;
 }
@@ -66,15 +69,20 @@ MongoService.prototype.open = function(err_cb, done) {
         this.service.db = db.db(this.service.dbname);
         this.service.db.listCollections().toArray(async function(err, colList) {
             if (err) { errFct(err); return; }
-            var hasMedia = false, hasEvents = false;
+            var hasMedia = false, hasUrl = false, hasEvents = false;
             for (ci in colList) {
                 const c = colList[ci];
                 hasMedia  |= (c.name == this.service.mediaCollName);
+                hasUrl    |= (c.name == this.service.urlCollName);
                 hasEvents |= (c.name == this.service.eventCollName);
             }
             if (hasMedia) {
                 this.service.mediaColl = this.service.db.collection(this.service.mediaCollName);
                 await this.service.mediaColl.drop();
+            }
+            if (hasUrl) {
+                this.service.urlColl = this.service.db.collection(this.service.urlCollName);
+                await this.service.urlColl.drop();
             }
             if (hasEvents) {
                 this.service.eventColl = this.service.db.collection(this.service.eventCollName);
@@ -91,6 +99,17 @@ MongoService.prototype.open = function(err_cb, done) {
                 this.service.mediaColl.createIndex({ 'zone':1, 'uuid':1 });
                 this.service.db.command({ collMod: this.service.mediaCollName,
                                           validator: { "$jsonSchema": this.service.schemaSet.toBson(this.service.mediaSchema) },
+                                          validationLevel: 'strict',
+                                          validationAction: 'error' }).then(doneFct, errFct);
+            }.bind({service:this.service}));
+
+            this.service.db.createCollection(this.service.urlCollName, function(err, col) {
+                if (err) { errFct(err); return; }
+                this.service.urlColl = col;
+                this.service.urlColl.createIndex({ 'uuid':1 });
+                this.service.urlColl.createIndex({ 'zone':1, 'uuid':1 });
+                this.service.db.command({ collMod: this.service.urlCollName,
+                                          validator: { "$jsonSchema": this.service.schemaSet.toBson(this.service.urlSchema) },
                                           validationLevel: 'strict',
                                           validationAction: 'error' }).then(doneFct, errFct);
             }.bind({service:this.service}));
@@ -126,10 +145,18 @@ MongoService.prototype.addMedia = async function(media, err, done) {
 
     if (!('uuid' in media) || !('zone' in media)) { errFct('Malformed media descriptor'); return; }
 
-    const emedia =  await this.mediaColl.findOne({ 'uuid': media.uuid });
-    //if (!emedia) console.log('MEDIA add '+emedia);
-    if (!emedia) this.mediaColl.insertOne(media).then(doneFct, errFct);
-    else         this.mediaColl.updateOne({ 'uuid': media.uuid }, { '$set': media }).then(doneFct, errFct);
+    if ('url' in media) {
+        const emedia =  await this.urlColl.findOne({ 'uuid': media.uuid });
+        //if (!emedia) console.log('URL add '+util.inspect(media));
+        if (!emedia) this.urlColl.insertOne(media).then(doneFct, errFct);
+        else         this.urlColl.updateOne({ 'uuid': media.uuid }, { '$set': media }).then(doneFct, errFct);
+    }
+    else {
+        const emedia =  await this.mediaColl.findOne({ 'uuid': media.uuid });
+        //if (!emedia) console.log('MEDIA add '+util.inspect(media));
+        if (!emedia) this.mediaColl.insertOne(media).then(doneFct, errFct);
+        else         this.mediaColl.updateOne({ 'uuid': media.uuid }, { '$set': media }).then(doneFct, errFct);
+    }
 }
 
 /**

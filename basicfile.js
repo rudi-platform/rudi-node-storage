@@ -6,7 +6,6 @@
  */
 const fs = require('fs');
 const util = require('util');
-const md5sum = require('md5');
 const { v4: uuidv4 } = require('uuid');
 
 /**
@@ -19,41 +18,28 @@ const { v4: uuidv4 } = require('uuid');
  *
  *  The complete meta-data can also be provided to the constructor.
  *
- * @param {string}   descline  - The description line from a CSV file.
  * @param {string}   zone      - The name of the storage and access control zone.
  * @param {object}   context   - The request context.
- * @param {json}     metadata  - The meta-data dictionary.
  * @param {string}   filename  - The media base filename.
+ * @param {integer}  uuid      - The local media ID.
+ * @param {string}   mime      - The data content mime format.
+ * @param {string}   encoding  - The data content binary encoding.
  * @param {integer}  size      - The file size.
  * @param {string}   md5       - The md5sum of the file content.
+ * @param {date}     date      - The creation/modification date.
+ * @param {json}     metadata  - The meta-data dictionary.
  */
-function BasicFileEntry(descline, zone, context, metadata, filename, size, md5, date) {
-    if (metadata === undefined) {
-        const [ md5, uuid, filetype, encoding, date, size] = descline.split(';');
-        if (size === undefined) throw new Error('Could not parse '+descline);
-        const [ filename, mimetype ] = filetype.split(':');
-        this.md5=md5; this.uuid=uuid;
-        this.filename=filename; this.mimetype=mimetype.trim(); this.encoding=encoding.trim();
-        this.date=parseInt(date)*1000; this.size=parseInt(size);
-    }
-    else {
-        try {
-            const now = new Date();
-            this.uuid     = metadata.media_id;
-            this.mimetype = metadata.file_type;
-            this.filename = filename;
-            this.size     = size;
-            this.md5      = md5;
-            this.encoding = 'charset' in metadata ? metadata.charset : 'charset=binary';
-            this.date     = date === undefined ? 'date' in metadata ?
-                new Date(metadata.date) :new Date(0) : new Date(date);
-            this.metadata = metadata;
-        }
-        catch(err) { throw new Error('invalid meta-data: '+err+' value: '+metadata); }
-    }
-    this.zone = zone;
-    this.context = context;
-    this.date = new Date(this.date);
+function BasicFileEntry(zone, context, filename, uuid, mime, encoding, size, md5, date, metadata) {
+    this.zone     = zone;
+    this.context  = context;
+    this.filename = filename;
+    this.uuid     = uuid;
+    this.mimetype = mime;
+    this.encoding = encoding;
+    this.size     = size;
+    this.md5      = md5;
+    this.date     = date;
+    if (metadata) { this.metadata = metadata; }
 }
 
 /**

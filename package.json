@@ -20,7 +20,7 @@
         "md5": "^2.3.0",
         "minimist": "^1.2.5",
         "mongodb": "^3.6.6",
-        "rudilogger": "git+https://deployment:V77s-5gnZM6PR_ihMRsN@gitlab.aqmo.org/rudidev/rudilogger.git#release",
+        "rudilogger": "file:rudilogger",
         "uuid": "^8.3.2"
     },
     "devDependencies": {

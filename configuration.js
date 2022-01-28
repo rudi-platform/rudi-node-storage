@@ -27,7 +27,8 @@ const DEFAULT_CONF = {
         schema_context: 'context.json',
         schema_meta: 'meta.json',
         schema_event: 'event.json',
-        schema_file: 'file.json'
+        schema_file: 'file.json',
+        schema_url: 'url.json'
     },
     storage: {
         media_dir: process.env.HOME + '/_media',
