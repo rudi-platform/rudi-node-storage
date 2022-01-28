@@ -16,6 +16,7 @@ const zlib = require('zlib');
 const logger = require('rudilogger');
 const AccessControl = require('./access.js');
 const BasicFileEntry = require('./basicfile.js');
+const BasicUrlEntry = require('./basicurl.js');
 const basicdb = require('./basicdb.js');
 const mongodb = require('./db.js');
 const schemaSet = require('./schema.js');
@@ -54,11 +55,13 @@ function HttpService(configuration) {
     const metaRef    = schemaBase + configuration.schemas.schema_meta;
     const eventRef   = schemaBase + configuration.schemas.schema_event;
     const fileRef    = schemaBase + configuration.schemas.schema_file;
+    const urlRef     = schemaBase + configuration.schemas.schema_url;
     this.schemaSet = new schemaSet(schemaURL);
     this.schemaSet.addSchema(contextRef, HttpService.contextSchema());
     this.schemaSet.addSchema(metaRef, HttpService.metaSchema());
     this.schemaSet.addSchema(eventRef, basicdb.eventSchema(contextRef));
     this.schemaSet.addSchema(fileRef, BasicFileEntry.fileSchema(contextRef, metaRef));
+    this.schemaSet.addSchema(urlRef, BasicUrlEntry.urlSchema(contextRef, metaRef));
 
     //this.wl = new WebLogger(configuration.logging.app_name, configuration.logging.log_dir, null);
     this.syslog = new logger.RudiLogger(configuration.logging.app_name, this.revision, configuration);
@@ -69,14 +72,16 @@ function HttpService(configuration) {
     this.icon = new Buffer.from('AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACe7OkFqNqYQ6jZlKWo2ZTjpdiR+5bQgvuc04Pj5PWgovv/qED4/6cEAAAAAAAAAAAAAAAAAAAAAAAAAACb7/wSm+/7h6Hlyeyo2pb/qNmU/6XYkv+W0IL/ndOD/+n4of/5/6fq+P+ng/j/pxAAAAAAAAAAAAAAAACa7/sQm+/7oZvv+/2b7/j/ouTG/6jalv+m2JH/ltCC/53Tg//p+KH/+f+n//j/p/34/6eb+P+mDgAAAACf7voBm+/7e5vv+/yb7/v/m+/8/5vu+P+i5MX/pdiT/5bQgv+d04P/6fih//n/p//4/6f/+P+n+/j9p3UAAAAAnPD7MZvw++Cb7/v/m+/7/5vv+/+b8Pz/nO/4/5/iwv+V0IT/ndOD/+n4of/5/6f/+P+n//j7qP/35qvc9tStLJPl+YWV5/n+lef5/5Xn+f+V5/n/lef5/5bo+viY7PbSj9mq053Tg/jp96H/+f+n//j8p//35av/9tat/fbWrX1+yfPEfsnz/37J8/9+yfP/fsr0/37K9PqAy/SHkOj/FITcuhWk14eN6vii+/n9qP/35av/9tat//bWrf/21q28fMfz33zH8/98x/P/fMfz/3zF8/+AqOvYgpDmGgAAAAAAAAAA4/efHfb7p9z35qv/9tat//bWrf/21q3/9tat2HzH8958x/P/fMfz/3zG8/+BoOr/iXTf2Z173hwAAAAAAAAAAPnuqh/346vd9tet//bWrf/21q3/9tat//bWrdh8x/PCfMfz/3zH8/+Boer/h3Lf/5R43/vJpOOP5a3TGuWTrhvzya2S9M6t/PTOrf/0zq3/9M6t//TOrf/00K26fMfzgnzH8/6Bour/iHPf/4du3v+Ved//zqjk+dup2Nnfg7La4oit+uKKrf/iiq3/4oqt/+KKrf/iiq3944+te3zK8y6Boerdh3Tf/4hu3v+Hbt7/lXnf/86o5P/TqeP/0YnI/917rv/eeq3/3nqt/956rf/eeq3/3nqt2t55rSoAAAAAiHDedohu3vuIb97/h27e/5V53//OqOT/0qrj/8SS3v/Phcf/3Xyu/957rf/ee63/3nut+t57rXAAAAAAAAAAAIdu3g2Ib96aiG/e/Idu3v+Ved//zqjk/9Kq4//Ekt//wo7d/9CFxv/dfK7/3nut/N57rZXee60MAAAAAAAAAAAAAAAAiG7eD4hv3n+Hbt7nlXnf/86o5P/SqeP/xJLf/8KP3v/Dj93/0YXF5d57rXvfeqwOAAAAAAAAAADT0c4F09HOBeHjyASwotIGjHXdQJp/357PquPd0qrj+MST3/jCkN7dw5LencSV3D7Tr8cG0N/VBNPRzgXT0c4F+B8AAOAHAADAAwAAwAMAAIABAAAAAQAAAYAAAAPAAAADwAAAAYAAAAABAACAAQAAwAMAAMADAADwDwAA+B8AAA==', 'base64');
 
     this.syslog.warn('Media file system: '+configuration.storage.media_dir, 'core');
-    this.mongodb = new mongodb(configuration.database.db_url, configuration.database.db_name, this.schemaSet, fileRef, eventRef);
+    this.mongodb = new mongodb(configuration.database.db_url, configuration.database.db_name, this.schemaSet, fileRef, urlRef, eventRef);
     this.db = new basicdb(configuration.storage.media_dir, this.syslog, this.mongodb, configuration.storage.acc_timeout);
 
-    this.mongodb.open(function(service, err) { this.syslog.error('DB initialization failed: '+err, 'core'); }.bind({syslog:this.syslog}),
-                      function(db) {
-                          this.syslog.info('DB initialized', 'core');
-                          this.db.init(configuration.storage.media_files);
-                      }.bind({syslog:this.syslog,db:this.db}));
+    this.mongodb.open(function(service, err) {
+        this.syslog.error('DB initialization failed: '+err, 'core');
+        this.db.init(configuration.storage.media_files, false);
+    }.bind({syslog:this.syslog}), function(db) {
+        this.syslog.info('DB initialized', 'core');
+        this.db.init(configuration.storage.media_files, true);
+    }.bind({syslog:this.syslog,db:this.db}));
 
     this.httpServer.get(this.httpPrefix+'favicon.ico', function(req, res) { service.favicon(req,res); }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'revision', function(req, res) { service.getRevision(req,res); }.bind({'service':this}));
@@ -208,7 +213,7 @@ HttpService.metaSchema = function() {
             "media_type": {
                 "description": "The media type, currently only FILE, STREAM in  the future",
                 "type": "string",
-                "enum": [ "FILE" ]
+                "enum": [ "FILE", "STREAM", "INDIRECT" ]
             },
             "media_name": {
                 "description": "The media name, typically used for the filename",
@@ -299,7 +304,7 @@ HttpService.prototype.postFile = function(req, res) {
     try { metadata = JSON.parse(metadata); }
     catch(err) {
         content = '{ "status": "error", "msg":"malformed metadata" } ]';
-        this.syslog.error('malformed metadata: '+req.params.file_metadata, 'core');
+        this.syslog.error('malformed metadata: '+metadata, 'core');
         res.send(content);
         res.end();
         return;
