@@ -58,6 +58,16 @@ A simple CURL command to post the file *mon_nom.json*:
 curl -u 'rudiprod:sysadminisgreat!'  -H 'file_metadata:{"media_name":"mon_nom","media_id":"37df63aa-1aae-4279-be3b-b07076d36131","file_size":21660,"file_type":"application/json"}' --data-binary @mon_nom.json https://data-rudi.aqmo.org/media/post
 ```
 
+A special extension is available in order to treat of URL instead of a file. In that case, no content is provided and some specific meta-data are required:
+   * "media_type": Must specify "INDIRECT" (it is an extension of the default value "FILE" defined in the standard RUDI meta-data specification)
+   * "url": mandatory, a properly formed URL
+   * "access_date": optional, the last validated access date (in the past)
+   * "expire_date": optional, a date after the access is invalid (in the future)
+
+```shell
+curl -u 'rudiprod:sysadminisgreat!'  -H 'file_metadata:{"media_type":"INDIRECT", "media_name":"mon_nom","media_id":"37df63aa-1aae-4279-be3b-b07076d36888","url":"https://data-rudi.aqmo.org/api/v1/","access_date":'"$(date +%s)"', "expire_date":'"$(date +%s --date +72\ hour )"' }'  https://shared-rudi.aqmo.org/media/pos
+```
+
 2. To get a meta-data:
 - *GET* https://data-rudi.aqmo.org/media/UUID [in header: *media-access-method*: [optional] access mode ]
 Returns a Json with the temporary file link. It is available for 2 minutes by default.
@@ -90,6 +100,8 @@ Defines the context data recorded with all events.
 Defines the minimal metadata requided for posting media.
 * *File* schema: [schema/rudi-media-db-file.json](https://data-rudi.aqmo.org/media/schema/rudi-media-db-file.json)
 Defines the data recorded for each media file.
+* *URL* schema: [schema/rudi-media-db-file.json](https://data-rudi.aqmo.org/media/schema/rudi-media-db-url.json)
+Defines the data recorded for each media URL.
 * *Event* schema: [schema/rudi-media-db-event.json](https://data-rudi.aqmo.org/media/schema/rudi-media-db-event.json)
 Defines the data recorded for an event associated with a media file.
 
@@ -102,7 +114,11 @@ restarts.
 The current permanent's file format used for the "basic" file database
 is based on an header-less, ';' based, CSV file. The exact format is the following:
 ```bash
-      <md5sum>;<uuid>;<filename>: <mimetype>; <encoding>;<creation date>;<size>
+      <md5sum>;<uuid>;<filename>: <mimetype>; <encoding>;<creation date in Posix EPOCH>;<size>
+```
+Note the the URL media type is also supported in the CSV file. In that case, the format is the following:
+```bash
+      <url>;<uuid>;<filename>: text/uri-list; charset=utf-8;<access date in Posix EPOCH>;<expire date in Posix EPOCH>
 ```
 
 The following bash command can rebuild the file.
@@ -194,11 +210,12 @@ Preconfigured links :
 - [x] Feature: file-management storage in mongodb @lmorin (#3)
 - [x] Feature: log-management in mongodb @lmorin (#4)
 - [x] Feature: add git version tag in API @lmorin (#5)
+- [x] Feature: add the support of media URL @lmorin (#11)
 - [ ] Feature: add non-regression tests @lmorin (#6)
 - [ ] Feature: mongodb backup management @lmorin (#7)
 
 #### Bugs
-- [x] Bug: Access-Control-Allow-Origin @lmorin (#8)
+- [x] Bug: Access-Control-Allow-Origin @lmorin (Fixed #8)
 
 ### Authors or Acknowledgments
 
