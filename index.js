@@ -243,11 +243,11 @@ HttpService.prototype.schemas = function(req, res) {
     const name = req.params.name;
     const mimetype = 'application/json';
     const content = this.schemaSet.toJSON(name);
-    if (!content) { res.status(404).send('Schema not found'); res.end(); return; }
+    if (!content) { res.status(404).write('Schema not found'); res.end(); return; }
     //console.log('REF:'+JSON.stringify(content));
     res.type(mimetype);
-    res.send(content);
-    res.end();
+    res.write(content);
+    res.status(200).end();
 }
 
 /**
@@ -291,13 +291,14 @@ HttpService.prototype.postFile = function(req, res) {
     if (!access) return;
     if (access[1] != 'w') { res.status(401).send('Write access not set for user ('+user+':'+access+')'); return; }
     res.header("Access-Control-Allow-Origin", "*");
-    //res.send('[');
+    res.type('application/json');
+    res.write('[');
 
     var content= [];
     if (!('file_metadata' in req.headers)) {
         content = '{ "status": "error", "msg":"no meta-data provided" } ]';
-        res.send(content);
-        res.end();
+        res.write(content);
+        res.status(400).end();
         return;
     }
     var metadata = req.headers.file_metadata;
@@ -305,34 +306,56 @@ HttpService.prototype.postFile = function(req, res) {
     catch(err) {
         content = '{ "status": "error", "msg":"malformed metadata" } ]';
         this.syslog.error('malformed metadata: '+metadata, 'core');
-        res.send(content);
-        res.end();
+        res.write(content);
+        res.status(400).end();
         return;
     }
 
     // Bufferize file data
-    var filecontent = [];
+    if (metadata.file_size > 500e6) {
+        content = '{ "status": "error", "msg":"file too large, use a different upload method" } ]';
+        this.syslog.error('file too large, use a different upload method: ' + JSON.stringify(metadata));
+        res.write(content);
+        res.status(400).end();
+        return;
+    }
+
+    // Bufferize file data
+    var realcontentsize = 0;
+    var bufferSize = metadata.file_size;
+    var filecontent = Buffer.allocUnsafe(bufferSize);
     req.on('readable', function() {
+        var chunkSize = 65536*4;
         var chunk;
         content = '{ "status" "ongoing" }, ';
         while (null !== (chunk = req.read())) {
-            filecontent = filecontent.concat(Array.from(chunk));
-            //res.send(content);
+            const nsize = realcontentsize + chunk.length;
+            if (nsize > bufferSize) {
+                if (bufferSize > 2 * chunkSize) chunkSize = chunkSize * 2;
+                bufferSize += chunkSize + chunk.length;
+                newfilecontent = Buffer.allocUnsafe(bufferSize);
+                filecontent.copy(newfilecontent);
+                filecontent = newfilecontent;
+            }
+            chunk.copy(filecontent, realcontentsize);
+            realcontentsize += chunk.length;
+            res.write(' ' + realcontentsize + ',');
         }
     });
     // Build the entry, Close the request
     req.on('end', function() {
-        //this.service.wl.logger.debug('content: '+filecontent, 'core');
+        this.service.syslog.debug('content: '+filecontent.length, 'core');
 
         const context = this.service.generateContext(req, access, user);
-        const nid = this.service.db.addEntry(metadata, context, filecontent, function() {
+        const data = filecontent.slice(0, realcontentsize);
+        const nid = this.service.db.addEntry(metadata, context, data, function() {
             content = '{ "status": "error", "msg":"invalid request" } ]';
-            res.send(content);
-            res.end();
+            res.write(content);
+            res.status(400).end();
         }, function() {
             content = '{ "status": "OK" } ]';
-            res.send(content);
-            res.end();
+            res.write(content);
+            res.status(200).end();
         });
     }.bind({service:this}));
 };
@@ -361,8 +384,8 @@ HttpService.prototype.media = function(req, res) {
     }
     else {
         res.header("Access-Control-Allow-Origin", "*");
-        res.send(content);
-        res.end();
+        res.write(JSON.stringify(content));
+        res.status(200).end();
     }
 };
 
@@ -402,27 +425,27 @@ HttpService.prototype.fileService = function(req, res) {
 
     this.db.find(fileid, context, function(err) {
         res.type('application/json');
-        res.status(401).send({ status: 'error', msg:"could not get media content"});
-        res.end();
+        res.write(JSON.stringify({ status: 'error', msg:"could not get media content"}));
+        res.status(401).end();
     }, function(data, name, mimetype) {
         const compression_mode = req.headers['media-access-compression'];
         const content = data;
         res.setHeader("Content-Disposition",'attachment; filename="' + name + '"');
         if (compression_mode && compression_mode.toLowerCase() == 'true') {
             zlib.gzip(data, function(err, buffer) {
-                if (err) { res.type('application/octet-stream'); res.send(content); }
+                if (err) { res.type('application/octet-stream'); res.write(content); }
                 else     {
                     res.setHeader("Content-Disposition",'attachment; filename="' + name + '.gz"');
                     res.type('application/gzip');
-                    res.send(buffer);
+                    res.write(buffer);
                 }
-                res.end();
+                res.status(200).end();
             });
         }
         else {
             res.type(mimetype);
-            res.send(content);
-            res.end();
+            res.write(content);
+            res.status(200).end();
         }
     });
 };

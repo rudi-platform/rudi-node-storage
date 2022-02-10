@@ -6,7 +6,7 @@
  */
 const fs = require('fs');
 const util = require('util');
-const md5sum = require('md5');
+const crypto = require('crypto'); 
 const BasicFileEntry = require('./basicfile.js');
 const BasicUrlEntry = require('./basicurl.js');
 const magic = require('magic-bytes.js');
@@ -247,7 +247,7 @@ BasicFileDB.eventSchema = function(contextRef) {
  */
 BasicFileDB.prototype.addEntry = function(metadata, context, filecontent, none, done) {
     if (!('media_type' in metadata)) {
-        this.errorCtx('Missing media type: '+ util.inspect(metadata), 'add_media', '-', context);
+        this.errorCtx('(ignored) Missing media type: '+ util.inspect(metadata), 'add_media', '-', context);
         //if (none) none('Missing media type');
         //return;
         metadata.media_type = "FILE";
@@ -275,8 +275,8 @@ BasicFileDB.prototype.addEntry = function(metadata, context, filecontent, none, 
     const name = ('media_name' in metadata) ? metadata.media_name : 'media';
 
     if (metadata.media_type == "FILE") {
-        const hash = md5sum(filecontent);
-        const size = filecontent.length;
+        const hash = crypto.createHash('md5').update(filecontent).digest('hex');
+        const size = ('file_size' in metadata) ? metadata.file_size : filecontent.length;
         const uuid = metadata.media_id;
         const mimetype = metadata.file_type;
         const encoding = metadata.charset;
@@ -284,8 +284,12 @@ BasicFileDB.prototype.addEntry = function(metadata, context, filecontent, none, 
         const filename = name;
         const zone = this.default_zone;
 
+        if (filecontent.length != size) {
+            this.errorCtx('(ignored) inconsistent provided file size: '+size+' received: '+filecontent.length, 'add_media', metadata.media_id, context);
+        }
         const path = this.getPathFromConnector(metadata.media_id + '_' + filename, zone);
-        fs.writeFile(path, Uint8Array.from(filecontent), { flag:'w'}, function(err, data) {
+        this.syslog.debug('new file: size='+size+' ('+filecontent.length+') hash='+hash, 'core');
+        fs.writeFile(path, filecontent, { flag:'w'}, function(err, data) {
             if (err) {
                 this.service.errorCtx('could not write file: '+path, 'add_media', metadata.media_id, context);
                 if (none) none(err);
@@ -295,7 +299,7 @@ BasicFileDB.prototype.addEntry = function(metadata, context, filecontent, none, 
             this.service.buildEntry(zone, context, entry, none, done);
         }.bind({service:this}));
     }
-    if (metadata.media_type == "INDIRECT") {
+    else if (metadata.media_type == "INDIRECT") {
         if (!('url' in metadata)) {
             this.errorCtx('Missing media URL: '+ metadata, 'add_media', '-', context);
             if (none) none('Missing media URL');
