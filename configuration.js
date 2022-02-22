@@ -44,15 +44,17 @@ const DEFAULT_CONF = {
         app_name: 'media'
     },
     log_server: {
-        path: "127.0.0.1"
-
-//        path: "/dev/log",
-//        transport: 4
+        path: "127.0.0.1",
+        port: 514,
+        path: "/dev/log",
+        transport: 1 // TCP=1, UNIX=4
     },
     log_local: {
+        directory: './_logs/',
         prefix: 'RudiMedia-',
         console: true,
-        consoleData: false
+        consoleData: false,
+        logRotationSec: 8 * 60 * 60 // 8 hours.
     }
 };
 
