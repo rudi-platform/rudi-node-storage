@@ -1,0 +1,48 @@
+stages:
+  - install
+  - pack
+  - quality
+
+# This folder is cached between builds
+cache:
+  paths:
+    - node_modules/
+
+install_media:
+  stage: install
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+  tags:
+    - nodejs
+  variables:
+    NODE_ENV: production
+  script:
+    - npm install
+
+pack_media:
+  stage: pack
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+  tags:
+    - nodejs
+  variables:
+    NODE_ENV: production
+  script:
+    - npm pack
+  artifacts:
+    name: "rudi_media.tgz"
+    when: on_success
+    paths:
+      - ./rudi_media_drv-*.tgz
+
+quality_lint:
+  stage: quality
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+  tags:
+    - nodejs
+  variables:
+    NODE_ENV: development
+  script:
+    - npm install
+    - npm run lint

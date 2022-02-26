@@ -90,7 +90,7 @@ BasicFileDB.prototype.logReq = function(data) {
         else                     extra = ' file='+data.value.filename;
         context = this.convertContext(data.operation, data.uuid, data.context);
     }
-    else  if (data.operation === 'new_conn' || data.operation === 'del_conn') {
+    else  if (data.operation === 'check_entry' || data.operation === 'new_conn' || data.operation === 'del_conn') {
         context = this.convertContext(data.operation, data.uuid, data.context);
     }
     else if (data.operation === 'acc_conn') {
@@ -217,7 +217,7 @@ BasicFileDB.eventSchema = function(contextRef) {
             "operation": {
                 "description": "The operation done",
                 "type": "string",
-                "enum": [ "add_media", "new_conn", "del_conn", "acc_conn" ]
+                "enum": [ "add_media", "check_entry", "new_conn", "del_conn", "acc_conn" ]
             },
             "uuid": {
                 "description": "The open storage access uuid",
@@ -265,8 +265,48 @@ BasicFileDB.prototype.addEntry = function(metadata, context, filecontent, none, 
             if ('mime' in info[0]) metadata.file_type = info[0].mime;
             else if ('typename' in info[0]) metadata.file_type = 'application/' + info[0].typename;
         }
+        /* TODO: Clean-up json/csv analysis.
+         *
+         * For sure, the following code is full of "magic-values". The
+         * purpose of this code is to provide a content basic analysis
+         * for demos.
+         */
+        else if (Buffer.isBuffer(filecontent)) {
+            const itecur = function (s,p) {var i=0,c=-1;while(i>=0&&c<10){i=s.indexOf(p,i)+1;c++;}; return c;}
+
+            const contheader = filecontent.slice(0,filecontent.indexOf('\n')).slice(0,500);
+            if (itecur(contheader,';') > 3 || itecur(contheader,',') > 3) { metadata.file_type = 'text/csv'; }
+            var jsoncontent = '';
+            if (filecontent.length < 5000) {
+                try { jsoncontent = JSON.parse(filecontent); } catch(e) {}
+            }
+            else {
+                const s = filecontent.slice(0,500);
+                jsoncontent =  (itecur(s,'{') > 3 && itecur(s,'}') > 3 && itecur(s,',') > 3) ? s : '' ;
+            }
+            if (jsoncontent.length > 0) {
+                if (jsoncontent.includes('Feature') && jsoncontent.includes('geometry'))
+                    metadata.file_type = 'application/geo+json';
+                else
+                    metadata.file_type = 'application/json';
+            }
+        }
     }
-    if (!('charset' in metadata))     { metadata.charset = 'charset=binary'; }
+    if (!('charset' in metadata))     {
+        /* TODO: Clean-up charset analysis.
+         *
+         * The following code is limited to small files. The purpose
+         *  of this code is to provide a basic charset analysis for
+         *  demos.
+         */
+        metadata.charset = '';
+        if (Buffer.isBuffer(filecontent) && filecontent.length < 120000) {
+            if      (metadata.charset == '') try { filecontent.toString('base64'); metadata.charset = 'charset=us-ascii'; } catch(e) {}
+            else if (metadata.charset == '') try { filecontent.toString('utf8');   metadata.charset = 'charset=utf-8'; }    catch(e) {}
+            else if (metadata.charset == '') try { filecontent.toString('ascii');  metadata.charset = 'charset=us-ascii'; } catch(e) {}
+        }
+        else metadata.charset = 'charset=binary';
+    }
     if (!('access_date' in metadata)) { metadata.access_date = new Date(); }
     else {
         metadata.access_date = parseInt(metadata.access_date)*1000;
@@ -426,6 +466,34 @@ BasicFileDB.prototype.saveZoneCSV = function(zone, csvFile) {
 BasicFileDB.prototype.saveCSV = function(csvFile) {
     for (zone in this.by_zone_db) {
         this.saveZoneCSV(zone, csvFile);
+    }
+}
+
+/**
+ * Require check the real content of a media, and returns its updated MD5 value.
+ *
+ * @param  {string}   uuid  - The media UUID.
+ * @return {string}         - The MD5 value.
+ */
+BasicFileDB.prototype.check = function(uuid, context, none, done) {
+    //console.log('Check:'+uuid);
+    if (!(uuid in this.db)) return none(new Error("media uuid not found"));
+    const media = this.db[uuid];
+    try {
+        const opdesc = { operation: 'check_entry', uuid: media.uuid, zone: media.zone, context: context };
+        this.logReq(opdesc);
+        const source = this.getPathFromConnector(media.uuid + '_' + media.filename, media.zone);
+        media.getRealMd5(source, context, none, done);
+
+        const errFct = function(err) { this.service.error('Could not update DB: '+err+' with '+JSON.stringify(this.desc)); };
+        if (this.mongodb) {
+            this.mongodb.addEvent(opdesc, errFct.bind({service:this,desc:opdesc}), function(mongodb) {});
+        }
+        return media.md5;
+    }
+    catch(err) {
+        this.error('Could not process media: '+err+' with '+uuid+' '+JSON.stringify(context));
+        return null;
     }
 }
 
