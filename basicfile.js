@@ -6,6 +6,7 @@
  */
 const fs = require('fs');
 const util = require('util');
+const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 
 /**
@@ -140,7 +141,7 @@ BasicFileEntry.prototype.generateFileId = function() {
  * @param {accessDesc}   context - The media access context.
  * @param {function=}    none    - An optional callback with the error if no CSV was found.
  * @param {function}     done    - A callback with the file when done.
- *                                 Returns an array with the content, then name, and the mime type.
+ *                                 Returns the content, then name, and the mime type.
  */
 BasicFileEntry.prototype.getFile = function(idesc, context, none, done) {
     if (!('source' in idesc)) {
@@ -155,6 +156,33 @@ BasicFileEntry.prototype.getFile = function(idesc, context, none, done) {
         }
         if (done) done(data, idesc.filename, idesc.type);
     });
+}
+
+/**
+ * Check the media content.
+ * The data is loaded from its expected location and an md5 is computed.
+ * @param {connector ID} source  - The media descriptor.
+ * @param {accessDesc}   context - The media access context.
+ * @param {function=}    none    - An optional callback with the error if no file was found.
+ * @param {function}     done    - A callback with the file when done.
+ *                                 Returns the hash, the previous hash, and the file size.
+ */
+BasicFileEntry.prototype.getRealMd5 = function(source, context, none, done) {
+
+    fs.readFile(source, { flag:'r'}, function(err, data) {
+        if (err) {
+            console.error('Error: critical failure: could not load '+idesc.source);
+            if (none) none(new Error('loading media: file error'));
+            return;
+        }
+        const hash = crypto.createHash('md5').update(data).digest('hex');
+        const previousHash = this.entry.md5;
+        if (hash != previousHash) {
+            this.entry.md5 = hash;
+            this.entry.size = data.length;
+        }
+        if (done) done(hash, previousHash, this.entry.size);
+    }.bind({entry:this}));
 }
 
 module.exports = BasicFileEntry;

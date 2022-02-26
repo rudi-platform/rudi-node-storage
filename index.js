@@ -78,7 +78,7 @@ function HttpService(configuration) {
     this.mongodb.open(function(service, err) {
         this.syslog.error('DB initialization failed: '+err, 'core');
         this.db.init(configuration.storage.media_files, false);
-    }.bind({syslog:this.syslog}), function(db) {
+    }.bind({syslog:this.syslog,db:this.db}), function(db) {
         this.syslog.info('DB initialized', 'core');
         this.db.init(configuration.storage.media_files, true);
     }.bind({syslog:this.syslog,db:this.db}));
@@ -93,6 +93,7 @@ function HttpService(configuration) {
     this.httpServer.get(this.httpPrefix+'storage/:fileid', function(req, res) { service.fileService(req, res) }.bind({'service':this}));
     this.httpServer.post(this.httpPrefix+'post', function(req, res) { service.postFile(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'post', function(req, res) { service.postFile(req, res) }.bind({'service':this}));
+    this.httpServer.get(this.httpPrefix+'check', function(req, res) { service.checkFile(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'schema/:name', function(req, res) { service.schemas(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+':uuid', function(req, res) { service.media(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'download/:uuid', function(req, res) { service.direct(req, res) }.bind({'service':this}));
@@ -277,6 +278,56 @@ HttpService.prototype.optionCors = function(req, res) {
     res.header('Access-Control-Allow-Headers', baseHeaderList +', '+ extendedHeaderList);
     res.status(200);
     res.end();
+}
+
+/**
+ * Serves a check of an existing media.
+ * The post HTTP header must contain the ":file_metadata" with all necessary fields.
+ *
+ * @param {object} req - the HTTP request
+ * @param {object} res - the HTTP response.
+ */
+HttpService.prototype.checkFile = function(req, res) {
+    const [ access, user ] = this.ac ? this.ac.checkAccessRights(req, res, 'r--') : null;
+    if (!access) return;
+    if (access[0] != 'r') { res.status(401).send('Read access not set for user ('+user+':'+access+')'); return; }
+    res.header("Access-Control-Allow-Origin", "*");
+    res.type('application/json');
+    res.write('[');
+    
+    var content= [];
+    if (!('file_metadata' in req.headers)) {
+        content = '{"status":"error", "msg":"no meta-data provided"}]';
+        res.write(content);
+        res.status(400).end();
+        return;
+    }
+    var metadata = req.headers.file_metadata;
+    try { metadata = JSON.parse(metadata); }
+    catch(err) {
+        content = '{"status":"error", "msg":"malformed metadata"}]';
+        this.syslog.error('malformed metadata: '+metadata, 'core');
+        res.write(content);
+        res.status(400).end();
+        return;
+    }
+
+    if (!metadata.media_id) {
+        content = '{ "status": "error", "msg":"uuid missing in metadata"}]';
+        this.syslog.error('uuid missing in metadata: ' + JSON.stringify(metadata));
+        res.write(content);
+        res.status(400).end();
+        return;
+    }
+
+    const context = this.generateContext(req, access, user);
+    const nid = this.db.check(metadata.media_id, context, function(err) {
+        this.res.write('{"status":"error", "msg":"'+err.toString()+'"}');
+        this.res.status(400).end();
+    }.bind({res:res}), function(hash, previousHash, size) {
+        this.res.write('{"status":"OK", "md5":"'+hash+'", "previous_md5":"'+previousHash+'", "size":"'+size+'"}');
+        this.res.status(200).end();
+    }.bind({res:res}));
 }
 
 /**

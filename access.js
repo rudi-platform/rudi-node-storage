@@ -12,7 +12,7 @@ const crypto = require('crypto');
  * A simple authorization filter for express.
  * The access rights are static and controlled by a tables.
  *
- * @class 
+ * @class
  * @param {json}      authorizedVersion - The list of authorized version.
  * @param {json}      authorizedUsers   - The list of authorized users.
  * @param {logger}    logger            - The access logger.
