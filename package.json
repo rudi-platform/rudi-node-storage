@@ -1,6 +1,6 @@
 {
     "name": "rudi_media_drv",
-    "version": "1.1.0",
+    "version": "1.0.0",
     "description": "",
     "main": "index.js",
     "files": [
@@ -14,7 +14,7 @@
         "weblogger.js"
     ],
     "dependencies": {
-        "@aqmo.org/rudi_logger": "file:../rudilogger/aqmo.org-rudi_logger-1.0.1.tgz",
+        "@aqmo.org/rudi_logger": "^1.1.0",
         "express": "^4.16.4",
         "ini": "^1.3.7",
         "magic-bytes.js": "^1.0.3",
