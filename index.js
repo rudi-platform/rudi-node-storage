@@ -13,7 +13,7 @@ const argv = require('minimist')(process.argv.slice(2));
 const zlib = require('zlib');
 
 //var WebLogger = require('./weblogger.js');
-const logger = require('rudilogger');
+const logger = require('@aqmo.org/rudi_logger');
 const AccessControl = require('./access.js');
 const BasicFileEntry = require('./basicfile.js');
 const BasicUrlEntry = require('./basicurl.js');
