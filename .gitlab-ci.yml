@@ -11,7 +11,7 @@ default:
   before_script:
     - |
       {
-        echo "@${CI_PROJECT_ROOT_NAMESPACE}:registry=${CI_API_V4_URL}/projects/59/packages/npm/"
+        echo "@aqmo.org:registry=${CI_API_V4_URL}/projects/59/packages/npm/"
         echo "${CI_API_V4_URL#https?}/projects/59/packages/npm/:_authToken=\${CI_JOB_TOKEN}"
       } | tee -a .npmrc
 
