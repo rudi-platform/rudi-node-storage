@@ -14,13 +14,13 @@
         "weblogger.js"
     ],
     "dependencies": {
+        "@aqmo.org/rudi_logger": "^1.1.1",
         "express": "^4.16.4",
         "ini": "^1.3.7",
         "magic-bytes.js": "^1.0.3",
         "md5": "^2.3.0",
         "minimist": "^1.2.5",
         "mongodb": "^3.6.6",
-        "rudilogger": "git+https://deployment:V77s-5gnZM6PR_ihMRsN@gitlab.aqmo.org/rudidev/rudilogger.git#release",
         "uuid": "^8.3.2"
     },
     "devDependencies": {

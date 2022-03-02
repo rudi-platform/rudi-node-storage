@@ -46,7 +46,10 @@ const DEFAULT_CONF = {
     log_server: {
         path: "127.0.0.1",
         port: 514,
-        transport: 1 // TCP=1, UNIX=4
+        transport: 1, // TCP=1, UNIX=4
+        facility: 20,  // Local4
+        tcpTimeout: 10000,  // Local4
+        retryTimeout: 0
     },
     log_local: {
         directory: './_logs/',
