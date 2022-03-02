@@ -14,7 +14,7 @@
         "weblogger.js"
     ],
     "dependencies": {
-        "@aqmo.org/rudi_logger": "^1.1.0",
+        "@aqmo.org/rudi_logger": "^1.1.1",
         "express": "^4.16.4",
         "ini": "^1.3.7",
         "magic-bytes.js": "^1.0.3",
