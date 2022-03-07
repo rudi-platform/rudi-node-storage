@@ -93,16 +93,19 @@ function HttpService(configuration) {
     this.httpServer.get(this.httpPrefix+'storage/:fileid', function(req, res) { service.fileService(req, res) }.bind({'service':this}));
     this.httpServer.post(this.httpPrefix+'post', function(req, res) { service.postFile(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'post', function(req, res) { service.postFile(req, res) }.bind({'service':this}));
-    this.httpServer.get(this.httpPrefix+'check', function(req, res) { service.checkFile(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'schema/:name', function(req, res) { service.schemas(req, res) }.bind({'service':this}));
-    this.httpServer.get(this.httpPrefix+':uuid', function(req, res) { service.media(req, res) }.bind({'service':this}));
+    this.httpServer.get(this.httpPrefix+'check/:uuid', function(req, res) { service.checkFile(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'download/:uuid', function(req, res) { service.direct(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'zdownload/:uuid', function(req, res) { service.compress(req, res) }.bind({'service':this}));
+    this.httpServer.get(this.httpPrefix+':uuid', function(req, res) { service.media(req, res) }.bind({'service':this}));
     this.httpServer.options(this.httpPrefix+'storage/:fileid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
     this.httpServer.options(this.httpPrefix+'post', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
-    this.httpServer.options(this.httpPrefix+':uuid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
+    this.httpServer.options(this.httpPrefix+'check/:uuid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
     this.httpServer.options(this.httpPrefix+'download/:uuid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
     this.httpServer.options(this.httpPrefix+'zdownload/:uuid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
+    this.httpServer.options(this.httpPrefix+':uuid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
+
+    //this.httpServer.use(function(req, res) { this.syslog.info('unserved access: '+JSON.stringify(req.url), 'core'); res.status(404).end(); }.bind({'syslog':this.syslog}));
     this.listen = this.httpServer.listen(this.port, this.netInterface);
 }
 
@@ -153,6 +156,9 @@ HttpService.prototype.getRevision = function(req, res) {
  * @param {object} res - the HTTP response.
  */
 HttpService.prototype.root = function(req, res){
+    if ('file_metadata' in req.headers) {
+        return this.media(req, res);
+    }
     res.send('<!DOCTYPE html>\
 <html lang="en">\
   <head><meta charset="utf-8"><title>Rudi media access driver</title></head>\
@@ -241,7 +247,7 @@ HttpService.metaSchema = function() {
  * @param {object} res - the HTTP response.
  */
 HttpService.prototype.schemas = function(req, res) {
-    const name = req.params.name;
+    const name = req.params.name || 'none';
     const mimetype = 'application/json';
     const content = this.schemaSet.toJSON(name);
     if (!content) { res.status(404).write('Schema not found'); res.end(); return; }
@@ -281,53 +287,18 @@ HttpService.prototype.optionCors = function(req, res) {
 }
 
 /**
- * Serves a check of an existing media.
- * The post HTTP header must contain the ":file_metadata" with all necessary fields.
+ * Close a communication with a Json message and a status code.
  *
+ * @private
  * @param {object} req - the HTTP request
- * @param {object} res - the HTTP response.
+ * @param {object} msg - Json message.
+ * @param {number} code - the HTML code.
  */
-HttpService.prototype.checkFile = function(req, res) {
-    const [ access, user ] = this.ac ? this.ac.checkAccessRights(req, res, 'r--') : null;
-    if (!access) return;
-    if (access[0] != 'r') { res.status(401).send('Read access not set for user ('+user+':'+access+')'); return; }
+HttpService.prototype.sendAndClose = function(res, code, msg) {
     res.header("Access-Control-Allow-Origin", "*");
-    res.type('application/json');
-    res.write('[');
-    
-    var content= [];
-    if (!('file_metadata' in req.headers)) {
-        content = '{"status":"error", "msg":"no meta-data provided"}]';
-        res.write(content);
-        res.status(400).end();
-        return;
-    }
-    var metadata = req.headers.file_metadata;
-    try { metadata = JSON.parse(metadata); }
-    catch(err) {
-        content = '{"status":"error", "msg":"malformed metadata"}]';
-        this.syslog.error('malformed metadata: '+metadata, 'core');
-        res.write(content);
-        res.status(400).end();
-        return;
-    }
-
-    if (!metadata.media_id) {
-        content = '{ "status": "error", "msg":"uuid missing in metadata"}]';
-        this.syslog.error('uuid missing in metadata: ' + JSON.stringify(metadata));
-        res.write(content);
-        res.status(400).end();
-        return;
-    }
-
-    const context = this.generateContext(req, access, user);
-    const nid = this.db.check(metadata.media_id, context, function(err) {
-        this.res.write('{"status":"error", "msg":"'+err.toString()+'"}');
-        this.res.status(400).end();
-    }.bind({res:res}), function(hash, previousHash, size) {
-        this.res.write('{"status":"OK", "md5":"'+hash+'", "previous_md5":"'+previousHash+'", "size":"'+size+'"}');
-        this.res.status(200).end();
-    }.bind({res:res}));
+    res.status(code).type('application/json');
+    res.write(msg);
+    res.end();
 }
 
 /**
@@ -363,7 +334,9 @@ HttpService.prototype.postFile = function(req, res) {
     }
 
     // Bufferize file data
-    if (metadata.file_size > 500e6) {
+    const chunkSize = 65536*4;
+    const file_size = metadata.file_size || chunkSize;
+    if (file_size > 500e6) {
         content = '{ "status": "error", "msg":"file too large, use a different upload method" } ]';
         this.syslog.error('file too large, use a different upload method: ' + JSON.stringify(metadata));
         res.write(content);
@@ -373,10 +346,9 @@ HttpService.prototype.postFile = function(req, res) {
 
     // Bufferize file data
     var realcontentsize = 0;
-    var bufferSize = metadata.file_size;
+    var bufferSize = file_size;
     var filecontent = Buffer.allocUnsafe(bufferSize);
     req.on('readable', function() {
-        var chunkSize = 65536*4;
         var chunk;
         content = '{ "status" "ongoing" }, ';
         while (null !== (chunk = req.read())) {
@@ -420,23 +392,61 @@ HttpService.prototype.media = function(req, res) {
     const [ access, user ] = this.ac ? this.ac.checkAccessRights(req, res) : null;
     if (!access) return;
 
-    var content= {};
-    var uuid = req.params.uuid;
+    let req_uuid = '-';
+    if ("uuid" in req.params) req_uuid = req.params.uuid;
+    else {
+        if (!('file_metadata' in req.headers)) {
+            this.sendAndClose(res, 400, '{"status":"error", "msg":"no meta-data provided"}');
+            return;
+        }
+        var metadata = req.headers.file_metadata;
+        try { metadata = JSON.parse(metadata); }
+        catch(err) {
+            this.syslog.error('malformed metadata: '+metadata, 'core');
+            this.sendAndClose(res, 400, '{"status":"error", "msg":"malformed metadata"}');
+            return;
+        }
+
+        if (!metadata.media_id) {
+            this.syslog.error('uuid missing in metadata: ' + JSON.stringify(metadata));
+            this.sendAndClose(res, 400, '{ "status": "error", "msg":"uuid missing in metadata"}');
+            return;
+        }
+        req_uuid = metadata.media_id;
+    }
+
     const context = this.generateContext(req, access, user);
-    const nid = this.db.get(uuid, context);
-    if (!nid) content = { status: 'error', msg:'invalid request' };
-    else      content = { url:this.server + this.httpPrefix+'storage/'+ nid };
 
     //console.log('OPTION: '+util.inspect(req.headers));
     const access_mode = req.headers['media-access-method'];
     if (access_mode == 'Direct') {
-        req.params.fileid = nid;
-        this.fileService(req,res);
+        const nid = this.db.get(req_uuid, context);
+        if (!nid) HttpService.prototype.sendAndClose(res, 404, '{"status":"error", "msg":"media uuid not found"}');
+        else {
+            req.params.fileid = nid;
+            this.fileService(req,res);
+        }
+    }
+    else if (access_mode == 'Check') {
+        const nid = this.db.check(req_uuid, context, function(err) {
+            HttpService.prototype.sendAndClose(res, 404, '{"status":"error", "msg":"'+err.toString()+'"}');
+        }.bind({res:res}), function(hash, previousHash, size) {
+            if (hash != previousHash && previousHash != '-') {
+                this.syslog.error('Media changed on disk for uuid '+req_uuid+' hash='+hash+' previously='+previousHash, 'core');
+            }
+            this.syslog.info('full read of media: '+req_uuid, 'core');
+            HttpService.prototype.sendAndClose(res, 200, '{"status":"OK", "md5":"'+hash+'", "previous_md5":"'+previousHash+'", "size":"'+size+'"}');
+        }.bind({res:res,syslog:this.syslog}));
     }
     else {
-        res.header("Access-Control-Allow-Origin", "*");
-        res.write(JSON.stringify(content));
-        res.status(200).end();
+        const nid = this.db.get(req_uuid, context);
+        if (!nid) HttpService.prototype.sendAndClose(res, 404, '{"status":"error", "msg":"media uuid not found"}');
+        else  {
+            content = { url:this.server + this.httpPrefix+'storage/'+ nid };
+            res.type('application/json');
+            res.write(JSON.stringify(content));
+            res.status(200).end();
+        }
     }
 };
 
@@ -462,6 +472,17 @@ HttpService.prototype.compress = function(req, res) {
 };
 
 /**
+ * Serves a check of an existing media.
+ *
+ * @param {object} req - the HTTP request
+ * @param {object} res - the HTTP response.
+ */
+HttpService.prototype.checkFile = function(req, res) {
+    req.headers['media-access-method'] = 'Check';
+    this.media(req, res);
+}
+
+/**
  * Serves the access to the media content from a connector.
  * @param {object} req - the HTTP request
  * @param {object} res - the HTTP response.
@@ -472,15 +493,14 @@ HttpService.prototype.fileService = function(req, res) {
 
     const fileid = req.params.fileid;
     const context = this.generateContext(req, access, user);
-    res.header("Access-Control-Allow-Origin", "*");
 
     this.db.find(fileid, context, function(err) {
-        res.type('application/json');
-        res.write(JSON.stringify({ status: 'error', msg:"could not get media content"}));
-        res.status(401).end();
+        HttpService.prototype.sendAndClose(res, 401, '{"status":"error", "msg":"could not get media content"}');
     }, function(data, name, mimetype) {
+        this.syslog.info('full read with connector: '+fileid, 'core');
         const compression_mode = req.headers['media-access-compression'];
         const content = data;
+        res.header("Access-Control-Allow-Origin", "*");
         res.setHeader("Content-Disposition",'attachment; filename="' + name + '"');
         if (compression_mode && compression_mode.toLowerCase() == 'true') {
             zlib.gzip(data, function(err, buffer) {
@@ -498,7 +518,7 @@ HttpService.prototype.fileService = function(req, res) {
             res.write(content);
             res.status(200).end();
         }
-    });
+    }.bind({syslog:this.syslog}));
 };
 
 /**

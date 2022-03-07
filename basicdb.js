@@ -82,7 +82,7 @@ BasicFileDB.prototype.errorCtx = function(message, name, cid, ctx) {
  * @param {object}    data - The error message.
  */
 BasicFileDB.prototype.logReq = function(data) {
-    const header = 'do='+data.operation+' uuid='+data.uuid;
+    const header = 'do='+data.operation+' uuid='+data.uuid+' ref='+data.ref;
     var extra = '';
     var context = undefined;
     if (data.operation === 'add_media') {
@@ -112,8 +112,9 @@ BasicFileDB.prototype.init = function(media_files, withmongo, none, done) {
         this.service.error('Could not initialize DB: '+err);
         if (none) none('Could not load initial file database: '+err);
     }.bind({service:this});
+    if (typeof media_files == 'string') media_files = [ media_files ];
     for (filen in media_files) {
-        this.loadCSV(media_files[filen], '', errFct);
+        if (media_files[filen]) this.loadCSV(media_files[filen], '', errFct);
     }
     for (zone in this.by_zone_db) {
         const path = this.getPathFromConnector(this.default_csvFile, zone);
@@ -227,6 +228,10 @@ BasicFileDB.eventSchema = function(contextRef) {
                 "description": "The media-id",
                 "type": "string",
             },
+            "zone": {
+                "description": "The storage zone",
+                "type": "string"
+            },
             "value": {
                 "description": "The object manipulated by the operation",
                 "type": "object"
@@ -247,13 +252,13 @@ BasicFileDB.eventSchema = function(contextRef) {
  */
 BasicFileDB.prototype.addEntry = function(metadata, context, filecontent, none, done) {
     if (!('media_type' in metadata)) {
-        this.errorCtx('(ignored) Missing media type: '+ util.inspect(metadata), 'add_media', '-', context);
+        this.errorCtx('(ignored) Missing media type: '+ JSON.stringify(metadata), 'add_media', '-', context);
         //if (none) none('Missing media type');
         //return;
         metadata.media_type = "FILE";
     }
     if (!('media_id' in metadata)) {
-        this.errorCtx('Missing media UUID: '+ metadata, 'add_media', '-', context);
+        this.errorCtx('Missing media UUID: '+ JSON.stringify(metadata), 'add_media', '-', context);
         if (none) none('Missing media UUID');
         return;
     }
@@ -470,34 +475,6 @@ BasicFileDB.prototype.saveCSV = function(csvFile) {
 }
 
 /**
- * Require check the real content of a media, and returns its updated MD5 value.
- *
- * @param  {string}   uuid  - The media UUID.
- * @return {string}         - The MD5 value.
- */
-BasicFileDB.prototype.check = function(uuid, context, none, done) {
-    //console.log('Check:'+uuid);
-    if (!(uuid in this.db)) return none(new Error("media uuid not found"));
-    const media = this.db[uuid];
-    try {
-        const opdesc = { operation: 'check_entry', uuid: media.uuid, zone: media.zone, context: context };
-        this.logReq(opdesc);
-        const source = this.getPathFromConnector(media.uuid + '_' + media.filename, media.zone);
-        media.getRealMd5(source, context, none, done);
-
-        const errFct = function(err) { this.service.error('Could not update DB: '+err+' with '+JSON.stringify(this.desc)); };
-        if (this.mongodb) {
-            this.mongodb.addEvent(opdesc, errFct.bind({service:this,desc:opdesc}), function(mongodb) {});
-        }
-        return media.md5;
-    }
-    catch(err) {
-        this.error('Could not process media: '+err+' with '+uuid+' '+JSON.stringify(context));
-        return null;
-    }
-}
-
-/**
  * Require an access to a media, and returns a connector ID if the access is granted.
  * This function creates a unique connector, and a timer to remove it on time.
  * 
@@ -533,7 +510,9 @@ BasicFileDB.prototype.get = function(uuid, context) {
         return niddesc.fileid;
     }
     catch(err) {
-        this.error('Could not process media: '+err+' with '+uuid+' '+JSON.stringify(context));
+        const e = 'Could not process media with '+uuid+' '+JSON.stringify(context);
+        this.error(e +': '+err);
+        if (none) none(new Error(e));
         return null;
     }
 }
@@ -591,6 +570,40 @@ BasicFileDB.prototype.find = function(fileid, context, none, done) {
         this.service.errorCtx('could not load file: '+err, 'get_media', fileid, context);
         if (none) none(err);
     }.bind({service:this}), done);
+}
+
+/**
+ * Require check the real content of a media, and returns its updated MD5 value.
+ *
+ * @param  {string}   uuid  - The media UUID.
+ * @return {string}         - The MD5 value.
+ */
+BasicFileDB.prototype.check = function(uuid, context, none, done) {
+    if (!(uuid in this.db)) return none(new Error("media uuid not found"));
+    const media = this.db[uuid];
+    try {
+        const opdesc = { operation: 'check_entry', uuid: '-', ref: media.uuid, zone: media.zone, context: context };
+        this.logReq(opdesc);
+        if (media.mimetype == 'text/uri-list') {
+            media.getRealMd5(media.url, context, none, done);
+        }
+        else {
+            const source = this.getPathFromConnector(media.uuid + '_' + media.filename, media.zone);
+            media.getRealMd5(source, context, none, done);
+        }
+
+        const errFct = function(err) { this.service.error('Could not update DB: '+err+' with '+JSON.stringify(this.desc)); };
+        if (this.mongodb) {
+            this.mongodb.addEvent(opdesc, errFct.bind({service:this,desc:opdesc}), function(mongodb) {});
+        }
+        return media.md5;
+    }
+    catch(err) {
+        const e = 'Could not process media: with '+uuid+' '+JSON.stringify(context);
+        this.error(e +': '+err);
+        if (none) none(new Error(e));
+        return null;
+    }
 }
 
 module.exports = BasicFileDB;

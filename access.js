@@ -21,6 +21,7 @@ function AccessControl(authorizedVersion, authorizedUsers, logger) {
     this.authorizedVersion = authorizedVersion;
     this.authorizedUsers = authorizedUsers;
     this.syslog = logger;
+    this._iop = { compact:true,depth:2, breakLength: 300};
 }
 
 /**
@@ -173,10 +174,10 @@ AccessControl.prototype.logAccess = function(code, errMsg, req, res, user, amode
     if (!this.syslog) return;
     const context = this.generateContext(req, user, code, amode);
     if (code != 200) {
-        this.syslog.error(errMsg+": "+req.hostname+":"+req.originalUrl+":"+req.ip+":"+util.inspect(req.params)+":"+authorization, 'ac', context);
+        this.syslog.error(errMsg+": "+req.hostname+":"+req.originalUrl+":"+req.ip+":"+util.inspect(req.params,this._iop)+":"+authorization, 'ac', context);
         res.status(code).send(errMsg);
     }
-    else this.syslog.notice(errMsg+": "+req.hostname+":"+req.originalUrl+":"+req.ip+":"+util.inspect(req.params)+":"+authorization, 'ac', context);
+    else this.syslog.notice(errMsg+": "+req.hostname+":"+req.originalUrl+":"+req.ip+":"+util.inspect(req.params,this._iop)+":"+authorization, 'ac', context);
 }
 
 /**
