@@ -1,5 +1,3 @@
-
-
 /**
  * The global configuration.
  * @typedef {Object} DEFAULT_CONF

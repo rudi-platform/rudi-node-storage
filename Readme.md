@@ -10,7 +10,7 @@ The RUDI media driver interface media file access between the the RUDI Productor
 * * *
 
 The Media driver core feature is to provide access to media files
-associated to data publish via the RUDI open-data framework. It is
+associated to data published via the RUDI open-data framework. It is
 currently extended with a logging system, and an isolation mechanism.
 
 ### List of features
@@ -23,7 +23,7 @@ The Media driver provides :
 * A basic access control system.
 * A dual log mechanism, one for the application, one for the media
     data management (new/open/close, etc.).
-* The file database is recorded in the mongodb collection 'media', but kept in memory
+* The file database is recorded in a mongodb collection 'media', but kept in memory
 * All events are recorder in the mongodb collection 'media_events'
 * All DB elements are validated using schemas, all available online for public access ($ref).
 
@@ -37,55 +37,99 @@ The release version is the one that shall be used by users and testers.
 [https://shared-rudi.aqmo.org/media/](#https://shared-rudi.aqmo.org/media/)
 The shared version is under development.
 
-Two user/login exists currently:
-With read access:  user=rudiadmin pass=sysadminisgreat!
-With write access: user=rudiprod  pass=sysadminisgreat!
+Two user/login couples exist currently:
+
+ * With read access:  user=rudiadmin pass=sysadminisgreat!
+ * With write access: user=rudiprod  pass=sysadminisgreat!
 
 ### Media Driver API
 
-The current API is divided in two: the file access API, and the log API
+The current API is divided in two: the media access API, and the log API
 
-#### File Access
+#### Media access
+
+Access to media-data, described in detailled below, can be one of the following:
+
+    - *POST* https://data-rudi.aqmo.org/media/post
+    - *GET*  https://data-rudi.aqmo.org/media/<media-uuid>
+    - *GET*  https://data-rudi.aqmo.org/media/check/<media-uuid>
+    - *GET*  https://data-rudi.aqmo.org/media/download/<media-uuid>
+    - *GET*  https://data-rudi.aqmo.org/media/downloadz/<media-uuid>
+
 The API is the following :
-1. To post a meta-data:
+1. To post a media-data:
 - *POST* https://data-rudi.aqmo.org/media/post [in header: *file-metadata*: Json description ]
 The file-metadata json must contain a field *media_id*, and should contain
-the standard [RUDI meta-data](https://app.swaggerhub.com/apis/OlivierMartineau/RUDI-PRODUCER/1.2.0#/Media)
+the standard [RUDI media-data](https://app.swaggerhub.com/apis/OlivierMartineau/RUDI-PRODUCER/1.2.0#/Media)
 An account with write access is required.
+
+The following RUDI media-data can be typically provided:
+   * "media_id": (*mandatory*) An uuid-v4 unique identifier
+   * "media_type": (*optional*) should specify "FILE", as defined in the standard specification
+   * "media_name": (*optional*) the name of the media. This name can be used to give a name for the file when downloaded
+   * "file_size": (*optional*) the file size. This value, when correclty used, will improve the transfer speed.
+   * "file_type": (*optional*), the mime-type as registered by the [IANA](https://www.iana.org/assignments/media-types/media-types.xhtml) authority
+   * "charset":   (*optional*), the data encoding format as registered by the [IANA](https://www.iana.org/assignments/character-sets/character-sets.xhtml) authority
+   * "access_date": (*optional*), a date after the access is invalid (in the future)
 
 A simple CURL command to post the file *mon_nom.json*:
 ```shell
 curl -u 'rudiprod:sysadminisgreat!'  -H 'file_metadata:{"media_name":"mon_nom","media_id":"37df63aa-1aae-4279-be3b-b07076d36131","file_size":21660,"file_type":"application/json"}' --data-binary @mon_nom.json https://data-rudi.aqmo.org/media/post
 ```
 
-A special extension is available in order to treat of URL instead of a file. In that case, no content is provided and some specific meta-data are required:
-   * "media_type": Must specify "INDIRECT" (it is an extension of the default value "FILE" defined in the standard RUDI meta-data specification)
-   * "url": mandatory, a properly formed URL
-   * "access_date": optional, the last validated access date (in the past)
-   * "expire_date": optional, a date after the access is invalid (in the future)
+A special extension is available in order to treat of URL instead of a file. In that case, no content is provided and some specific media-data are required:
+   * "media_type": (*mandatory*) must specify "INDIRECT" (it is an extension of the default value "FILE" defined in the standard RUDI media-data specification)
+   * "url": (*mandatory*), a properly formed URL
+   * "access_date": (*optional*), the last validated access date (in the past)
+   * "expire_date": (*optional*), a date after the access is invalid (in the future)
 
 ```shell
 curl -u 'rudiprod:sysadminisgreat!'  -H 'file_metadata:{"media_type":"INDIRECT", "media_name":"mon_nom","media_id":"37df63aa-1aae-4279-be3b-b07076d36888","url":"https://data-rudi.aqmo.org/api/v1/","access_date":'"$(date +%s)"', "expire_date":'"$(date +%s --date +72\ hour )"' }'  https://shared-rudi.aqmo.org/media/pos
 ```
 
-2. To get a meta-data:
+The requests returns an array in Json with the followinf format :
+```json
+      [ <number>*, 'status': <ok|error>, ['msg': <description>] ]
+```
+The list of numbers, when present, are send to keep the connexion open during the transfer, and provide the amount of data currently received.
+If an error is raised, the *msg* field contains its description.
+
+2. To get a media-data:
 - *GET* https://data-rudi.aqmo.org/media/UUID [in header: *media-access-method*: [optional] access mode ]
 Returns a Json with the temporary file link. It is available for 2 minutes by default.
-The header *media-access-method* value can be one of the following :
+The header *media-access-method* can be set with one of the following values :
    * **Default**: default behavior, i.e. returns the temporary link.
    * **Direct**: returns directly the content of the data. Restrictions on this mode can be applied.
    * **Block**: Not implemented. Reserved for block level access modes
    * **Stream**: Not implemented. Reserved for stream level access modes
 
-- Example:
+A Boolean parameter set in the header can activate the transfer of compressed using the *Gzip* format: the header *media-access-compression*.
+
+- Example of result returned with the default mechanism:
 ```json
 {"url":"https://data-rudi.aqmo.org/media/storage/55643808-dd0c-48d9-941e-c21736d5e4e5"}
 ```
 
+3. To directly download the content of a media-data:
 - *GET* https://data-rudi.aqmo.org/media/download/UUID
-Shortcut for the standard media get with the *media-access-method* header set to **Direct** mode
+- *GET* https://data-rudi.aqmo.org/media/zdownload/UUID
 
-3. All requests returns a status in Json with the format:
+There are shortcuts for the standard media *get* API with the
+*media-access-method* header set to **Direct** mode. The *zdownload*
+version compresses the data before the transmission (see the
+*media-access-compression*).
+
+**Warning:** The support of this feature is not guarantied for all types of media.
+
+4. To check the existence and the integrity of a media-data:
+- *GET* https://data-rudi.aqmo.org/media/check/UUID It is a
+shortcut for the standard media get with the *media-access-method*
+header set to **Check** mode.
+
+**Warning:** The support of this feature is not guarantied for all types of media.
+
+
+5. When a problem occurs, most requests may return a status description in Json with the format:
 ```json
       { 'status': <ok|error>, ['msg': <description>], ['value':<context information>] }
 ```
@@ -150,11 +194,23 @@ db_url = mongodb://localhost:27017/
 db_name = rudi_media
 
 [storage]
+media_dir: '/_media',
+media_files: [ './localmedia/mydb.csv' ],
 acc_timeout = 20
+
+[log_server]
+path = /dev/log
+transport= 5 // TCP=1, UNIX=4
+retryTimeout = 60000
+
+[log_local]
+consoleData= false
+directory = ./_logs/
 
 [logging]
 app_name = RudiMedia-
-log_dir = ./logs/
+#revision: 'release'
+
 ```
 By default the *init* file is *./rudi_media_custom.ini*. It can be set by the command-line.
 
@@ -179,6 +235,8 @@ To get access to the file management log for a given period, use the provided ur
 http://data-rudi.aqmo.org/media/logs/RudiMedia-XXXX.jslog
 
 All access to the log data require an account with read access.
+
+**A detailled description of the logging system is available, and now maintained, by the @aqmo.org/rudi_logger library.**
 
 ### Download & Installation
 
@@ -210,7 +268,9 @@ Preconfigured links :
 - [x] Feature: file-management storage in mongodb @lmorin (#3)
 - [x] Feature: log-management in mongodb @lmorin (#4)
 - [x] Feature: add git version tag in API @lmorin (#5)
+- [x] Feature: add the support of compressed media data @lmorin (#9)
 - [x] Feature: add the support of media URL @lmorin (#11)
+- [x] Feature: add the support of media hash check @lmorin (#13)
 - [ ] Feature: add non-regression tests @lmorin (#6)
 - [ ] Feature: mongodb backup management @lmorin (#7)
 

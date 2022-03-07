@@ -76,7 +76,7 @@ BasicFileEntry.fileSchema = function(contextRef, metaRef) {
                 "type": "string"
             },
             "context": {
-                "description":"The creaction context",
+                "description":"The creation context",
                 "$ref":contextRef
             },
             "filename": {
@@ -105,7 +105,7 @@ BasicFileEntry.fileSchema = function(contextRef, metaRef) {
                 "format": "date-time"
             },
             "metadata": {
-                "description": "The RUDI metara",
+                "description": "The RUDI metadata",
                 "$ref": metaRef
             }
         },
@@ -168,7 +168,6 @@ BasicFileEntry.prototype.getFile = function(idesc, context, none, done) {
  *                                 Returns the hash, the previous hash, and the file size.
  */
 BasicFileEntry.prototype.getRealMd5 = function(source, context, none, done) {
-
     fs.readFile(source, { flag:'r'}, function(err, data) {
         if (err) {
             console.error('Error: critical failure: could not load '+idesc.source);

@@ -5,7 +5,10 @@
  * @version: 1.0.0
  */
 const util = require('util');
+const crypto = require('crypto');
+const http = require('http');
 const https = require('https');
+const { URL } = require('url');
 const { v4: uuidv4 } = require('uuid');
 
 /**
@@ -33,6 +36,7 @@ function BasicUrlEntry(zone, context, name, uuid, url, date, expire, metadata) {
     this.encoding = 'charset=utf-8';
     this.date     = date;
     this.expire   = expire;
+    this.md5      = '-';
     if (metadata) { this.metadata = metadata; }
 }
 
@@ -135,21 +139,70 @@ BasicUrlEntry.prototype.generateFileId = function() {
  */
 BasicUrlEntry.prototype.getFile = function(idesc, context, none, done) {
     if (!('url' in idesc)) {
-        if (none) none(new Error('loading media: url missing in context'));
+        if (none) none(new Error('loading URL media: url missing in context'));
         return;
     }
+    const source = idesc.url;
 
-    https.get(idesc.url, (res) => {
-        var data = "";
-        res.on("data", (chunk) => { data += chunk; });
-        res.on("end", () => {
-            if (done) done(data, idesc.name, 'charset=binary');
-        });
-    }).on("error", (error) => {
-        console.error('Error: critical failure: could not load '+idesc.url+': '+error);
-        if (none) none(new Error('loading media: file error'));
-        return;
-    });
+    try {
+        const sourceUrl = new URL(source);
+        switch(sourceUrl.protocol) {
+        case 'https:': {
+            https.get(sourceUrl.href, (res) => {
+                var data = "";
+                res.on("data", (chunk) => { data += chunk; });
+                res.on("end", () => {
+                    if (done) done(data, idesc.name, 'charset=binary');
+                });
+            }).on("error", (error) => {
+                console.error('Error: critical failure: could not load '+sourceUrl.href+': '+error);
+                if (none) none(new Error('loading media: file error'));
+                return;
+            });
+            break;
+        }
+        case 'http:': {
+            http.get(sourceUrl.href, (res) => {
+                var data = "";
+                res.on("data", (chunk) => { data += chunk; });
+                res.on("end", () => {
+                    if (done) done(data, idesc.name, 'charset=binary');
+                });
+            }).on("error", (error) => {
+                console.error('Error: critical failure: could not load '+sourceUrl.href+': '+error);
+                if (none) none(new Error('loading media: file error'));
+                return;
+            });
+            break;
+        }
+        default:
+            if (none) none(new Error('loading URL media: protocol not supported ('+sourceUrl.protocol+')'));
+        }
+    }
+    catch(e) {
+        if (none) none(new Error('loading URL media: content access error'));
+    }
+}
+
+/**
+ * Check the media content.
+ * The data is loaded from its expected location and an md5 is computed.
+ * @param {connector ID} source  - The media descriptor.
+ * @param {accessDesc}   context - The media access context.
+ * @param {function=}    none    - An optional callback with the error if no file was found.
+ * @param {function}     done    - A callback with the file when done.
+ *                                 Returns the hash, the previous hash, and the file size.
+ */
+BasicUrlEntry.prototype.getRealMd5 = function(source, context, none, done) {
+    return this.getFile(this, context, none, function(data, name, charset) {
+        const hash = crypto.createHash('md5').update(data).digest('hex');
+        const previousHash = this.entry.md5;
+        if (hash != previousHash) {
+            this.entry.md5 = hash;
+            this.entry.size = data.length;
+        }
+        if (done) done(hash, previousHash, this.entry.size);
+    }.bind({entry:this}));
 }
 
 module.exports = BasicUrlEntry;
