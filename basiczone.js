@@ -328,7 +328,7 @@ BasicZone.prototype.loadCSV = function(entrycb, none, done) {
             }
             const context = { source:'CSV', filename:path, user:'<admin>', access:'rwx' };
             const entries = data.split('\n');
-            for (let index in entries) {
+            for (const index in entries) {
                 const line = entries[index];
                 if (!line || line == '') continue;
                 const entry = this.zone.newBasicEntryFromCsv(line, aclStatus);
