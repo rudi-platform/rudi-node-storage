@@ -21,12 +21,12 @@
         "md5": "^2.3.0",
         "minimist": "^1.2.5",
         "mongodb": "^3.6.6",
-        "unix-dgram": "^2.0.4",
         "uuid": "^8.3.2"
     },
     "devDependencies": {
         "eslint": "^7.22.0",
-        "nodemon": "^2.0.1"
+        "nodemon": "^2.0.1",
+        "unix-dgram": "^2.0.4"
     },
     "scripts": {
         "start": "nodejs index.js",
