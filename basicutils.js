@@ -6,6 +6,11 @@
  */
 const magic = require('magic-bytes.js');
 
+/**
+ * Extract mime data.
+ * @function
+ *
+ */
 function mimeFromContent(filecontent) {
     let mimetype = 'application/octet-stream';
     const info = magic.filetypeinfo(filecontent);
@@ -21,11 +26,11 @@ function mimeFromContent(filecontent) {
      * for demos.
      */
     else if (Buffer.isBuffer(filecontent)) {
-        const itecur = function (s,p) {var i=0,c=-1;while(i>=0&&c<10){i=s.indexOf(p,i)+1;c++;}; return c;}
+        const itecur = function (s,p) {let i=0,c=-1;while(i>=0&&c<10){i=s.indexOf(p,i)+1;c++;}; return c;}
 
         const contheader = filecontent.slice(0,filecontent.indexOf('\n')).slice(0,500);
         if (itecur(contheader,';') > 3 || itecur(contheader,',') > 3) { mimetype = 'text/csv'; }
-        var jsoncontent = '';
+        let jsoncontent = '';
         if (filecontent.length < 5000) {
             try { jsoncontent = JSON.parse(filecontent); } catch(e) {}
         }
@@ -43,6 +48,11 @@ function mimeFromContent(filecontent) {
     return mimetype;
 }
 
+/**
+ * Extract encoding.
+ * @function
+ *
+ */
 function charsetFromContent(filecontent) {
     /* TODO: Clean-up charset analysis.
      *

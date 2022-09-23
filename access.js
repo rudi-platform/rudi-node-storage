@@ -59,9 +59,9 @@ AccessContext.prototype.process = function(name, uuid, access, accError) {
                          this.errContext(500));
         return;
     }
-    let [ message, realm ] =  this.acldb.errDesc(accError);
-    let code = this.errorCode(accError);
-    let sev =  accError ? logger.Severity.Error : logger.Severity.Notice;
+    const [ message, realm ] =  this.acldb.errDesc(accError);
+    const code = this.errorCode(accError);
+    const sev =  accError ? logger.Severity.Error : logger.Severity.Notice;
     this.acldb.log(sev, "["+this.auth.userName+"]:"+this.opType+": "+message, this.errContext(code));
     if (accError) {
         this.sessionOpen = false;
@@ -117,7 +117,7 @@ AccessControl.prototype.debug   = function(message, context = null) { if (this.s
  * @returns {object}        - an ACL status.
  */
 AccessControl.prototype.getAccessStatus = function (req, res) {
-    let validApiVersion = this._readVersion(req.headers);
+    const validApiVersion = this._readVersion(req.headers);
     let aclStatus = this._readBasicAccessRights(req.headers);
     if (!aclStatus) aclStatus = this._readJwtAccessRights(req.headers);
     if (!aclStatus) aclStatus = this.acldb.newAclError('E01');
@@ -135,7 +135,7 @@ AccessControl.prototype.checkSystemAccessStatus = function (aclStatus, amode) {
 }
 
 AccessControl.prototype.forgeTokenCookie = function (aclStatus, user_id, user_name, group_name) {
-    let [ token, accError ] = this.acldb.forgeJwtFor(user_id, user_name, group_name);
+    const [ token, accError ] = this.acldb.forgeJwtFor(user_id, user_name, group_name);
     if (accError) {
         aclStatus.context.process(user_name, user_id, '---', accError);
         return null;
@@ -156,7 +156,7 @@ AccessControl.prototype.forgeTokenCookie = function (aclStatus, user_id, user_na
  */
 /* LEGACY API */
 AccessControl.prototype.checkAccessRights = function (req, res, amode='---') {
-    let aclStatus = this.getAccessStatus(req, res);
+    const aclStatus = this.getAccessStatus(req, res);
     let access = this.checkSystemAccessStatus(aclStatus, amode);
     if (!access) access = null;
     return [ access, aclStatus.user ];
@@ -173,7 +173,7 @@ AccessControl.prototype.checkAccessRights = function (req, res, amode='---') {
 AccessControl.prototype._readVersion = function (header) {
     /* Check API version compatibility */
     if (this.authorizedVersion[0] == '0.1') return true;
-    var apiCompatible = false;
+    let apiCompatible = false;
     if ('version' in header) {
         const version = header['version'];
         for (i in this.authorizedVersion) {
@@ -217,7 +217,7 @@ AccessControl.prototype._readJwtAccessRights = function (header) {
     if ('cookie' in header) {
         const cookies = header['cookie'].split(' ');
         for (ci in cookies) {
-            let c = cookies[ci];
+            const c = cookies[ci];
             const [key, value] = c.split('=');
             if (key.toLowerCase() != 'rudi.media.auth') continue;
             aclStatus = this.acldb.findIdsFromJwt(value);

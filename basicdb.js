@@ -122,14 +122,14 @@ BasicFileDB.prototype.init = function(zones, withmongo, none, done) {
     }
 
     // Initialize all zones.
-    var entrycb = function(aclStatus, zone, entry) {
+    const entrycb = function(aclStatus, zone, entry) {
         this.bfdb.recordEntry(aclStatus, zone, entry);
     }.bind({bfdb:this});
     const initFct = function(resolve, reject) {
         this.zone.init(entrycb, reject, resolve);
     };
 
-    var pl = [];
+    const pl = [];
     for (nzone in this.zone_db) {
         pl.push(new Promise(initFct.bind({zone:this.zone_db[nzone]})));
     }
@@ -151,7 +151,7 @@ BasicFileDB.prototype.close = function(none, done) {
     }.bind({service:this});
 
     const closeAllZones = function(none, done) {
-        var pl = [];
+        const pl = [];
         for (nzone in this.zone_db) {
             pl.push(new Promise(function(resolve, reject) {
                 this.service.warn('Close zone '+this.zone.name);
@@ -168,7 +168,7 @@ BasicFileDB.prototype.close = function(none, done) {
     }.bind({zone_db:this.zone_db,service:this,none:none,done:done})
 
     if (Object.keys(this.storageId).length > 0) {
-        var pl = [];
+        const pl = [];
         for (fileid in this.storageId) {
             pl.push(new Promise(function(resolve, reject) {
                 this.service.deleleteFileId(this.fileid, { source: 'interruption' }, reject, resolve);
@@ -346,12 +346,12 @@ BasicFileDB.prototype.logEntry = function(zone, type, aclStatus, entry, none, do
 }
 
 BasicFileDB.prototype.list = function(aclStatus) {
-    let mediaList = {};
-    let errList = [];
+    const mediaList = {};
+    const errList = [];
     for(zoneName in this.zone_db) {
         const zone = this.zone_db[zoneName];
         try {
-            let content = zone.listMedias(aclStatus);
+            const content = zone.listMedias(aclStatus);
             this.debug('list medias: name='+JSON.stringify(content));
             mediaList[zoneName] = {
                 'list': content, 'status': 'OK'
@@ -378,8 +378,8 @@ BasicFileDB.prototype.get = function(uuid, aclStatus) {
     if (!(uuid in this.db)) return null;
     const media = nid = this.db[uuid];
     try {
-        var niddesc = media.generateFileId();
-        var connectorTimeout = this.connectorTimeout;
+        const niddesc = media.generateFileId();
+        let connectorTimeout = this.connectorTimeout;
         if ('timeout' in niddesc) {
             connectorTimeout = niddesc['timeout'];
         }

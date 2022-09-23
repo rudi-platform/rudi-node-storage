@@ -75,8 +75,8 @@ BasicFileEntry.prototype.getStorageName = function() {
  * @returns {string}              - The CSV line.
  */
 BasicFileEntry.prototype.getCSVline = function() {
-    var filetype = this.filename +': '+ this.mimetype +'; '+ this.encoding;
-    var s = ';';
+    const filetype = this.filename +': '+ this.mimetype +'; '+ this.encoding;
+    const s = ';';
     return '' + this.md5 +s+ this.uuid +s+ filetype +s+ (this.date/1000) +s+ this.size;
 }
 

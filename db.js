@@ -51,7 +51,7 @@ function MongoService(config, schemaSet, mediaSchema, urlSchema, eventSchema) {
 MongoService.prototype.open = function(err_cb, done) {
     try {
         if (typeof this.mongoOptions == 'string') {
-            let so = this.mongoOptions;
+            const so = this.mongoOptions;
             this.mongoOptions = {};
             this.mongoOptions = JSON.parse(so);
         }
@@ -76,7 +76,7 @@ MongoService.prototype.open = function(err_cb, done) {
         this.service.db = db.db(this.service.dbname);
         this.service.db.listCollections().toArray(async function(err, colList) {
             if (err) { errFct(err); return; }
-            var hasMedia = false, hasUrl = false, hasEvents = false;
+            let hasMedia = false, hasUrl = false, hasEvents = false;
             for (ci in colList) {
                 const c = colList[ci];
                 hasMedia  |= (c.name == this.service.mediaCollName);
@@ -187,7 +187,7 @@ MongoService.prototype.addEvent = async function(opdesc, err, done, update) {
 
     if (!('uuid' in opdesc) || !('zone' in opdesc)) { errFct('Malformed operation descriptor'); return; }
 
-    var emedia = false;
+    const emedia = false;
     if (!(update === undefined)) {
         this.eventColl.findOne({ 'uuid': opdesc.uuid }, function(err, emedia) {
             if (err) { errFct(err); }

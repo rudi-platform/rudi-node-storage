@@ -114,6 +114,10 @@ function HttpService(configuration) {
     this.listen = this.httpServer.listen(this.port, this.netInterface);
 }
 
+/**
+ * An utility class operating a fast buffering management.
+ * @class DownloadService
+ */
 function DownloadService(chunkSize, file_size) {
     this.chunkSize = chunkSize;
     this.bufferSize = file_size;
@@ -125,20 +129,20 @@ function DownloadService(chunkSize, file_size) {
 DownloadService.prototype.read = function(req, update = null) {
     let bufferSize = this.bufferSize;
     let chunkSize = this.chunkSize;
-    var chunk;
+    let chunk;
     while (null !== (chunk = req.read())) {
         const nsize = this.realcontentsize + chunk.length;
         if (nsize > bufferSize) {
             if (bufferSize > 2 * chunkSize) chunkSize = chunkSize * 2;
             bufferSize += chunkSize + chunk.length;
-            let newfilecontent = Buffer.allocUnsafe(bufferSize);
+            const newfilecontent = Buffer.allocUnsafe(bufferSize);
             this.filecontent.copy(newfilecontent);
             this.filecontent = newfilecontent;
         }
         chunk.copy(this.filecontent, this.realcontentsize);
         this.realcontentsize += chunk.length;
         if (update) {
-            let currentts = new Date().valueOf();
+            const currentts = new Date().valueOf();
             if ((currentts - this.startts) > this.updateTime) {
                 update(this.realcontentsize);
                 this.startts = new Date().valueOf();
@@ -372,7 +376,7 @@ HttpService.prototype.forgeUserToken = function(req, res) {
     }
 
     // Get the config
-    let body = [];
+    const body = [];
     req.on('data', (chunk) => { body.push(chunk); });
     req.on('end', function() {
         let userDesc = Buffer.concat(body).toString();
@@ -387,11 +391,11 @@ HttpService.prototype.forgeUserToken = function(req, res) {
             this.service.sendAndClose(res, 400, '{"status":"error", "msg":"missing user_name"}'); return;
         }
         if (!('user_name' in userDesc)) { userDesc.group_name = null; }
-        let cookie = this.service.ac.forgeTokenCookie(this.aclStatus, userDesc.user_id, userDesc.user_name, userDesc.group_name);
+        const cookie = this.service.ac.forgeTokenCookie(this.aclStatus, userDesc.user_id, userDesc.user_name, userDesc.group_name);
         if (!cookie) return;
         else {
             this.service.syslog.info('forged token for '+userDesc.user_name+':'+userDesc.group_name?userDesc.group_name:'-', 'core');
-            content = '{ "status": "OK" } ]';
+            const content = '{ "status": "OK" } ]';
             res.setHeader('cookie', cookie);
             res.write(content);
             res.status(200).end();
@@ -414,15 +418,15 @@ HttpService.prototype.postFile = function(req, res) {
     res.write('[');
 
     if (!('file_metadata' in req.headers)) {
-        let content = '{ "status": "error", "msg":"no meta-data provided" } ]';
+        const content = '{ "status": "error", "msg":"no meta-data provided" } ]';
         res.write(content);
         res.status(400).end();
         return;
     }
-    var metadata = req.headers.file_metadata;
+    let metadata = req.headers.file_metadata;
     try { metadata = JSON.parse(metadata); }
     catch(err) {
-        let content = '{ "status": "error", "msg":"malformed metadata" } ]';
+        const content = '{ "status": "error", "msg":"malformed metadata" } ]';
         this.syslog.error('malformed metadata: '+metadata, 'core');
         res.write(content);
         res.status(400).end();
@@ -430,10 +434,10 @@ HttpService.prototype.postFile = function(req, res) {
     }
 
     // Bufferize file data
-    var chunkSize = 65536*4;
+    const chunkSize = 65536*4;
     const file_size = metadata.file_size || parseInt(req.headers['content-length']) || chunkSize;
     if (file_size > 500e6) {
-        let content = '{ "status": "error", "msg":"file too large, use a different upload method" } ]';
+        const content = '{ "status": "error", "msg":"file too large, use a different upload method" } ]';
         this.syslog.error('file too large, use a different upload method: ' + JSON.stringify(metadata));
         res.write(content);
         res.status(400).end();
@@ -441,7 +445,7 @@ HttpService.prototype.postFile = function(req, res) {
     }
 
     // Bufferize file data
-    let dwnld = new DownloadService(chunkSize, file_size);
+    const dwnld = new DownloadService(chunkSize, file_size);
     res.write('{ "status": "download" }, ');
     req.on('readable', function() {
         const update = function(size)  { res.write(' ' + size + ',') }
@@ -452,7 +456,7 @@ HttpService.prototype.postFile = function(req, res) {
         const data = dwnld.finish();
         this.service.syslog.debug('content: '+dwnld.buffer_length, 'core');
         const nid = this.service.db.addEntry(metadata, this.aclStatus, data, function(err, code = 400) {
-            let content = '{ "status": "error", "msg":"'+err+'" } ]';
+            const content = '{ "status": "error", "msg":"'+err+'" } ]';
             res.write(content);
             res.status(code).end();
         }, function(zone, commitUrl) {
@@ -513,7 +517,7 @@ HttpService.prototype.commitMedia = function(req, res) {
         processCommit(zone_name, commit_uuid);
     }
     else {
-        var metadata = req.body;
+        let metadata = req.body;
         if ('media_commit' in req.headers) {
             metadata = req.headers.media_commit;
             processJson(metadata);
@@ -521,7 +525,7 @@ HttpService.prototype.commitMedia = function(req, res) {
         else {
             // Bufferize file data
             const size = parseInt(req.headers['content-length']) || 4096;
-            let dwnld = new DownloadService(4096, size);
+            const dwnld = new DownloadService(4096, size);
             req.on('readable', function() { dwnld.read(req); });
             // Build the entry, Close the request
             req.on('end', function() {
@@ -569,7 +573,7 @@ HttpService.prototype.deleteMedia = function(req, res) {
         processDelete(uuid);
     }
     else {
-        var metadata = req.body;
+        let metadata = req.body;
         if ('media_delete' in req.headers) {
             metadata = req.headers.media_delete;
             processJson(metadata);
@@ -577,7 +581,7 @@ HttpService.prototype.deleteMedia = function(req, res) {
         else {
             // Bufferize file data
             const size = parseInt(req.headers['content-length']) || 4096;
-            let dwnld = new DownloadService(4096, size);
+            const dwnld = new DownloadService(4096, size);
             req.on('readable', function() { dwnld.read(req); });
             // Build the entry, Close the request
             req.on('end', function() {
@@ -604,7 +608,7 @@ HttpService.prototype.media = function(req, res) {
             this.sendAndClose(res, 400, '{"status":"error", "msg":"no meta-data provided"}');
             return;
         }
-        var metadata = req.headers.file_metadata;
+        let metadata = req.headers.file_metadata;
         try { metadata = JSON.parse(metadata); }
         catch(err) {
             this.syslog.error('malformed metadata: '+metadata, 'core');
@@ -730,7 +734,7 @@ HttpService.prototype.fileService = function(req, res) {
  * @param {object} updated - the source of updated data
  */
 function updateProperty(base, updated) {
-    var newo = {};
+    const newo = {};
     for (e in base) {
         if (e in updated) {
             if ((typeof updated[e]) == 'object')   newo[e] = updateProperty(base[e], updated[e]);
@@ -758,7 +762,7 @@ function fetchAndParseArguments(conf_default, conf_filename) {
         conf_filename = argv["ini"];
     }
 
-    var configuration = conf_default;
+    let configuration = conf_default;
     try {
         const configfile = ini.parse(fs.readFileSync(conf_filename, 'utf-8'));
         configuration = updateProperty(conf_default, configfile);
@@ -766,7 +770,7 @@ function fetchAndParseArguments(conf_default, conf_filename) {
     catch (err) { console.error('warning: configuration file ignored: '+err); }
 
     if (argv["p"]) {
-        var np = parseInt(argv["p"], 10);
+        const np = parseInt(argv["p"], 10);
         if (np != NaN) configuration.server.port = np;
     }
     if (argv["revision"]) {

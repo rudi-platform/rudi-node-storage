@@ -22,7 +22,7 @@ function idFromStr(name, idstr) {
     let id = -1, uid = -1;
     let idt = typeof idstr;
     if (idt == 'string') {
-        let pid = parseInt(idstr);
+        const pid = parseInt(idstr);
         if (pid != NaN) {
             idstr = pid;
             idt = 'number';
@@ -30,8 +30,8 @@ function idFromStr(name, idstr) {
     }
     if (idt == 'string') {
         if (!uuid.validate(idstr)) throw Error(`Invalid uuid for ${name}`);
-        let version = uuid.version(idstr);
-        let idbytes = uuid.parse(idstr);
+        const version = uuid.version(idstr);
+        const idbytes = uuid.parse(idstr);
         uid = idstr;
         if (version == 4) {
             id = 1000 + (idbytes[10] << 8) + idbytes[11];
@@ -71,8 +71,8 @@ function User(acldb, name, userDesc) {
     this.password = userDesc[1];
     this.groups = [];
     for (gi in userDesc[2]) {
-        let g = userDesc[2][gi];
-        let group = acldb.findGroup(g);
+        const g = userDesc[2][gi];
+        const group = acldb.findGroup(g);
         if (!group) throw Error(`Invalid group "${g}" while initializing ${name}`);
         this.groups.push(group);
     }
@@ -110,11 +110,11 @@ User.prototype.forgeDeletatedJwtUser = function(duser, dgroup, attributes, durat
     if (attributes === undefined || !attributes) attributes = {}
     const jti = uuid.v4();
     const xattr = Object.assign({}, { "name":duser.name, "uuid":duser.uuid, "group":dgroup.name }, attributes);
-    let token = jwti.forgeToken(this.privkey,
+    const token = jwti.forgeToken(this.privkey,
                                 { typ: 'jwt' },
                                 { "jti": jti, "client_id": this.name, "sub":"delegate",
                                   "user_id": duser.id, "group_id": dgroup.id,
-                                  xattr: xattr
+                                  "xattr": xattr
                                 },
                                 duration);
     this.acldb.debug(`Access token forged by ${this.name}: ${duser.name}:${dgroup.name} = ${token} [${JSON.stringify(xattr)}]`);
@@ -133,19 +133,19 @@ User.prototype.checkPassword = function (input) {
     if (p == '' || p == '-') return false;
     if (p.slice(0,3) == '$1$' && p[p.length-1] == '$') {
         p = p.slice(3, p.length-1)
-        var sha512 = crypto.createHash('md5');
+        const sha512 = crypto.createHash('md5');
         data = sha512.update(input, 'utf-8');
         input = data.digest('hex');
     }
     else if (p.slice(0,3) == '$5$' && p[p.length-1] == '$') {
         p = p.slice(3, p.length-1)
-        var sha512 = crypto.createHash('sha256');
+        const sha512 = crypto.createHash('sha256');
         data = sha512.update(input, 'utf-8');
         input = data.digest('hex');
     }
     else if (p.slice(0,3) == '$6$' && p[p.length-1] == '$') {
         p = p.slice(3, p.length-1)
-        var sha512 = crypto.createHash('sha512');
+        const sha512 = crypto.createHash('sha512');
         data = sha512.update(input, 'utf-8');
         input = data.digest('hex');
     }
@@ -156,11 +156,11 @@ User.prototype.checkPassword = function (input) {
  * @class ACL: defines an ACL entry.
  */
 function Acl(aclDesc) {
-    let err = function(msg) { throw Error(`${msg} in acl ("${JSON.stringify(aclDesc)}")`); }
+    const err = function(msg) { throw Error(`${msg} in acl ("${JSON.stringify(aclDesc)}")`); }
     if (!('core' in aclDesc)) err('Missing core');
     if (!('users' in aclDesc)) err('Missing users');
     if (!('groups' in aclDesc)) err('Missing groups');
-    let core = aclDesc['core'];
+    const core = aclDesc['core'];
     if (core.length != 5) err('Incorrect number of elements for core');
     [ this.owner, this.group, this.uaccess, this.gaccess, this.oaccess ] = core;
     this.users  = JSON.parse(JSON.stringify(aclDesc['users'])); // json -> deep-copy
@@ -222,8 +222,8 @@ function AclDB(cfg, syslog) {
     if ((typeof cfg != 'object') || (cfg.system_groups == undefined) || (cfg.system_users == undefined)) {
         throw Error(`Invalid AclDB cfg`);
     }
-    let sg = cfg.system_groups;
-    let au = cfg.system_users;
+    const sg = cfg.system_groups;
+    const au = cfg.system_users;
     try {
         this.systemGroups = {};
         this.groupsByID =   {};
@@ -245,7 +245,7 @@ AclDB.prototype.notice  = function(message, context = null) { if (this.syslog) t
 AclDB.prototype.debug   = function(message, context = null) { if (this.syslog) this.syslog.debug(message, 'ac',context); }
 
 AclDB.prototype.newGroup = function(name, goupId) {
-    let ng = new Group(name, goupId);
+    const ng = new Group(name, goupId);
     if (ng.id in this.groupsByID)  throw Error(`Group id already set ("${ng.id} is in ${this.groupsByID[ng.id].name}" for ${gi})`);
     this.systemGroups[name] = ng;
     this.groupsByID[ng.id] = ng;
@@ -260,7 +260,7 @@ AclDB.prototype.newUser = function(name, userDesc) {
 }
 AclDB.prototype.newAcl = function(aclconf) {
     const acl = new Acl(aclconf);
-    let err = function(msg) { throw Error(`${msg} in acl ("${JSON.stringify(aclconf)}")`); }
+    const err = function(msg) { throw Error(`${msg} in acl ("${JSON.stringify(aclconf)}")`); }
     if (!(acl.owner in this.systemUsers))  err(`Users ${this.owner} not found`);
     for (ui in acl.users) {
         if (!(ui in this.systemUsers))  err(`Users ${ui} not found`);
@@ -309,7 +309,7 @@ AclDB.prototype.findUser = function (login, gname = '-', password = null) {
 AclDB.prototype.forgeJwtFor = function (sysid, name, gname = 'producer', attributes = {}) {
     let user = null, group = null;
     try {
-        let [ id, uuidv ] = idFromStr(name, sysid);
+        const [ id, uuidv ] = idFromStr(name, sysid);
         if (id in this.usersByID) user = this.usersByID[id];
         else                      user = this.newUser(name, [ id, '', [ gname ], '' ]);
         group = user.validGroup(gname);
@@ -317,7 +317,7 @@ AclDB.prototype.forgeJwtFor = function (sysid, name, gname = 'producer', attribu
     catch (error) { this.error(`Invalid user: ${error}`); return [ null, 'E30' ]; }
     try {
         const admin = this.systemUsers['admin'];
-        let token = admin.forgeDeletatedJwtUser(user, group, attributes);
+        const token = admin.forgeDeletatedJwtUser(user, group, attributes);
         return [ token, null ];
     }
     catch (error) { this.error(`Could not forge JWT: ${error}`); return [ null, 'E31' ]; }
@@ -326,22 +326,22 @@ AclDB.prototype.forgeJwtFor = function (sysid, name, gname = 'producer', attribu
 AclDB.prototype.findIdsFromJwt = function (value) {
     let aclStatus = null;
     try {
-        let rawJwt = value.split('.');
+        const rawJwt = value.split('.');
         if ((typeof rawJwt != 'object') || rawJwt.length != 3) return this.newAclError('E20');
-        let jwt = jwti.tokenStringToJwtObject(value);
+        const jwt = jwti.tokenStringToJwtObject(value);
         if (!jwt) return this.newAclError('E21');
         this.debug(`Decoded JWT: ${JSON.stringify(jwt)}`);
 
-        let gname = ('sub' in jwt['payload']) ? jwt['payload']['sub'] : '-';
-        let uname = ('client_id' in jwt['payload']) ? jwt['payload']['client_id'] : '-' ;
+        const gname = ('sub' in jwt['payload']) ? jwt['payload']['sub'] : '-';
+        const uname = ('client_id' in jwt['payload']) ? jwt['payload']['client_id'] : '-' ;
 
-        let nowepoch = Math.floor(+new Date() / 1000);
-        let expire = ('exp' in jwt['payload']) ? jwt['payload']['exp'] : 0 ;
-        let nbf = ('nbf' in jwt['payload']) ? jwt['payload']['nbf'] : 0 ;
+        const nowepoch = Math.floor(+new Date() / 1000);
+        const expire = ('exp' in jwt['payload']) ? jwt['payload']['exp'] : 0 ;
+        const nbf = ('nbf' in jwt['payload']) ? jwt['payload']['nbf'] : 0 ;
         if (expire && (nowepoch > expire))   return new AclStatus(uname, gname, null, 'E23');
         else if (expire && (nowepoch < nbf)) return new AclStatus(uname, gname, null, 'E24');
 
-        let digest = jwt['header']['alg'] ? jwti.jwtAlgToDigestAlgo(jwt['header']['alg']) : 'SHA256';
+        const digest = jwt['header']['alg'] ? jwti.jwtAlgToDigestAlgo(jwt['header']['alg']) : 'SHA256';
         this.debug(`Digest: ${jwt['header']['alg']} ${digest}`);
 
         aclStatus = this.findUser(uname, gname);
@@ -352,8 +352,8 @@ AclDB.prototype.findIdsFromJwt = function (value) {
         if (user.keys.length < 1) { aclStatus.accError = 'E25'; return aclStatus; }
         let validated = false;
         for (ky in user.keys) {
-            let pubkey = user.keys[ky];
-            let jwtOk = jcrypt.atomicVerify(pubkey, rawJwt[0]+'.'+rawJwt[1], rawJwt[2], digest, 'base64url');
+            const pubkey = user.keys[ky];
+            const jwtOk = jcrypt.atomicVerify(pubkey, rawJwt[0]+'.'+rawJwt[1], rawJwt[2], digest, 'base64url');
             if (jwtOk) { validated = true; break; }
         }
         if (validated) {
@@ -361,8 +361,8 @@ AclDB.prototype.findIdsFromJwt = function (value) {
             if (group.name == 'delegate') {
                 extraNotice = ' by '+user.name;
                 this.debug("JWT delegation"+extraNotice);
-                let dgname = ('group_id' in jwt['payload']) ? jwt['payload']['group_id'] : '-';
-                let duname = ('user_id' in jwt['payload']) ? jwt['payload']['user_id'] : '-' ;
+                const dgname = ('group_id' in jwt['payload']) ? jwt['payload']['group_id'] : '-';
+                const duname = ('user_id' in jwt['payload']) ? jwt['payload']['user_id'] : '-' ;
                 aclStatus = this.findUser(duname, dgname);
                 if (aclStatus.accError) return aclStatus;
                 user = aclStatus.user;

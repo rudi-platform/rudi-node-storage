@@ -31,8 +31,8 @@ ZoneContext.prototype.process = function(name, uuid, access, accError) {
     this.auth.userName = name;
     this.auth.userId = uuid;
     this.auth.access = access;
-    let [ message, realm ] =  this.acldb.errDesc(accError);
-    let sev =  accError ? logger.Severity.Warning : logger.Severity.Notice;
+    const [ message, realm ] =  this.acldb.errDesc(accError);
+    const sev =  accError ? logger.Severity.Warning : logger.Severity.Notice;
     this.acldb.log(sev, "["+this.auth.userName+"]:"+this.opType+": "+message, this.errContext(0));
 }
 ZoneContext.prototype.toJson = function() {
@@ -55,7 +55,7 @@ function BasicZone(acldb, parent, zoneconf) {
     this.abspath   = 'abspath' in zoneconf ? zoneconf.abspath : false;
     this.db        = {}
     if (!('path' in zoneconf)) {
-        let basedir    = !parent ? '' : (typeof parent == 'object' ? parent.dirname() : ''+parent);
+        const basedir    = !parent ? '' : (typeof parent == 'object' ? parent.dirname() : ''+parent);
         this.dirname   = basedir + '/' + this.name;
     }
     else this.dirname = zoneconf.path;
@@ -128,7 +128,7 @@ BasicZone.prototype.commitPath = function(media) {
     return storageName;
 }
 BasicZone.prototype.commitClear = function(media) {
-    let storageName = media.getStorageName();
+    const storageName = media.getStorageName();
     if (storageName[0] == '/' || storageName[0] == '#') return false;
     const stagedName  = this._absPath(this.staged_prefix + storageName);
     try { fs.rmSync(stagedName); }
@@ -137,7 +137,7 @@ BasicZone.prototype.commitClear = function(media) {
 }
 BasicZone.prototype.destroyMedia = function(media, staged) {
     if (staged) return false;
-    let storageName = media.getStorageName();
+    const storageName = media.getStorageName();
     if (storageName[0] == '/' || storageName[0] == '#') return false;
     const path  = this._absPath(storageName);
     try { fs.rmSync(path); }
@@ -164,7 +164,7 @@ BasicZone.prototype.stageEntry = function(entry, process) {
 }
 
 BasicZone.prototype.commitEntry = function(aclStatus, suid, none, done) {
-    let ctx = new ZoneContext(this.acldb, aclStatus.user, 'zone_commit')
+    const ctx = new ZoneContext(this.acldb, aclStatus.user, 'zone_commit')
     aclStatus.setContext(ctx);
     aclStatus.setAcl(this.zoneAcl);
     if (aclStatus.refused('--x')) { none('Access denied', 401); return; }
@@ -183,7 +183,7 @@ BasicZone.prototype.commitEntry = function(aclStatus, suid, none, done) {
 }
 
 BasicZone.prototype.deleteEntry = function(aclStatus, uuid, none, done) {
-    let ctx = new ZoneContext(this.acldb, aclStatus.user, 'zone_delete')
+    const ctx = new ZoneContext(this.acldb, aclStatus.user, 'zone_delete')
     aclStatus.setContext(ctx);
     aclStatus.setAcl(this.zoneAcl);
     if (aclStatus.refused('-wx')) { none('Access denied', 401); return; }
@@ -200,12 +200,12 @@ BasicZone.prototype.deleteEntry = function(aclStatus, uuid, none, done) {
 }
 
 BasicZone.prototype.listMedias = function(aclStatus) {
-    let ctx = new ZoneContext(this.acldb, aclStatus.user, 'zone_list')
+    const ctx = new ZoneContext(this.acldb, aclStatus.user, 'zone_list')
     aclStatus.setContext(ctx);
     aclStatus.setAcl(this.zoneAcl);
     if (aclStatus.refused('r--')) throw Error('Access denied');
 
-    let content = [];
+    const content = [];
     for (uuid in this.db) {
         const entry = this.db[uuid];
         content.push(entry.toJson());
@@ -219,7 +219,7 @@ BasicZone.prototype.newBasicEntryFromMetadata = function(metadata, filecontent, 
 
         let needValidation = false;
         if (!aclStatus.user) none('Authentication required', 405);
-        let ctx = new ZoneContext(this.acldb, aclStatus.user, 'zone_add')
+        const ctx = new ZoneContext(this.acldb, aclStatus.user, 'zone_add')
         aclStatus.setContext(ctx);
         aclStatus.setAcl(this.zoneAcl);
         if (aclStatus.refused('-w-')) none('Access denied', 401);
@@ -275,8 +275,8 @@ BasicZone.prototype.newBasicEntryFromMetadata = function(metadata, filecontent, 
 BasicZone.prototype.newBasicEntryFromCsv = function(descline, aclStatus) {
     let entry = null;
     try {
-        var [ urlmd5, uuid, filetype, encoding, date, sizedate] = descline.split(';');
-        var [ filename, mimetype ] = filetype.split(':');
+        let [ urlmd5, uuid, filetype, encoding, date, sizedate] = descline.split(';');
+        let [ filename, mimetype ] = filetype.split(':');
         if (sizedate === undefined) throw Error('Could not parse '+descline);
         date = new Date(parseInt(date)*1000);
 
@@ -289,7 +289,6 @@ BasicZone.prototype.newBasicEntryFromCsv = function(descline, aclStatus) {
 
         mimetype=mimetype.trim();
         if (mimetype == 'text/uri-list') {
-            var [ name, mime ] = filetype.split(':');
             const url = urlmd5;
             const expire = new Date(parseInt(sizedate)*1000);
             entry = new BasicUrlEntry(null, this, aclStatus, filename, uuid, url, date, expire);
@@ -329,7 +328,7 @@ BasicZone.prototype.loadCSV = function(entrycb, none, done) {
             }
             const context = { source:'CSV', filename:path, user:'<admin>', access:'rwx' };
             const entries = data.split('\n');
-            for (var index in entries) {
+            for (let index in entries) {
                 const line = entries[index];
                 if (!line || line == '') continue;
                 const entry = this.zone.newBasicEntryFromCsv(line, aclStatus);
@@ -348,7 +347,7 @@ BasicZone.prototype.loadCSV = function(entrycb, none, done) {
  */
 BasicZone.prototype.saveZoneCSV = function(none, done) {
     const path = this.getPathFromConnector(this);
-    var content = '';
+    let content = '';
     for (uuid in this.db) {
         const entry = this.db[uuid];
         content += entry.getCSVline() + '\n';

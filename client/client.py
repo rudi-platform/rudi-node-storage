@@ -277,6 +277,7 @@ def main():
         print(r'--------------- utilisateur console récupère une donnée: fonctionne -----------' )
         mcConsole.media('8d784a62-5e20-4412-a3be-48ef85c073ec', '_OO', method = 'Check')
         time.sleep(3)
+
     if mcConsole and True:
         print(r'--------------- utilisateur console récupère une donnée qui n\'existe pas -----------' )
         mcConsole.media('2b67bfd7-b7a2-40f8-bba0-56abbbbff054', '_OO')
@@ -286,14 +287,19 @@ def main():
         print(r'--------------- utilisateur console poste une donnée nouvelle -----------' )
         stageId = mcConsole.post('2b67bfd7-b7a2-40f8-bba0-56abbbbff054', 'zoom_amd64.deb')
         time.sleep(1)
+
+    if mcConsole and True:
         print(r'--------------- utilisateur console commite: il échoue -----------' )
         mcConsole.commit(stageId)
         time.sleep(2)
+
+    if mcManager and True:
         print(r'--------------- utilisateur manager commite: il réussi -----------' )
         mcManager.commit(stageId)
         print(r'--------------- utilisateur console check md5: succès -----------' )
         mcConsole.media('2b67bfd7-b7a2-40f8-bba0-56abbbbff054', '_OO', method = 'Check')
         time.sleep(2)
+
     if mcConsole and True:
         print(r'--------------- utilisateur console télécharge: succès -----------' )
         mcConsole.media('2b67bfd7-b7a2-40f8-bba0-56abbbbff054', '_OO')

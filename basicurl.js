@@ -65,10 +65,10 @@ BasicUrlEntry.prototype.getStorageName = function() {
  * @returns {string}              - The CSV line.
  */
 BasicUrlEntry.prototype.getCSVline = function() {
-    var filetype = this.name +': '+ this.mimetype +'; '+ this.encoding;
+    const filetype = this.name +': '+ this.mimetype +'; '+ this.encoding;
     const d = this.date.valueOf();
     const e = this.expire.valueOf();
-    var s = ';';
+    const s = ';';
     return '' + this.url +s+ this.uuid +s+ filetype +s+ (d?d/1000:0) +s+ (e?e/1000:0);
 }
 
@@ -197,7 +197,7 @@ BasicUrlEntry.prototype.getFile = function(idesc, none, done) {
         switch(sourceUrl.protocol) {
         case 'https:': {
             https.get(sourceUrl.href, (res) => {
-                var data = "";
+                let data = "";
                 res.on("data", (chunk) => { data += chunk; });
                 res.on("end", () => {
                     if (done) done(data, idesc.name, 'charset=binary');
@@ -211,7 +211,7 @@ BasicUrlEntry.prototype.getFile = function(idesc, none, done) {
         }
         case 'http:': {
             http.get(sourceUrl.href, (res) => {
-                var data = "";
+                let data = "";
                 res.on("data", (chunk) => { data += chunk; });
                 res.on("end", () => {
                     if (done) done(data, idesc.name, 'charset=binary');
