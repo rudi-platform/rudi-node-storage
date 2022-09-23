@@ -99,13 +99,13 @@ BasicFileEntry.prototype.clear = function(staged) {
     this.zone.commitClear(this);
     staged.process('File ['+this.uuid+']:'+this.filename+' marked not confirmed');
 }
-BasicFileEntry.prototype.destroy = function(staged) {
-    this.zone.destroyMedia(this, staged);
-    staged.process('File ['+this.uuid+']:'+this.filename+' destroyed');
-}
 BasicFileEntry.prototype.commit = function(staged) {
     const path = this.zone.commitPath(this);
     staged.process('File ['+this.uuid+']:'+path+' commited');
+}
+BasicFileEntry.prototype.destroy = function(staged) {
+    this.zone.destroyMedia(this, staged);
+    if (staged) staged.process('File ['+this.uuid+']:'+this.filename+' destroyed');
 }
 
 /**
@@ -195,13 +195,13 @@ BasicFileEntry.fileSchema = function(contextRef, metaRef) {
  */
 BasicFileEntry.prototype.getFile = function(idesc, none, done) {
     if (!('source' in idesc)) {
-        if (none) none('loading media: source missing in context');
+        if (none) none('loading media: source missing in context', 404);
         return;
     }
     fs.readFile(idesc.source, { flag:'r'}, function(err, data) {
         if (err) {
             console.error('Error: critical failure: could not load '+idesc.source);
-            if (none) none('loading media: file error');
+            if (none) none('loading media: file error', 500);
             return;
         }
         if (done) done(data, idesc.filename, idesc.type);
@@ -221,7 +221,7 @@ BasicFileEntry.prototype.getRealMd5 = function(none, done) {
     fs.readFile(source, { flag:'r'}, function(err, data) {
         if (err) {
             console.error('Error: critical failure: could not load '+source);
-            if (none) none('loading media: file error');
+            if (none) none('loading media: file error', 500);
             return;
         }
         const hash = crypto.createHash('md5').update(data).digest('hex');

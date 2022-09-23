@@ -10,17 +10,21 @@ import base64
 
 # openssl req -x509 -nodes -newkey rsa:2048 -keyout private_key.pem -out public_key.pem -subj "/CN=rudiadmin.aqmo.org"
 
-def dumps(obj, indent = 0):
+def dumps(obj, indent = 0, cut=False):
     def isobj(obj): return (isinstance(obj, list) or isinstance(obj, dict))
     s = json.dumps(obj, separators=(',',':'))
-    if len(s) < (78 - indent): return s
+    if len(s) < (78- indent): return s
     indent += 4
     padb = r''
     padn = '\n'.ljust(indent+2)
     pade = '\n'.ljust(indent)
     padf = padb if isobj(obj) and (len(obj)>0) and isobj(list(obj)[0]) else padn
-    if isinstance(obj, list):    return padb + '[' + padf + (','+padn).join([ dumps(i, indent) for i in obj ]) + pade + ']'
-    elif isinstance(obj, dict):  return padb + '{' + padf + (','+padn).join([ (dumps(k, indent) + ':' + dumps(v, indent)) for k,v in obj.items() ]) + pade + '}'
+    if isinstance(obj, list):    return padb + '[' + padf + (','+padn).join([ dumps(i, indent, cut) for i in obj ]) + pade + ']'
+    elif isinstance(obj, dict):  return padb + '{' + padf + (','+padn).join([ (dumps(k, indent, cut) + ':' + dumps(v, indent, cut)) for k,v in obj.items() ]) + pade + '}'
+    elif cut:
+        r = str(obj).split('.')
+        if len(r) > 1: r = [ i[0:14] for i in r ]
+        return '.'.join(r)
     else: return str(obj)
 
 class User(object):
@@ -103,7 +107,7 @@ class MediaClient(object):
             if body and type(body) == dict:
                 headers[r'Content-Type'] = r'application/json'
                 body = json.dumps(body)
-            logging.warning("Request: %s: %s => %s"%(path, json.dumps(headers), body))
+            logging.warning("Request: %s: %s => %s"%(path, dumps(headers, cut=True), body))
             if body: conn.request(ctype, path, body, headers)
             else:
                 conn.putrequest(ctype, path)
@@ -237,6 +241,11 @@ class MediaClient(object):
         conn = self.conn(r'POST', r'/commit/', stageId, headers = headers)
         return self.cresult(conn)
 
+    def mediaList(self):
+        headers = {"Content-Type": "text/plain", "Accept": "application/json" }
+        conn = self.conn(r'GET', r'/list/', headers = headers)
+        return self.cresult(conn)
+
 def main():
     rudimanager = User(r'rudimanager', privkeyfile = r'./adminpriv.pem')
     rudiconsole = User(r'rudiconsole', '1000')
@@ -245,31 +254,62 @@ def main():
 
     mcManager = None
     if True:
+        print(r'--------------- Création du client HTTP pour utilisateur rudimanager (teste le /) -----------' )
         mcManager = MediaClient(rudimanager)
+        time.sleep(1)
 
     mcConsole = None
     if mcManager and True:
         rudiconsole.setGroup('producer')
+        print(r'--------------- Demande un token pour utilisateur "rudiconsole" -----------' )
         mcManager.askToken(rudiconsole)
+        time.sleep(2)
+        print(r'--------------- Création du client HTTP pour utilisateur console -----------' )
         mcConsole = MediaClient(rudiconsole, verify = False)
-        #mcConsole.logs()
+        time.sleep(1)
+
+    if mcManager and True:
+        print(r'--------------- utilisateur console échoue à récuper /log -----------' )
+        mcConsole.logs()
+        time.sleep(3)
 
     if mcConsole and True:
+        print(r'--------------- utilisateur console récupère une donnée: fonctionne -----------' )
         mcConsole.media('8d784a62-5e20-4412-a3be-48ef85c073ec', '_OO', method = 'Check')
+        time.sleep(3)
     if mcConsole and True:
+        print(r'--------------- utilisateur console récupère une donnée qui n\'existe pas -----------' )
         mcConsole.media('2b67bfd7-b7a2-40f8-bba0-56abbbbff054', '_OO')
+        time.sleep(3)
+
     if mcConsole and mcManager and True:
+        print(r'--------------- utilisateur console poste une donnée nouvelle -----------' )
         stageId = mcConsole.post('2b67bfd7-b7a2-40f8-bba0-56abbbbff054', 'zoom_amd64.deb')
         time.sleep(1)
+        print(r'--------------- utilisateur console commite: il échoue -----------' )
         mcConsole.commit(stageId)
         time.sleep(2)
+        print(r'--------------- utilisateur manager commite: il réussi -----------' )
         mcManager.commit(stageId)
-        mcConsole.media('2b67bfd7-b7a2-40f8-bba0-56abbbbff054', '_OO')
+        print(r'--------------- utilisateur console check md5: succès -----------' )
         mcConsole.media('2b67bfd7-b7a2-40f8-bba0-56abbbbff054', '_OO', method = 'Check')
+        time.sleep(2)
+    if mcConsole and True:
+        print(r'--------------- utilisateur console télécharge: succès -----------' )
+        mcConsole.media('2b67bfd7-b7a2-40f8-bba0-56abbbbff054', '_OO')
+        time.sleep(2)
 
-    if False:
+    if mcConsole and True:
+        mcConsole.mediaList()
+
+    if mcManager and True:
+        mcManager.mediaList()
+
+    if True:
+        print(r'--------------- utilisateur admin par mot de passe -----------' )
         mcAdmin = MediaClient(admin)
         #mcAdmin.logs()
+        print(r'--------------- utilisateur admin poste sans commit: succès -----------' )
         mcAdmin.post('2b67bfd7-b7a2-40f8-bba0-56abbbbff054', 'zoom_amd64.deb')
 
 if __name__ == '__main__': main()

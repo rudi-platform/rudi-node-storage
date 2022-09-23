@@ -29,7 +29,7 @@ const DEFAULT_CONF = {
             'core': [ 'admin', 'admin', 'rwx', 'rwx', '---' ],
             'users': {},
             'groups': {
-                'auth': '--x',      // Can create tokens and provide login/group IDs.
+                'auth': 'r-x',      // Can create tokens and provide login/group IDs.
                 'producer': '-w-',  // Can create media
                 'monitor': 'r--',   // Can access logs
                 'anonymous': '---'  // Can access public entries only

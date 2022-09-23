@@ -60,7 +60,9 @@ function BasicZone(acldb, parent, zoneconf) {
     }
     else this.dirname = zoneconf.path;
     this.zoneAcl = acldb.newAcl({
-        'core': [ 'admin', 'producer', 'rwx', 'rw-', '---' ], 'users': {}, 'groups': {}
+        'core': [ 'admin', 'producer', 'rwx', 'rw-', '---' ],
+        'users': {},
+        'groups': { 'auth': 'rwx' }
     });
     this.staging_timeout = 'staging_time' in zoneconf ? zoneconf.staging_time : 5;
     this.destroy_timeout = 'destroy_time' in zoneconf ? zoneconf.destroy_time : 10;
@@ -89,37 +91,6 @@ BasicZone.prototype.init = function(entrycb, none, done) {
 
 BasicZone.prototype.close = function(none, done) {
     if (done) done();
-}
-
-BasicZone.prototype.stageEntry = function(entry, process) {
-    const suid = uuidv4();
-    this.staging_db[suid] = { suid: suid, entry: entry, date:new Date(), process:process };
-    setTimeout(function() {
-        if (!(this.suid in this.zone.staging_db)) return; // Commited
-        const staged = this.zone.staging_db[this.suid];
-        delete         this.zone.staging_db[this.suid];
-        this.zone.staging_trash[this.suid] = staged;
-        staged.entry.clear(staged);
-        setTimeout(function() {
-            const staged = this.zone.staging_trash[this.suid];
-            delete         this.zone.staging_trash[this.suid];
-            staged.entry.destroy(staged);
-        }.bind({zone:this.zone, suid: this.suid}), this.staging_timeout * 1000);
-    }.bind({zone:this, suid: suid}), this.destroy_timeout * 1000);
-    return suid;
-}
-
-BasicZone.prototype.commitEntry = function(suid, none, done) {
-    if (!(suid in this.staging_db)) {
-        if (suid in this.staging_trash) none('could not commit file: time exceeded.');
-        else                            none('could not commit file: entry not found.');
-    }
-    else {
-        const stg = this.staging_db[suid];
-        delete this.staging_db[suid]
-        stg.entry.commit(stg);
-        done(stg);
-    }
 }
 
 /**
@@ -174,16 +145,84 @@ BasicZone.prototype.destroyMedia = function(media, staged) {
     return true;
 }
 
+BasicZone.prototype.stageEntry = function(entry, process) {
+    const suid = uuidv4();
+    this.staging_db[suid] = { suid: suid, entry: entry, date:new Date(), process:process };
+    setTimeout(function() {
+        if (!(this.suid in this.zone.staging_db)) return; // Commited
+        const staged = this.zone.staging_db[this.suid];
+        delete         this.zone.staging_db[this.suid];
+        this.zone.staging_trash[this.suid] = staged;
+        staged.entry.clear(staged);
+        setTimeout(function() {
+            const staged = this.zone.staging_trash[this.suid];
+            delete         this.zone.staging_trash[this.suid];
+            staged.entry.destroy(staged);
+        }.bind({zone:this.zone, suid: this.suid}), this.staging_timeout * 1000);
+    }.bind({zone:this, suid: suid}), this.destroy_timeout * 1000);
+    return suid;
+}
+
+BasicZone.prototype.commitEntry = function(aclStatus, suid, none, done) {
+    let ctx = new ZoneContext(this.acldb, aclStatus.user, 'zone_commit')
+    aclStatus.setContext(ctx);
+    aclStatus.setAcl(this.zoneAcl);
+    if (aclStatus.refused('--x')) { none('Access denied', 401); return; }
+
+    if (!(suid in this.staging_db)) {
+        if (suid in this.staging_trash) none('could not commit file: time exceeded.', 400);
+        else                            none('could not commit file: entry not found.', 404);
+    }
+    else {
+        const stg = this.staging_db[suid];
+        delete this.staging_db[suid]
+        this.db[suid] = stg.entry;
+        stg.entry.commit(stg);
+        done(stg);
+    }
+}
+
+BasicZone.prototype.deleteEntry = function(aclStatus, uuid, none, done) {
+    let ctx = new ZoneContext(this.acldb, aclStatus.user, 'zone_delete')
+    aclStatus.setContext(ctx);
+    aclStatus.setAcl(this.zoneAcl);
+    if (aclStatus.refused('-wx')) { none('Access denied', 401); return; }
+
+    if (!(uuid in this.db)) {
+        none('could not delete file: entry not found.', 404);
+    }
+    else {
+        const entry = this.db[uuid];
+        delete this.this.db[uuid]
+        entry.destroy();
+        done(entry);
+    }
+}
+
+BasicZone.prototype.listMedias = function(aclStatus) {
+    let ctx = new ZoneContext(this.acldb, aclStatus.user, 'zone_list')
+    aclStatus.setContext(ctx);
+    aclStatus.setAcl(this.zoneAcl);
+    if (aclStatus.refused('r--')) throw Error('Access denied');
+
+    let content = [];
+    for (uuid in this.db) {
+        const entry = this.db[uuid];
+        content.push(entry.toJson());
+    }
+    return content;
+}
+
 BasicZone.prototype.newBasicEntryFromMetadata = function(metadata, filecontent, aclStatus, none, step, done) {
     try {
         if (!('media_type' in metadata)) { none('Missing media type'); return; }
 
         let needValidation = false;
-        if (!aclStatus.user) none(Error('Authentication required'));
+        if (!aclStatus.user) none('Authentication required', 405);
         let ctx = new ZoneContext(this.acldb, aclStatus.user, 'zone_add')
         aclStatus.setContext(ctx);
         aclStatus.setAcl(this.zoneAcl);
-        if (aclStatus.refused('-w-')) none('Access denied');
+        if (aclStatus.refused('-w-')) none('Access denied', 401);
         ctx.opType = 'zone_commit';
         if (aclStatus.refused('--x')) needValidation = true;
 
@@ -193,33 +232,33 @@ BasicZone.prototype.newBasicEntryFromMetadata = function(metadata, filecontent, 
                 this.step('saved: '+path);
                 this.done(entry);
             });
-        }.bind({zone:this,step:step,doneFct:done});
+        }.bind({zone:this,step:step,done:done});
 
         const recordOrStageEntry = function(entry) {
-            if (!needValidation) { this.zone.recordEntry(entry, this.none, this.done); }
+            if (!needValidation) { this.recordEntry(entry, this.none, this.done); }
             else {
                 const suid = this.zone.stageEntry(entry, this.step);
                 this.done(entry, suid);
             }
-        }.bind({zone:this, needValidation:needValidation, none:none, step:step, done:done});
+        }.bind({zone:this, recordEntry:recordEntry, needValidation:needValidation, none:none, step:step, done:done});
 
         if (metadata.media_type == "FILE") {
             const entry = new BasicFileEntry(metadata, filecontent, this, aclStatus);
             if (this.abspath) entry.abspath = true;
             const path = this.getPathFromConnector(entry, needValidation);
             fs.writeFile(path, filecontent, { flag:'w'}, function(err, data) {
-                if (err) none('could not write file: '+path);
+                if (err) none('could not write file: '+path, 500);
                 this.recordOrStageEntry(entry);
             }.bind({recordOrStageEntry:recordOrStageEntry}));
         }
         else if (metadata.media_type == "INDIRECT") {
-            if (!('url' in metadata)) { none('Missing media URL'); return; }
+            if (!('url' in metadata)) { none('Missing media URL', 400); return; }
             const entry = new BasicUrlEntry(metadata, this, aclStatus);
             this.recordOrStageEntry(entry);
         }
-        else none('Unsupported Media Type: '+metadata.media_type);
+        else none('Unsupported Media Type: '+metadata.media_type, 400);
     }
-    catch(err) { none('invalid meta-data: '+err+' value: '+JSON.stringify(metadata)); }
+    catch(err) { none('invalid meta-data: '+err+' value: '+JSON.stringify(metadata), 400); }
 }
 
 /**
@@ -279,7 +318,7 @@ BasicZone.prototype.newBasicEntryFromCsv = function(descline, aclStatus) {
  */
 BasicZone.prototype.loadCSV = function(entrycb, none, done) {
     const path = this.getPathFromConnector(this);
-    const aclStatus = this.acldb.newUSerAclStatus(this.user);
+    const aclStatus = this.acldb.newUserAclStatus(this.user);
     aclStatus.setContext(new ZoneContext(this.acldb, this.user, 'csv_import'));
     fs.stat(path, function(err,stats) {
         if (err) return;

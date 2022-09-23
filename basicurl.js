@@ -89,12 +89,12 @@ BasicUrlEntry.prototype.generateFileId = function() {
 BasicUrlEntry.prototype.clear = function(staged) {
     staged.process('URL ['+this.uuid+']:'+this.url+' marked not confirmed');
 }
-BasicUrlEntry.prototype.destroy = function(staged) {
-    staged.process('URL ['+this.uuid+']:'+this.url+' destroyed');
-}
 BasicUrlEntry.prototype.commit = function(staged) {
     const path = this.zone.getPathFromConnector(this);
     staged.process('URL ['+this.uuid+']:'+path+' commited');
+}
+BasicUrlEntry.prototype.destroy = function(staged) {
+    if (staged) staged.process('URL ['+this.uuid+']:'+this.url+' destroyed');
 }
 
 /**
@@ -187,7 +187,7 @@ BasicUrlEntry.urlSchema = function(contextRef, metaRef) {
  */
 BasicUrlEntry.prototype.getFile = function(idesc, none, done) {
     if (!('url' in idesc)) {
-        if (none) none('loading URL media: url missing in context');
+        if (none) none('loading URL media: url missing in context', 400);
         return;
     }
     const source = idesc.url;
@@ -204,7 +204,7 @@ BasicUrlEntry.prototype.getFile = function(idesc, none, done) {
                 });
             }).on("error", (error) => {
                 console.error('Error: critical failure: could not load '+sourceUrl.href+': '+error);
-                if (none) none('loading media: file error');
+                if (none) none('loading media: file error', 500);
                 return;
             });
             break;
@@ -218,17 +218,17 @@ BasicUrlEntry.prototype.getFile = function(idesc, none, done) {
                 });
             }).on("error", (error) => {
                 console.error('Error: critical failure: could not load '+sourceUrl.href+': '+error);
-                if (none) none('loading media: file error');
+                if (none) none('loading media: file error', 500);
                 return;
             });
             break;
         }
         default:
-            if (none) none('loading URL media: protocol not supported ('+sourceUrl.protocol+')');
+            if (none) none('loading URL media: protocol not supported ('+sourceUrl.protocol+')', 400);
         }
     }
     catch(e) {
-        if (none) none('loading URL media: content access error');
+        if (none) none('loading URL media: content access error', 500);
     }
 }
 

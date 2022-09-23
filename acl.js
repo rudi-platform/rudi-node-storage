@@ -240,6 +240,7 @@ function AclDB(cfg, syslog) {
 AclDB.prototype.log = function(sev, message, context = null) { if (this.syslog) this.syslog.log(sev, message, 'ac',context); }
 AclDB.prototype.error   = function(message, context = null) { if (this.syslog) this.syslog.error(message, 'ac',context); }
 AclDB.prototype.warn    = function(message, context = null) { if (this.syslog) this.syslog.warn(message, 'ac',context); }
+AclDB.prototype.info    = function(message, context = null) { if (this.syslog) this.syslog.info(message, 'ac',context); }
 AclDB.prototype.notice  = function(message, context = null) { if (this.syslog) this.syslog.notice(message, 'ac',context); }
 AclDB.prototype.debug   = function(message, context = null) { if (this.syslog) this.syslog.debug(message, 'ac',context); }
 
@@ -273,7 +274,7 @@ AclDB.prototype.newAcl = function(aclconf) {
 AclDB.prototype.newAclStatus = function (uname, gname, user, accError) {
     return new AclStatus(uname, gname, user, accError);
 }
-AclDB.prototype.newUSerAclStatus = function (user, group = '-') {
+AclDB.prototype.newUserAclStatus = function (user, group = '-') {
     return new AclStatus(user.name, group, user, null);
 }
 AclDB.prototype.newAclError = function (accError) {
@@ -367,7 +368,7 @@ AclDB.prototype.findIdsFromJwt = function (value) {
                 user = aclStatus.user;
                 group = aclStatus.group;
             }
-            this.notice("JWT validated for "+user.name+':'+group.name+extraNotice);
+            this.info("JWT validated for "+user.name+':'+group.name+extraNotice);
         }
         else aclStatus.accError = 'E22';
     }

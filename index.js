@@ -92,6 +92,8 @@ function HttpService(configuration) {
     this.httpServer.get(this.httpPrefix+'storage/:fileid', function(req, res) { service.fileService(req, res) }.bind({'service':this}));
     this.httpServer.post(this.httpPrefix+'post', function(req, res) { service.postFile(req, res) }.bind({'service':this}));
     this.httpServer.post(this.httpPrefix+'commit/', function(req, res) { service.commitMedia(req, res) }.bind({'service':this}));
+    this.httpServer.post(this.httpPrefix+'delete/:uuid', function(req, res) { service.deleteMedia(req, res) }.bind({'service':this}));
+    this.httpServer.get(this.httpPrefix+'list/', function(req, res) { service.listMedias(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'schema/:name', function(req, res) { service.schemas(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'check/:uuid', function(req, res) { service.checkFile(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'download/:uuid', function(req, res) { service.direct(req, res) }.bind({'service':this}));
@@ -101,6 +103,8 @@ function HttpService(configuration) {
     this.httpServer.options(this.httpPrefix+'storage/:fileid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
     this.httpServer.options(this.httpPrefix+'post', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
     this.httpServer.options(this.httpPrefix+'commit/', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
+    this.httpServer.options(this.httpPrefix+'delete/', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
+    this.httpServer.options(this.httpPrefix+'list/', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
     this.httpServer.options(this.httpPrefix+'check/:uuid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
     this.httpServer.options(this.httpPrefix+'download/:uuid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
     this.httpServer.options(this.httpPrefix+'zdownload/:uuid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
@@ -344,6 +348,20 @@ HttpService.prototype.sendAndClose = function(res, code, msg) {
     res.end();
 }
 
+HttpService.prototype.listMedias = function(req, res) {
+    console.log('---------------');
+    const aclStatus = this.ac.getAccessStatus(req, res);
+    if (!this.ac.checkSystemAccessStatus(aclStatus, '---')) return;
+
+    const mediaList = this.db.list(aclStatus);
+    if (!mediaList) HttpService.prototype.sendAndClose(res, 404, '{"status":"error", "msg":"media list not available"}');
+    else  {
+        res.type('application/json');
+        res.write(JSON.stringify(mediaList));
+        res.status(200).end();
+    }
+}
+
 HttpService.prototype.forgeUserToken = function(req, res) {
     const aclStatus = this.ac.getAccessStatus(req, res);
     if (!this.ac.checkSystemAccessStatus(aclStatus, '--x')) return;
@@ -372,6 +390,7 @@ HttpService.prototype.forgeUserToken = function(req, res) {
         let cookie = this.service.ac.forgeTokenCookie(this.aclStatus, userDesc.user_id, userDesc.user_name, userDesc.group_name);
         if (!cookie) return;
         else {
+            this.service.syslog.info('forged token for '+userDesc.user_name+':'+userDesc.group_name?userDesc.group_name:'-', 'core');
             content = '{ "status": "OK" } ]';
             res.setHeader('cookie', cookie);
             res.write(content);
@@ -432,10 +451,10 @@ HttpService.prototype.postFile = function(req, res) {
     req.on('end', function() {
         const data = dwnld.finish();
         this.service.syslog.debug('content: '+dwnld.buffer_length, 'core');
-        const nid = this.service.db.addEntry(metadata, this.aclStatus, data, function() {
-            let content = '{ "status": "error", "msg":"invalid request" } ]';
+        const nid = this.service.db.addEntry(metadata, this.aclStatus, data, function(err, code = 400) {
+            let content = '{ "status": "error", "msg":"'+err+'" } ]';
             res.write(content);
-            res.status(400).end();
+            res.status(code).end();
         }, function(zone, commitUrl) {
             let content  = '';
             if (commitUrl) content += '{ "zone_name": "'+zone+'", "commit_uuid": "'+commitUrl+'" }, ';
@@ -459,8 +478,8 @@ HttpService.prototype.commitMedia = function(req, res) {
     res.header("Access-Control-Allow-Origin", "*");
 
     const processCommit = function(zone_name, commit_uuid) {
-        this.service.db.commit(zone_name, commit_uuid, this.aclStatus, function(err) {
-            this.service.sendAndClose(this.res, 400, '{ "status": "error", "msg":"'+err+'"}');
+        this.service.db.commit(zone_name, commit_uuid, this.aclStatus, function(err, code = null) {
+            this.service.sendAndClose(this.res, code ? code : 400, '{ "status": "error", "msg":"'+err+'"}');
         }.bind({service:this.service,res:this.res}), function() {
             this.service.sendAndClose(this.res, 200, '{ "status": "OK" }');
         }.bind({service:this.service,res:this.res}));
@@ -497,6 +516,62 @@ HttpService.prototype.commitMedia = function(req, res) {
         var metadata = req.body;
         if ('media_commit' in req.headers) {
             metadata = req.headers.media_commit;
+            processJson(metadata);
+        }
+        else {
+            // Bufferize file data
+            const size = parseInt(req.headers['content-length']) || 4096;
+            let dwnld = new DownloadService(4096, size);
+            req.on('readable', function() { dwnld.read(req); });
+            // Build the entry, Close the request
+            req.on('end', function() {
+                metadata = dwnld.finish().toString('utf-8');
+                processJson(metadata);
+            });
+        }
+    }
+}
+
+HttpService.prototype.deleteMedia = function(req, res) {
+    const aclStatus = this.ac.getAccessStatus(req, res, 'API');
+    if (!this.ac.checkSystemAccessStatus(aclStatus, '-wx')) return;
+    res.header("Access-Control-Allow-Origin", "*");
+
+    const processDelete = function(uuid) {
+        this.service.db.mdelete(uuid, this.aclStatus, function(err, code = null) {
+            this.service.sendAndClose(this.res, code ? code : 400, '{ "status": "error", "msg":"'+err+'"}');
+        }.bind({service:this.service,res:this.res}), function() {
+            this.service.sendAndClose(this.res, 200, '{ "status": "OK" }');
+        }.bind({service:this.service,res:this.res}));
+    }.bind({service:this,aclStatus:aclStatus,res:res});
+    const processJson = function(metadata) {
+        try { metadata = JSON.parse(metadata); }
+        catch(err) {
+            this.service.syslog.error('malformed delete message: '+metadata, 'core');
+            this.service.sendAndClose(this.res, 400, '{"status":"error", "msg":"malformed metadata"}');
+            return;
+        }
+        if (!metadata.uuid) {
+            this.service.syslog.error('uuid missing in metadata: ' + JSON.stringify(metadata));
+            this.service.sendAndClose(this.res, 400, '{ "status": "error", "msg":"uuid missing in metadata"}');
+            return;
+        }
+        processDelete(metadata.uuid);
+    }.bind({service:this,res:res});
+
+    let uuid = '-';
+    if ("uuid" in req.params) {
+        uuid = req.params.uuid;
+        processDelete(uuid);
+    }
+    else if ("zone_name" in req.query && "commit_uuid" in req.query) {
+        uuid = req.query.commit_uuid;
+        processDelete(uuid);
+    }
+    else {
+        var metadata = req.body;
+        if ('media_delete' in req.headers) {
+            metadata = req.headers.media_delete;
             processJson(metadata);
         }
         else {
@@ -556,8 +631,8 @@ HttpService.prototype.media = function(req, res) {
         }
     }
     else if (access_mode == 'Check') {
-        const nid = this.db.check(req_uuid, aclStatus, function(err) {
-            HttpService.prototype.sendAndClose(res, 404, '{"status":"error", "msg":"'+err.toString()+'"}');
+        const nid = this.db.check(req_uuid, aclStatus, function(err, code = 400) {
+            HttpService.prototype.sendAndClose(res, code, '{"status":"error", "msg":"'+err+'"}');
         }.bind({res:res}), function(hash, previousHash, size) {
             if (hash != previousHash && previousHash != '-') {
                 this.syslog.error('Media changed on disk for uuid '+req_uuid+' hash='+hash+' previously='+previousHash, 'core');
@@ -621,8 +696,8 @@ HttpService.prototype.fileService = function(req, res) {
 
     const fileid = req.params.fileid;
 
-    this.db.find(fileid, aclStatus, function(err) {
-        HttpService.prototype.sendAndClose(res, 401, '{"status":"error", "msg":"could not get media content"}');
+    this.db.find(fileid, aclStatus, function(err, code) {
+        HttpService.prototype.sendAndClose(res, 404, '{"status":"error", "msg":"could not get media content"}');
     }, function(data, name, mimetype) {
         this.syslog.info('full read with connector: '+fileid, 'core');
         const compression_mode = req.headers['media-access-compression'];

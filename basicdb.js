@@ -80,7 +80,8 @@ BasicFileDB.prototype.logReq = function(aclStatus, data) {
     if (data.uuid != data.ref) header += ' ref='+data.ref;
     let extra = '';
     let context = undefined;
-    if (data.operation === 'add_media' || data.operation === 'stage_media' || data.operation === 'commit_media') {
+    if (data.operation === 'add_media'    || data.operation === 'stage_media' ||
+        data.operation === 'commit_media' || data.operation === 'list_media'  || data.operation === 'delete_media') {
         if ('url' in data.value) extra = ' url='+data.value.url;
         else                     extra = ' file='+data.value.filename;
         context = this.convertContext(data.operation, data.uuid, aclStatus);
@@ -162,7 +163,7 @@ BasicFileDB.prototype.close = function(none, done) {
             if (this.done) this.done();
         }.bind({service:this.service,done:this.done}), function(err) {
             this.service.error('Could not close all zones: '+err);
-            if (this.none) this.none(new Error('Could not close all zones: '+err));
+            if (this.none) this.none('Could not close all zones: '+err);
         }.bind({service:this.service,none:this.none}));
     }.bind({zone_db:this.zone_db,service:this,none:none,done:done})
 
@@ -231,7 +232,7 @@ BasicFileDB.prototype.addEntry = function(metadata, aclStatus, filecontent, none
     }
     if (!('media_id' in metadata)) {
         this.errorCtx('Missing media UUID: '+ JSON.stringify(metadata), 'add_media', '-', aclStatus);
-        if (none) none('Missing media UUID');
+        if (none) none('Missing media UUID', 400);
         return;
     }
     if (!('access_date' in metadata)) metadata.access_date = new Date();
@@ -244,9 +245,9 @@ BasicFileDB.prototype.addEntry = function(metadata, aclStatus, filecontent, none
     }
 
     const zone = this.zone_db[this.default_zone];
-    const errFct = function(err) {
+    const errFct = function(err, code) {
         this.service.errorCtx('could not add entry: '+err, 'add_media', metadata.media_id, aclStatus);
-        if (none) none(err);
+        if (none) none(err, code);
     }.bind({service:this});
     const addStepEntry = function(message) {
         this.service.info('[add_media]:'+message);
@@ -268,7 +269,7 @@ BasicFileDB.prototype.addEntry = function(metadata, aclStatus, filecontent, none
 BasicFileDB.prototype.commit = function(zoneName, commitId, aclStatus, none, done) {
     if (!(zoneName in this.zone_db)) {
         this.errorCtx('Zone '+zoneName+' not found', 'commit_media', zoneName, aclStatus);
-        if (none) none('Zone '+zoneName+' not found');
+        if (none) none('Zone '+zoneName+' not found', 404);
         return;
     }
     const zone = this.zone_db[zoneName];
@@ -280,10 +281,31 @@ BasicFileDB.prototype.commit = function(zoneName, commitId, aclStatus, none, don
         this.service.logEntry(zone, 'commit_media', aclStatus, entry, none, done);
     }.bind({service:this});
 
-    zone.commitEntry(commitId, function(err) {
-        this.service.errorCtx(err.toString(), 'commit_media', zoneName, aclStatus);
-        if (none) none(err);
+    zone.commitEntry(aclStatus, commitId, function(err, code) {
+        this.service.errorCtx(err, 'commit_media', zoneName, aclStatus);
+        if (none) none(err, code);
     }.bind({service:this}), commitDone);
+}
+
+
+BasicFileDB.prototype.mdelete = function(uuid, aclStatus, none, done) {
+    if (!(uuid in this.db)) {
+        const errstr = 'media '+uuid+' not found';
+        this.errorCtx(errstr, 'delete_media', uuid, aclStatus);
+        if (none) none(errstr, 404);
+        return;
+    }
+    const entry = this.db[uuid];
+    const deleteDone = function(entry) {
+        delete this.service.db[entry.uuid];
+        this.service.debug('delete file: name='+entry.uuid);
+        this.service.logEntry(zone, 'delete_media', aclStatus, entry, none, done);
+    }.bind({service:this});
+
+    entry.zone.deleteEntry(aclStatus, uuid, function(err, code) {
+        this.service.errorCtx(err, 'delete_media', uuid, aclStatus);
+        if (none) none(err, code);
+    }.bind({service:this}), deleteDone);
 }
 
 /**
@@ -323,6 +345,28 @@ BasicFileDB.prototype.logEntry = function(zone, type, aclStatus, entry, none, do
     }
 }
 
+BasicFileDB.prototype.list = function(aclStatus) {
+    let mediaList = {};
+    let errList = [];
+    for(zoneName in this.zone_db) {
+        const zone = this.zone_db[zoneName];
+        try {
+            let content = zone.listMedias(aclStatus);
+            this.debug('list medias: name='+JSON.stringify(content));
+            mediaList[zoneName] = {
+                'list': content, 'status': 'OK'
+            }
+        }
+        catch(err) {
+            this.errorCtx(err, 'list_media', zoneName, aclStatus);
+            mediaList['zoneName'] = {
+                'list': [], 'status': err
+            }
+        }
+    }
+    return mediaList;
+}
+
 /**
  * Require an access to a media, and returns a connector ID if the access is granted.
  * This function creates a unique connector, and a timer to remove it on time.
@@ -356,7 +400,7 @@ BasicFileDB.prototype.get = function(uuid, aclStatus) {
     catch(err) {
         const e = 'Could not process media with '+uuid+' '+aclStatus.context;
         this.error(e +': '+err);
-        if (none) none(new Error(e));
+        if (none) none(e);
         return null;
     }
 }
@@ -391,7 +435,7 @@ BasicFileDB.prototype.find = function(fileid, aclStatus, none, done) {
     if (!(fileid in this.storageId)) {
         const errmsg = 'media connector id "'+fileid+'" not found';
         this.errorCtx(errmsg, 'get_media', fileid, aclStatus);
-        if (none) none(new Error(errmsg));
+        if (none) none(errmsg, 404);
         return;
     }
     const now = new Date();
@@ -408,9 +452,9 @@ BasicFileDB.prototype.find = function(fileid, aclStatus, none, done) {
 
     // Load the data asynchronously
     const media = this.db[iddesc.ref];
-    media.getFile(iddesc, function(err) {
+    media.getFile(iddesc, function(err, code) {
         this.service.errorCtx('could not load file: '+err, 'get_media', fileid, aclStatus);
-        if (none) none(err);
+        if (none) none(err, code);
     }.bind({service:this}), done);
 }
 
@@ -421,7 +465,7 @@ BasicFileDB.prototype.find = function(fileid, aclStatus, none, done) {
  * @return {string}         - The MD5 value.
  */
 BasicFileDB.prototype.check = function(uuid, aclStatus, none, done) {
-    if (!(uuid in this.db)) return none(new Error("media uuid not found"));
+    if (!(uuid in this.db)) return none("media uuid not found", 404);
     const media = this.db[uuid];
     try {
         const opdesc = { operation: 'check_entry', uuid: '-', ref: media.uuid, zone: media.zone.name, context: aclStatus.context.toJson() };
@@ -437,7 +481,7 @@ BasicFileDB.prototype.check = function(uuid, aclStatus, none, done) {
     catch(err) {
         const e = 'Could not process media: with '+uuid+' '+aclStatus.context;
         this.error(e +': '+err);
-        if (none) none(new Error(e));
+        if (none) none(e, 500);
         return null;
     }
 }
