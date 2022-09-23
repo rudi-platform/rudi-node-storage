@@ -26,6 +26,8 @@
     "devDependencies": {
         "eslint": "^7.22.0",
         "nodemon": "^2.0.1",
+    },
+    "couldHaveDependencies": {
         "unix-dgram": "^2.0.4"
     },
     "scripts": {
