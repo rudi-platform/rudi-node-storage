@@ -39,8 +39,8 @@ The shared version is under development.
 
 Two user/login couples exist currently:
 
- * With read access:  user=rudiadmin pass=sysadminisgreat!
- * With write access: user=rudiprod  pass=sysadminisgreat!
+ * With read access:  user=rudiadmin pass=xxxxxxxxxxxxxxxx
+ * With write access: user=rudiprod  pass=xxxxxxxxxxxxxxxx
 
 ### Media Driver API
 
@@ -74,7 +74,7 @@ The following RUDI media-data can be typically provided:
 
 A simple CURL command to post the file *mon_nom.json*:
 ```shell
-curl -u 'rudiprod:sysadminisgreat!'  -H 'file_metadata:{"media_name":"mon_nom","media_id":"37df63aa-1aae-4279-be3b-b07076d36131","file_size":21660,"file_type":"application/json"}' --data-binary @mon_nom.json https://data-rudi.aqmo.org/media/post
+curl -u 'rudiprod:xxxxxxxxxxxxxxxx'  -H 'file_metadata:{"media_name":"mon_nom","media_id":"37df63aa-1aae-4279-be3b-b07076d36131","file_size":21660,"file_type":"application/json"}' --data-binary @mon_nom.json https://data-rudi.aqmo.org/media/post
 ```
 
 A special extension is available in order to treat of URL instead of a file. In that case, no content is provided and some specific media-data are required:
@@ -84,7 +84,7 @@ A special extension is available in order to treat of URL instead of a file. In 
    * "expire_date": (*optional*), a date after the access is invalid (in the future)
 
 ```shell
-curl -u 'rudiprod:sysadminisgreat!'  -H 'file_metadata:{"media_type":"INDIRECT", "media_name":"mon_nom","media_id":"37df63aa-1aae-4279-be3b-b07076d36888","url":"https://data-rudi.aqmo.org/api/v1/","access_date":'"$(date +%s)"', "expire_date":'"$(date +%s --date +72\ hour )"' }'  https://shared-rudi.aqmo.org/media/pos
+curl -u 'rudiprod:xxxxxxxxxxxxxxxx'  -H 'file_metadata:{"media_type":"INDIRECT", "media_name":"mon_nom","media_id":"37df63aa-1aae-4279-be3b-b07076d36888","url":"https://data-rudi.aqmo.org/api/v1/","access_date":'"$(date +%s)"', "expire_date":'"$(date +%s --date +72\ hour )"' }'  https://shared-rudi.aqmo.org/media/pos
 ```
 
 The requests returns an array in Json with the followinf format :

@@ -7,50 +7,140 @@
 
 const util = require('util');
 const crypto = require('crypto');
+const uuid = require('uuid');
+const logger = require('@aqmo.org/rudi_logger');
+const jcrypt = require('./jwti/dist/crypt.js');
+const jwti = require('./jwti/dist/jwt.js');
+const AclDB = require('./acl.js');
 
 /**
- * A simple authorization filter for express.
- * The access rights are static and controlled by a tables.
+ * An authorization processing unit.
  *
  * @class
- * @param {json}      authorizedVersion - The list of authorized version.
- * @param {json}      authorizedUsers   - The list of authorized users.
- * @param {logger}    logger            - The access logger.
  */
-function AccessControl(authorizedVersion, authorizedUsers, logger) {
-    this.authorizedVersion = authorizedVersion;
-    this.authorizedUsers = authorizedUsers;
-    this.syslog = logger;
-    this._iop = { compact:true,depth:2, breakLength: 300};
+function AccessContext(req, res, acldb, validApiVersion, source) {
+    this.res = res;
+    this.acldb = acldb;
+    this.validApiVersion = validApiVersion;
+    this.source = source;
+    const srcip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+    this.auth = { clientApp:'media/ac', userId: -1, userName: '-', reqIP: srcip, access:'---' };
+    let paramstr = "?" + util.inspect(req.params,{ compact:true,depth:2, breakLength: 3000});
+    if (paramstr == '?{}') paramstr = '';
+    this.opType = req.originalUrl+paramstr;
+    this.sessionOpen = true;
+}
+AccessContext.prototype.validApi = function() { return this.validApiVersion; }
+AccessContext.prototype.errContext = function(code = 0, cid = '') {
+    return { auth: this.auth, operation: { opType:this.opType, statusCode:code , id: cid } };
+}
+AccessContext.prototype.errorCode = function(accError) {
+    if (!accError) return 200;
+    let code = 200;
+    switch(accError) {
+    case 'E01': case 'E02': case 'E03':
+    case 'E05': code = 405; /* */ break;
+    case 'E06': case 'E07': case 'E08':
+        code = 401; /* */ break;
+    case 'E12': code = 412; /* */ break;
+    case 'E20': case 'E21': case 'E22': case 'E23': case 'E24': case 'E25':
+        code = 460; /* */ break;
+    case 'E30': case 'E31':
+        code = 461; /* */ break;
+    }
+    return code;
+}
+AccessContext.prototype.process = function(name, uuid, access, accError) {
+    this.auth.userName = name;
+    this.auth.userId = uuid;
+    this.auth.access = access;
+    if (!this.sessionOpen) {
+        this.acldb.error(`Internal error: access control already done: mode=${accError} (ignored)`,
+                         this.errContext(500));
+        return;
+    }
+    let [ message, realm ] =  this.acldb.errDesc(accError);
+    let code = this.errorCode(accError);
+    let sev =  accError ? logger.Severity.Error : logger.Severity.Notice;
+    this.acldb.log(sev, "["+this.auth.userName+"]:"+this.opType+": "+message, this.errContext(code));
+    if (accError) {
+        this.sessionOpen = false;
+        this.res.set('WWW-Authenticate', 'Basic realm="'+realm+'"');
+        this.res.type('text/plain; charset=utf-8');
+        this.res.status(code).send(message); // Game over, we close the connexion with an error.
+    }
+    else this.res.status(code);
+}
+AccessContext.prototype.toJson = function() {
+    return { source:this.source, ip: this.auth.reqIP, user:this.auth.userName, access:this.auth.access };
+}
+AccessContext.prototype.toString = function() {
+    return JSON.stringify(this.toJson());
 }
 
 /**
- * Perform a password hash. Currently SHA-512 only is supported.
+ * A simple authorization filter for express.
+ * The access rights are static and controlled by tables.
  *
- * @param {object}   p      - the reference password
- * @param {object}   input  - the given password
- * @returns {string}        - passwords matches
+ * @class
+ * @param {json}      configuration     - The configuration.
+ * @param {logger}    logger            - The access logger.
  */
-AccessControl.prototype.checkPassword = function (p, input) {
-    if (p.slice(0,3) == '$1$' && p[p.length-1] == '$') {
-        p = p.slice(3, p.length-1)
-        var sha512 = crypto.createHash('md5');
-        data = sha512.update(input, 'utf-8');
-        input = data.digest('hex');
+function AccessControl(cfg, slogger) {
+    this.syslog = slogger;
+    cfg = cfg !== undefined ? cfg : {};
+    cfg.authorized_version = cfg.authorized_version !== undefined  ? cfg.authorized_version : [ '0.1' ];
+    cfg.system_groups      = cfg.system_groups !== undefined       ? cfg.system_groups : {'admin': 4};
+    cfg.system_users       = cfg.system_users !== undefined        ? cfg.system_users : {'admin': [4,'',['admin'], '']};
+    cfg.system_acl         = cfg.system_acl !== undefined          ? cfg.system_acl : {'core':['admin','admin','rwx','---','---'],'users':{},'groups':{}};
+    cfg.media_priv_keyfile = cfg.media_priv_keyfile !== undefined  ? cfg.media_priv_keyfile : './mediapriv.pem';
+    try {
+        this.authorizedVersion = JSON.parse(JSON.stringify(cfg.authorized_version)); // json -> deep-copy
+        this.privkey = jcrypt.readPrivatePemKeyFile(cfg.media_priv_keyfile);
+        this.acldb = new AclDB(cfg, slogger)
+        this.systemAcl = this.acldb.newAcl(cfg.system_acl);
     }
-    else if (p.slice(0,3) == '$5$' && p[p.length-1] == '$') {
-        p = p.slice(3, p.length-1)
-        var sha512 = crypto.createHash('sha256');
-        data = sha512.update(input, 'utf-8');
-        input = data.digest('hex');
+    catch (err) {
+        this.error(`Internal error: ${err}`);
+        throw Error('Could not initialize AccessControl unit: ${err}');
     }
-    else if (p.slice(0,3) == '$6$' && p[p.length-1] == '$') {
-        p = p.slice(3, p.length-1)
-        var sha512 = crypto.createHash('sha512');
-        data = sha512.update(input, 'utf-8');
-        input = data.digest('hex');
+}
+AccessControl.prototype.error   = function(message, context = null) { if (this.syslog) this.syslog.error(message, 'ac',context); }
+AccessControl.prototype.debug   = function(message, context = null) { if (this.syslog) this.syslog.debug(message, 'ac',context); }
+
+/**
+ * Extract the authentication information from an HTTP request.
+ * Access rights take the form of the standard UNIX format RWX
+ *
+ * @param {object}   req    - the HTTP request
+ * @param {object}   res    - the HTTP response.
+ * @returns {object}        - an ACL status.
+ */
+AccessControl.prototype.getAccessStatus = function (req, res) {
+    let validApiVersion = this._readVersion(req.headers);
+    let aclStatus = this._readBasicAccessRights(req.headers);
+    if (!aclStatus) aclStatus = this._readJwtAccessRights(req.headers);
+    if (!aclStatus) aclStatus = this.acldb.newAclError('E01');
+    aclStatus.setContext(new AccessContext(req, res, this.acldb, validApiVersion, 'API'));
+    this.debug(`AC status: ${aclStatus.toString()}`);
+    return aclStatus;
+}
+
+AccessControl.prototype.checkSystemAccessStatus = function (aclStatus, amode) {
+    let access = null;
+    aclStatus.setAcl(this.systemAcl);
+    if (!aclStatus.refused(amode)) access = aclStatus.access;
+    this.debug(`Access computed ${access ? access : '---'}`);
+    return access;
+}
+
+AccessControl.prototype.forgeTokenCookie = function (aclStatus, user_id, user_name, group_name) {
+    let [ token, accError ] = this.acldb.forgeJwtFor(user_id, user_name, group_name);
+    if (accError) {
+        aclStatus.context.process(user_name, user_id, '---', accError);
+        return null;
     }
-    return p == input;
+    return 'rudi.media.auth='+token;
 }
 
 /**
@@ -64,45 +154,13 @@ AccessControl.prototype.checkPassword = function (p, input) {
  * @returns {string}        - the access rights, null if none provided.
  * @returns {string}        - the user operating the request.
  */
+/* LEGACY API */
 AccessControl.prototype.checkAccessRights = function (req, res, amode='---') {
-    var [ access, user ] = this.getAccessRights(req.headers, amode);
-    var code = 200;
-    var errMsg = "access granted";
-
-    switch(access) {
-    case 'E01':
-        res.set('WWW-Authenticate', 'Basic realm="Authentication required"');
-        code = 401; errMsg = 'Authentication required';
-        access = null;
-        /* */ break;
-    case 'E02':
-        res.set('WWW-Authenticate', 'Basic realm="Authentication required"');
-        code = 401; errMsg = 'Authentication failed: invalid user/password';
-        access = null;
-        /* */ break;
-    case 'E03':
-        res.set('WWW-Authenticate', 'Basic realm="Authentication required"');
-        code = 401; errMsg = 'Access not granted: the user miss one or several credentials';
-        access = null;
-        /* */ break;
-    case 'E12':
-        //req.session.error = 'Incorrect version';
-        code = 412; errMsg = 'Incorrect API version, or version unspecified';
-        access = null;
-        /* */ break;
-    case 'E05':
-        res.set('WWW-Authenticate', 'Basic realm="Authentication method invalid"');
-        code = 405; errMsg = 'Authentication method invalid';
-        access = null;
-        /* */ break;
-    }
-    this.logAccess(code, errMsg, req, res, user, amode);
-    return [ access, user ];
+    let aclStatus = this.getAccessStatus(req, res);
+    let access = this.checkSystemAccessStatus(aclStatus, amode);
+    if (!access) access = null;
+    return [ access, aclStatus.user ];
 }
-
-/*
- * Private interface
- */
 
 /**
  * Analyse the access rights given by the header.
@@ -110,90 +168,63 @@ AccessControl.prototype.checkAccessRights = function (req, res, amode='---') {
  *
  * Access rights take the form of the standard UNIX format RWX
  * @param {object}   header - the HTTP header
- * @param {object}   amode  - access mode, requiring read, write, of execution rights.
  * @returns {string}        - either the access rights or an HTTP error.
  */
-AccessControl.prototype.getAccessRights = function (header, amode='---') {
+AccessControl.prototype._readVersion = function (header) {
     /* Check API version compatibility */
-    var execute = '-';
+    if (this.authorizedVersion[0] == '0.1') return true;
+    var apiCompatible = false;
     if ('version' in header) {
         const version = header['version'];
         for (i in this.authorizedVersion) {
             if (version == this.authorizedVersion[i]) {
-                execute = 'x';
+                apiCompatible = true;
                 break;
             }
         }
     }
-    if (amode[2] == 'x' && execute != amode[2]) return [ 'E12', '-' ]; // http 412
+    return apiCompatible;
+}
 
-    var userId = '-';
-    var userAcc = '---';
+/**
+ * Analyse the access rights given by the header.
+ * @access protected
+ *
+ * Access rights take the form of the standard UNIX format RWX
+ * @param {object}   header - the HTTP header
+ * @returns {string}        - either the access rights or an HTTP error.
+ */
+AccessControl.prototype._readBasicAccessRights = function (header) {
+    let aclStatus = null;
     if ('authorization' in header) {
         const authorization = header['authorization'];
         const [authType, b64auth] = (authorization.split(' ') || '');
         if (authType.toLowerCase() == 'basic') {
             const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':')
-            for (i in this.authorizedUsers) {
-                const [u, p, a] = this.authorizedUsers[i];
-                if (login == u) {
-                    if (this.checkPassword(p, password)) {
-                        userId = login;
-                        userAcc = a;
-                        break;
-                    }
-                }
+            if (password != null) {
+                aclStatus = this.acldb.findUser(login, '-', password);
             }
+            else aclStatus = this.acldb.newAclError('E05');
         }
-        else return [ 'E05', '-' ]; // http 405
+        else aclStatus = this.acldb.newAclError('E05');
+        this.debug(`login: ${aclStatus.uname}`);
     }
-
-    /* Check Authorizations */
-    if (amode[0] == '-' && amode[1] == '-') return [ userAcc, userId ]; // no restriction specified, http OK
-    else if (!('authorization' in header))  return [ 'E01', userId ]; // http 401, no login
-    else if (userId === '-')                return [ 'E02', userId ]; // http 401, wrong user/pass
-    else if (amode[0] != '-' && amode[0] != userAcc[0]) return [ 'E03', userId ]; // http 401, no credentials
-    else if (amode[1] != '-' && amode[1] != userAcc[1]) return [ 'E03', userId ]; // http 401, no credentials
-
-    // Access granted but some restrictions may still apply depending on calling function.
-    return [ userAcc, userId ]; // http OK
+    return aclStatus;
 }
 
-/**
- * Generate a log message
- * Access rights take the form of the standard UNIX format RWX
- * @access protected
- *
- * @param {object} code   - the HTTP return code
- * @param {object} errMsg - optional error message.
- * @param {object} req    - the HTTP request
- * @param {object} res    - the HTTP response.
- */
-AccessControl.prototype.logAccess = function(code, errMsg, req, res, user, amode) {
-    const authorization = ('authorization' in req.header) ? req.header['authorization'] : '';
-    if (!this.syslog) return;
-    const context = this.generateContext(req, user, code, amode);
-    if (code != 200) {
-        this.syslog.error(errMsg+": "+req.hostname+":"+req.originalUrl+":"+req.ip+":"+util.inspect(req.params,this._iop)+":"+authorization, 'ac', context);
-        res.status(code).send(errMsg);
+AccessControl.prototype._readJwtAccessRights = function (header) {
+    let aclStatus = null;
+    if ('cookie' in header) {
+        const cookies = header['cookie'].split(' ');
+        for (ci in cookies) {
+            let c = cookies[ci];
+            const [key, value] = c.split('=');
+            if (key.toLowerCase() != 'rudi.media.auth') continue;
+            aclStatus = this.acldb.findIdsFromJwt(value);
+            break;
+        }
     }
-    else this.syslog.notice(errMsg+": "+req.hostname+":"+req.originalUrl+":"+req.ip+":"+util.inspect(req.params,this._iop)+":"+authorization, 'ac', context);
+    return aclStatus;
 }
-
-/**
- * Create a request context.
- * The context is used to process requests,
- *   and contains basic information about the sender.
- * @param {object} req  - the HTTP request
- * @param {string} user - the HTTP user if found.
- */
-AccessControl.prototype.generateContext = function(req, user, code, amode) {
-    const srcip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-    //console.log('from:'+ip);
-    return { auth: { clientApp:'media/ac', userId: user, reqIP: srcip },
-             operation: { opType:req.originalUrl+':'+amode, statusCode: code }
-           };
-}
-
 
 module.exports = AccessControl;

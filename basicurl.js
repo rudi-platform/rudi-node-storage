@@ -1,5 +1,5 @@
 /**
- * Basic Media file descriptor
+ * Basic Media URL descriptor
  *
  * @author: Laurent Morin
  * @version: 1.0.0
@@ -26,18 +26,37 @@ const { v4: uuidv4 } = require('uuid');
  * @param {date}     expire    - The expire date.
  * @param {json}     metadata  - The meta-data dictionary.
  */
-function BasicUrlEntry(zone, context, name, uuid, url, date, expire, metadata) {
-    this.zone     = zone;
-    this.context  = context;
-    this.name     = name;
-    this.uuid     = uuid;
-    this.url      = url;
-    this.mimetype = 'text/uri-list';
-    this.encoding = 'charset=utf-8';
-    this.date     = date;
-    this.expire   = expire;
-    this.md5      = '-';
-    if (metadata) { this.metadata = metadata; }
+function BasicUrlEntry(metadata, zone, aclStatus, name, uuid, url, date, expire) {
+    if (metadata) {
+        this.uuid      = metadata.media_id; delete metadata.media_id;
+        this.date      = metadata.access_date; delete metadata.access_date;
+        this.zone      = zone;
+        this.aclStatus = aclStatus;
+        this.url       = metadata.url; delete metadata.url;
+        if ('media_name'  in metadata)  { this.filename = metadata.media_name; delete metadata.media_name; }
+        else                              this.filename = 'media';
+        if ('expire_date' in metadata)  { this.expire   = new Date(parseInt(metadata.expire_date)*1000); delete metadata.expire_date; }
+        else                              this.expire   = 0;
+        this.metadata = metadata;
+    }
+    else {
+        this.zone      = zone;
+        this.aclStatus = aclStatus;
+        this.name      = name;
+        this.uuid      = uuid;
+        this.url       = url;
+        this.mimetype  = 'text/uri-list';
+        this.encoding  = 'charset=utf-8';
+        this.date      = date;
+        this.expire    = expire;
+        this.md5       = '-';
+    }
+}
+
+/**
+ */
+BasicUrlEntry.prototype.getStorageName = function() {
+    return '#' + this.url;
 }
 
 /**
@@ -51,6 +70,43 @@ BasicUrlEntry.prototype.getCSVline = function() {
     const e = this.expire.valueOf();
     var s = ';';
     return '' + this.url +s+ this.uuid +s+ filetype +s+ (d?d/1000:0) +s+ (e?e/1000:0);
+}
+
+/**
+ * Generate a unique connector ID for the media.
+ * The connector generated is not managed by the media. Once generated, nothing is kept.
+ * @returns {json} - Description of a new descriptor.
+ */
+BasicUrlEntry.prototype.generateFileId = function() {
+    return {
+        ref:this.uuid, fileid: uuidv4(),
+        count: 0, access: [], cdate:Date(),
+        zone:this.zone.name, source: this.zone.getPathFromConnector(this),
+        name: this.name
+    };
+}
+
+BasicUrlEntry.prototype.clear = function(staged) {
+    staged.process('URL ['+this.uuid+']:'+this.url+' marked not confirmed');
+}
+BasicUrlEntry.prototype.commit = function(staged) {
+    const path = this.zone.getPathFromConnector(this);
+    staged.process('URL ['+this.uuid+']:'+path+' commited');
+}
+BasicUrlEntry.prototype.destroy = function(staged) {
+    if (staged) staged.process('URL ['+this.uuid+']:'+this.url+' destroyed');
+}
+
+/**
+ */
+BasicUrlEntry.prototype.toJson = function() {
+    return {
+        uuid:this.uuid, zone:this.zone.name,
+        context: this.aclStatus.context.toJson(),
+        url: this.url, mimetype:this.mimetype, encoding:this.encoding,
+        name: this.name, date: this.date,
+        basefile:this.getStorageName(),
+    };
 }
 
 /**
@@ -81,6 +137,11 @@ BasicUrlEntry.urlSchema = function(contextRef, metaRef) {
             "name": {
                 "description": "The name of the media, find with the zone",
                 "type": "string"
+            },
+            "url": {
+                "description": "The URL of the media, find with the zone",
+                "type": "string",
+                "format": "uri"
             },
             "mimetype": {
                 "description": "The mime-type of the URL",
@@ -116,19 +177,6 @@ BasicUrlEntry.urlSchema = function(contextRef, metaRef) {
 }
 
 /**
- * Generate a unique connector ID for the media.
- * The connector generated is not managed by the media. Once generated, nothing is kept.
- * @returns {json} - Description of a new descriptor.
- */
-BasicUrlEntry.prototype.generateFileId = function() {
-    return {
-        ref:this.uuid, fileid: uuidv4(),
-        count: 0, access: [], cdate:Date(),
-        zone:this.zone, url: this.url
-    };
-}
-
-/**
  * Load the media content.
  * The data is loaded and processed if necessary before beeing sent.
  * @param {connector ID} iddesc  - The media access descriptor.
@@ -137,9 +185,9 @@ BasicUrlEntry.prototype.generateFileId = function() {
  * @param {function}     done    - A callback with the file when done.
  *                                 Returns an array with the content, then name, and the mime type.
  */
-BasicUrlEntry.prototype.getFile = function(idesc, context, none, done) {
+BasicUrlEntry.prototype.getFile = function(idesc, none, done) {
     if (!('url' in idesc)) {
-        if (none) none(new Error('loading URL media: url missing in context'));
+        if (none) none('loading URL media: url missing in context', 400);
         return;
     }
     const source = idesc.url;
@@ -156,7 +204,7 @@ BasicUrlEntry.prototype.getFile = function(idesc, context, none, done) {
                 });
             }).on("error", (error) => {
                 console.error('Error: critical failure: could not load '+sourceUrl.href+': '+error);
-                if (none) none(new Error('loading media: file error'));
+                if (none) none('loading media: file error', 500);
                 return;
             });
             break;
@@ -170,17 +218,17 @@ BasicUrlEntry.prototype.getFile = function(idesc, context, none, done) {
                 });
             }).on("error", (error) => {
                 console.error('Error: critical failure: could not load '+sourceUrl.href+': '+error);
-                if (none) none(new Error('loading media: file error'));
+                if (none) none('loading media: file error', 500);
                 return;
             });
             break;
         }
         default:
-            if (none) none(new Error('loading URL media: protocol not supported ('+sourceUrl.protocol+')'));
+            if (none) none('loading URL media: protocol not supported ('+sourceUrl.protocol+')', 400);
         }
     }
     catch(e) {
-        if (none) none(new Error('loading URL media: content access error'));
+        if (none) none('loading URL media: content access error', 500);
     }
 }
 
@@ -188,13 +236,12 @@ BasicUrlEntry.prototype.getFile = function(idesc, context, none, done) {
  * Check the media content.
  * The data is loaded from its expected location and an md5 is computed.
  * @param {connector ID} source  - The media descriptor.
- * @param {accessDesc}   context - The media access context.
  * @param {function=}    none    - An optional callback with the error if no file was found.
  * @param {function}     done    - A callback with the file when done.
  *                                 Returns the hash, the previous hash, and the file size.
  */
-BasicUrlEntry.prototype.getRealMd5 = function(source, context, none, done) {
-    return this.getFile(this, context, none, function(data, name, charset) {
+BasicUrlEntry.prototype.getRealMd5 = function(none, done) {
+    return this.getFile(this, none, function(data, name, charset) {
         const hash = crypto.createHash('md5').update(data).digest('hex');
         const previousHash = this.entry.md5;
         if (hash != previousHash) {
