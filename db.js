@@ -14,21 +14,20 @@ const basicdb = require('./basicdb.js');
  * Basic interface for the storage of LOG events MongoDB.
  *
  * @class 
- * @param {json}        srv         - The main MongoDB URL.
- * @param {string}      dbname      - The list of authorized users.
- * @param {object}      schemaSet   - the schemas DB
+ * @param {json}        config       - The DB configuration with the MongoDB URL and its name.
+ * @param {object}      schemaSet    - the schemas DB
  * @param {string}      mediaSchema  - the name of the media schema
- * @param {string}      eventSchema - the name of the event schema
+ * @param {string}      eventSchema  - the name of the event schema
  */
-function MongoService(srv, dbname, schemaSet, mediaSchema, urlSchema, eventSchema) {
+function MongoService(config, schemaSet, mediaSchema, urlSchema, eventSchema) {
     this.mongoClient = mongodb.MongoClient;
     this.schemaSet = schemaSet;
     this.mediaSchema = mediaSchema;
     this.urlSchema = urlSchema;
     this.eventSchema = eventSchema;
-    this.mongoServerURL = (srv === undefined ? "mongodb://localhost:27017/" : srv);
-    this.dbname = (dbname === undefined ? "rudi_media" : dbname);
-    this.mongoOptions = { useUnifiedTopology: true };
+    this.mongoServerURL = (config.db_url === undefined ? "mongodb://localhost:27017/" : config.db_url);
+    this.dbname = (config.db_name === undefined ? "rudi_media" : config.db_name);
+    this.mongoOptions = (config.db_options === undefined ? {} : config.db_options);
     this.mediaCollName = 'media';
     this.urlCollName = 'url';
     this.eventCollName = 'media_events';
@@ -50,9 +49,17 @@ function MongoService(srv, dbname, schemaSet, mediaSchema, urlSchema, eventSchem
  * @param {function}   done      - the success callback
  */
 MongoService.prototype.open = function(err_cb, done) {
+    try {
+        if (typeof this.mongoOptions == 'string') {
+            let so = this.mongoOptions;
+            this.mongoOptions = {};
+            this.mongoOptions = JSON.parse(so);
+        }
+    }
+    catch(err) { err_cb(this, err); }
+
     this.mongoClient.connect(this.mongoServerURL,  this.mongoOptions, function(err, db) {
         if (err) { this.service.currentError = err; if (err_cb) err_cb(this.service, err); return; }
-
         const errFct  = function(reason) {
             if (!this.cb) return;
             this.service.currentError = reason;
@@ -76,18 +83,21 @@ MongoService.prototype.open = function(err_cb, done) {
                 hasUrl    |= (c.name == this.service.urlCollName);
                 hasEvents |= (c.name == this.service.eventCollName);
             }
-            if (hasMedia) {
-                this.service.mediaColl = this.service.db.collection(this.service.mediaCollName);
-                await this.service.mediaColl.drop();
+            try {
+                if (hasMedia) {
+                    this.service.mediaColl = this.service.db.collection(this.service.mediaCollName);
+                    await this.service.mediaColl.drop();
+                }
+                if (hasUrl) {
+                    this.service.urlColl = this.service.db.collection(this.service.urlCollName);
+                    await this.service.urlColl.drop();
+                }
+                if (hasEvents) {
+                    this.service.eventColl = this.service.db.collection(this.service.eventCollName);
+                    await this.service.eventColl.drop();
+                }
             }
-            if (hasUrl) {
-                this.service.urlColl = this.service.db.collection(this.service.urlCollName);
-                await this.service.urlColl.drop();
-            }
-            if (hasEvents) {
-                this.service.eventColl = this.service.db.collection(this.service.eventCollName);
-                await this.service.eventColl.drop();
-            }
+            catch(err) { errFct(err); }
 
             // Command CollMod returns nothing according to the doc....
             //console.log(this.service.schemaSet.toBson(this.service.mediaSchema));
@@ -145,43 +155,48 @@ MongoService.prototype.addMedia = async function(media, err, done) {
 
     if (!('uuid' in media) || !('zone' in media)) { errFct('Malformed media descriptor'); return; }
 
-    if ('url' in media) {
-        const emedia =  await this.urlColl.findOne({ 'uuid': media.uuid });
-        //if (!emedia) console.log('URL add '+util.inspect(media));
-        if (!emedia) this.urlColl.insertOne(media).then(doneFct, errFct);
-        else         this.urlColl.updateOne({ 'uuid': media.uuid }, { '$set': media }).then(doneFct, errFct);
-    }
-    else {
-        const emedia =  await this.mediaColl.findOne({ 'uuid': media.uuid });
-        //if (!emedia) console.log('MEDIA add '+util.inspect(media));
-        if (!emedia) this.mediaColl.insertOne(media).then(doneFct, errFct);
-        else         this.mediaColl.updateOne({ 'uuid': media.uuid }, { '$set': media }).then(doneFct, errFct);
-    }
+    try {
+        if ('url' in media) {
+            const emedia =  await this.urlColl.findOne({ 'uuid': media.uuid });
+            //if (!emedia) console.log('URL add '+util.inspect(media));
+            if (!emedia) this.urlColl.insertOne(media).then(doneFct, errFct);
+            else         this.urlColl.updateOne({ 'uuid': media.uuid }, { '$set': media }).then(doneFct, errFct);
+        }
+        else {
+            const emedia =  await this.mediaColl.findOne({ 'uuid': media.uuid });
+            //if (!emedia) console.log('MEDIA add '+util.inspect(media));
+            if (!emedia) this.mediaColl.insertOne(media).then(doneFct, errFct);
+            else         this.mediaColl.updateOne({ 'uuid': media.uuid }, { '$set': media }).then(doneFct, errFct);
+        }
+    } catch(err) { errFct(err); }
 }
 
 /**
  * Add a new event
  * The event must reference an object.
  *
- * @param {BasicFileEntry}   media   - a fileEntry object.
+ * @param {BasicFileEntry}   opdesc  - an operation description.
  * @param {function}         err     - the error callback
  * @param {function}         done    - the success callback
  * @param {function}         update  - update fields, by defaulf off
  */
-MongoService.prototype.addEvent = async function(media, err, done, update) {
+MongoService.prototype.addEvent = async function(opdesc, err, done, update) {
     if (!this.mediaColl || !this.eventColl) { err('Collections not initialized'); return; }
     const errFct = function(reason) { if (err) err('Media event error: '+reason, this.service); }.bind({service:this});
-    const doneFct = function()       { if (done) done(this.service); }.bind({service:this});
+    const doneFct = function()      { if (done) done(this.service); }.bind({service:this});
 
-    if (!('uuid' in media) || !('zone' in media)) { errFct('Malformed media descriptor'); return; }
+    if (!('uuid' in opdesc) || !('zone' in opdesc)) { errFct('Malformed operation descriptor'); return; }
 
     var emedia = false;
     if (!(update === undefined)) {
-        emedia =  await this.eventColl.findOne({ 'uuid': media.uuid });
+        this.eventColl.findOne({ 'uuid': opdesc.uuid }, function(err, emedia) {
+            if (err) { errFct(err); }
+            else if (!emedia) this.eventColl.insertOne(opdesc).then(doneFct, errFct);
+            else              this.eventColl.updateOne({ 'uuid': opdesc.uuid }, { '$set': opdesc }).then(doneFct, errFct);
+        });
         //if (!emedia) console.log('MEDIA update '+emedia);
     }
-    if (!emedia) this.eventColl.insertOne(media).then(doneFct, errFct);
-    else         this.eventColl.updateOne({ 'uuid': media.uuid }, { '$set': media }).then(doneFct, errFct);
+    else this.eventColl.insertOne(opdesc).then(doneFct, errFct);
 }
 
 /**

@@ -37,8 +37,6 @@ function HttpService(configuration) {
     this.netInterface = configuration.server.listening_address;
     this.server = configuration.server.server_url;
     this.httpPrefix = configuration.server.server_prefix;
-    this.authorizedVersion = JSON.parse(JSON.stringify(configuration.server.authorized_version));
-    this.authorizedUsers = JSON.parse(JSON.stringify(configuration.server.authorized_users));
     this.revision = configuration.logging.revision
 
     if (!this.httpPrefix || this.httpPrefix == '' || this.httpPrefix[0] != '/' ) {
@@ -66,21 +64,21 @@ function HttpService(configuration) {
     //this.wl = new WebLogger(configuration.logging.app_name, configuration.logging.log_dir, null);
     this.syslog = new logger.RudiLogger(configuration.logging.app_name, this.revision, configuration);
     this.logweb = this.syslog.getWebInterface();
-    this.ac = new AccessControl(this.authorizedVersion, this.authorizedUsers, this.syslog);
+    this.ac = new AccessControl(configuration.auth, this.syslog);
     if (this.logweb) this.logweb.setWebAccessControlInterface(this.ac);
     //this.wl.setWebAccessControlInterface(this.ac);
     this.icon = new Buffer.from('AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACe7OkFqNqYQ6jZlKWo2ZTjpdiR+5bQgvuc04Pj5PWgovv/qED4/6cEAAAAAAAAAAAAAAAAAAAAAAAAAACb7/wSm+/7h6Hlyeyo2pb/qNmU/6XYkv+W0IL/ndOD/+n4of/5/6fq+P+ng/j/pxAAAAAAAAAAAAAAAACa7/sQm+/7oZvv+/2b7/j/ouTG/6jalv+m2JH/ltCC/53Tg//p+KH/+f+n//j/p/34/6eb+P+mDgAAAACf7voBm+/7e5vv+/yb7/v/m+/8/5vu+P+i5MX/pdiT/5bQgv+d04P/6fih//n/p//4/6f/+P+n+/j9p3UAAAAAnPD7MZvw++Cb7/v/m+/7/5vv+/+b8Pz/nO/4/5/iwv+V0IT/ndOD/+n4of/5/6f/+P+n//j7qP/35qvc9tStLJPl+YWV5/n+lef5/5Xn+f+V5/n/lef5/5bo+viY7PbSj9mq053Tg/jp96H/+f+n//j8p//35av/9tat/fbWrX1+yfPEfsnz/37J8/9+yfP/fsr0/37K9PqAy/SHkOj/FITcuhWk14eN6vii+/n9qP/35av/9tat//bWrf/21q28fMfz33zH8/98x/P/fMfz/3zF8/+AqOvYgpDmGgAAAAAAAAAA4/efHfb7p9z35qv/9tat//bWrf/21q3/9tat2HzH8958x/P/fMfz/3zG8/+BoOr/iXTf2Z173hwAAAAAAAAAAPnuqh/346vd9tet//bWrf/21q3/9tat//bWrdh8x/PCfMfz/3zH8/+Boer/h3Lf/5R43/vJpOOP5a3TGuWTrhvzya2S9M6t/PTOrf/0zq3/9M6t//TOrf/00K26fMfzgnzH8/6Bour/iHPf/4du3v+Ved//zqjk+dup2Nnfg7La4oit+uKKrf/iiq3/4oqt/+KKrf/iiq3944+te3zK8y6Boerdh3Tf/4hu3v+Hbt7/lXnf/86o5P/TqeP/0YnI/917rv/eeq3/3nqt/956rf/eeq3/3nqt2t55rSoAAAAAiHDedohu3vuIb97/h27e/5V53//OqOT/0qrj/8SS3v/Phcf/3Xyu/957rf/ee63/3nut+t57rXAAAAAAAAAAAIdu3g2Ib96aiG/e/Idu3v+Ved//zqjk/9Kq4//Ekt//wo7d/9CFxv/dfK7/3nut/N57rZXee60MAAAAAAAAAAAAAAAAiG7eD4hv3n+Hbt7nlXnf/86o5P/SqeP/xJLf/8KP3v/Dj93/0YXF5d57rXvfeqwOAAAAAAAAAADT0c4F09HOBeHjyASwotIGjHXdQJp/357PquPd0qrj+MST3/jCkN7dw5LencSV3D7Tr8cG0N/VBNPRzgXT0c4F+B8AAOAHAADAAwAAwAMAAIABAAAAAQAAAYAAAAPAAAADwAAAAYAAAAABAACAAQAAwAMAAMADAADwDwAA+B8AAA==', 'base64');
 
     this.syslog.warn('Media file system: '+configuration.storage.media_dir, 'core');
-    this.mongodb = new mongodb(configuration.database.db_url, configuration.database.db_name, this.schemaSet, fileRef, urlRef, eventRef);
-    this.db = new basicdb(configuration.storage.media_dir, this.syslog, this.mongodb, configuration.storage.acc_timeout);
+    this.mongodb = new mongodb(configuration.database, this.schemaSet, fileRef, urlRef, eventRef);
+    this.db = new basicdb(configuration.storage.media_dir, this.ac.acldb, this.syslog, this.mongodb, configuration.storage.acc_timeout);
 
     this.mongodb.open(function(service, err) {
         this.syslog.error('DB initialization failed: '+err, 'core');
         this.db.init(configuration.storage.media_files, false);
     }.bind({syslog:this.syslog,db:this.db}), function(db) {
         this.syslog.info('DB initialized', 'core');
-        this.db.init(configuration.storage.media_files, true);
+        this.db.init(configuration.storage.zones, true);
     }.bind({syslog:this.syslog,db:this.db}));
 
     this.httpServer.get(this.httpPrefix+'favicon.ico', function(req, res) { service.favicon(req,res); }.bind({'service':this}));
@@ -90,16 +88,19 @@ function HttpService(configuration) {
         this.httpServer.get(this.httpPrefix+'logs', function(req, res) { service.logweb.logContent(req, res) }.bind({'service':this}));
         this.httpServer.get(this.httpPrefix+'logs/:name', function(req, res) { service.logweb.logFile(req, res) }.bind({'service':this}));
     }
+    this.httpServer.post(this.httpPrefix+'jwt/forge', function(req, res) { service.forgeUserToken(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'storage/:fileid', function(req, res) { service.fileService(req, res) }.bind({'service':this}));
     this.httpServer.post(this.httpPrefix+'post', function(req, res) { service.postFile(req, res) }.bind({'service':this}));
-    this.httpServer.get(this.httpPrefix+'post', function(req, res) { service.postFile(req, res) }.bind({'service':this}));
+    this.httpServer.post(this.httpPrefix+'commit/', function(req, res) { service.commitMedia(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'schema/:name', function(req, res) { service.schemas(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'check/:uuid', function(req, res) { service.checkFile(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'download/:uuid', function(req, res) { service.direct(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+'zdownload/:uuid', function(req, res) { service.compress(req, res) }.bind({'service':this}));
     this.httpServer.get(this.httpPrefix+':uuid', function(req, res) { service.media(req, res) }.bind({'service':this}));
+    this.httpServer.options(this.httpPrefix+'jwt/forge', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
     this.httpServer.options(this.httpPrefix+'storage/:fileid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
     this.httpServer.options(this.httpPrefix+'post', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
+    this.httpServer.options(this.httpPrefix+'commit/', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
     this.httpServer.options(this.httpPrefix+'check/:uuid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
     this.httpServer.options(this.httpPrefix+'download/:uuid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
     this.httpServer.options(this.httpPrefix+'zdownload/:uuid', function(req, res) { service.optionCors(req, res) }.bind({'service':this}));
@@ -108,6 +109,46 @@ function HttpService(configuration) {
     //this.httpServer.use(function(req, res) { this.syslog.info('unserved access: '+JSON.stringify(req.url), 'core'); res.status(404).end(); }.bind({'syslog':this.syslog}));
     this.listen = this.httpServer.listen(this.port, this.netInterface);
 }
+
+function DownloadService(chunkSize, file_size) {
+    this.chunkSize = chunkSize;
+    this.bufferSize = file_size;
+    this.filecontent = Buffer.allocUnsafe(this.bufferSize);
+    this.startts = new Date().valueOf();
+    this.updateTime = 500;
+    this.realcontentsize = 0;
+}
+DownloadService.prototype.read = function(req, update = null) {
+    let bufferSize = this.bufferSize;
+    let chunkSize = this.chunkSize;
+    var chunk;
+    while (null !== (chunk = req.read())) {
+        const nsize = this.realcontentsize + chunk.length;
+        if (nsize > bufferSize) {
+            if (bufferSize > 2 * chunkSize) chunkSize = chunkSize * 2;
+            bufferSize += chunkSize + chunk.length;
+            let newfilecontent = Buffer.allocUnsafe(bufferSize);
+            this.filecontent.copy(newfilecontent);
+            this.filecontent = newfilecontent;
+        }
+        chunk.copy(this.filecontent, this.realcontentsize);
+        this.realcontentsize += chunk.length;
+        if (update) {
+            let currentts = new Date().valueOf();
+            if ((currentts - this.startts) > this.updateTime) {
+                update(this.realcontentsize);
+                this.startts = new Date().valueOf();
+            }
+        }
+    }
+}
+DownloadService.prototype.finish = function() {
+    this.buffer_length = this.filecontent.length;
+    this.data = this.filecontent.slice(0, this.realcontentsize);
+    this.filecontent = null;
+    return this.data;
+}
+
 
 /**
  * Flush and stop the database, and close the server.
@@ -156,6 +197,8 @@ HttpService.prototype.getRevision = function(req, res) {
  * @param {object} res - the HTTP response.
  */
 HttpService.prototype.root = function(req, res){
+    const aclStatus = this.ac.getAccessStatus(req, res);
+    if (!this.ac.checkSystemAccessStatus(aclStatus, '---')) return;
     if ('file_metadata' in req.headers) {
         return this.media(req, res);
     }
@@ -263,10 +306,10 @@ HttpService.prototype.schemas = function(req, res) {
  *   and contains basic information about the sender.
  * @param {object} req - the HTTP request
  */
-HttpService.prototype.generateContext = function(req, access, user) {
+HttpService.prototype.generateContext = function(req, aclStatus) {
     const srcip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     //console.log('from:'+ip);
-    return { source:'API', ip: srcip, access:access, user:user };
+    return { source:'API', ip: srcip, access:aclStatus.access, user:aclStatus.uname };
 }
 
 /**
@@ -301,6 +344,42 @@ HttpService.prototype.sendAndClose = function(res, code, msg) {
     res.end();
 }
 
+HttpService.prototype.forgeUserToken = function(req, res) {
+    const aclStatus = this.ac.getAccessStatus(req, res);
+    if (!this.ac.checkSystemAccessStatus(aclStatus, '--x')) return;
+
+    if ((!('content-type' in req.headers)) || (req.headers['content-type'] != 'application/json')) {
+        this.sendAndClose(res, 400, '{"status":"error", "msg":"application/json Content-Type expected"}');
+        return;
+    }
+
+    // Get the config
+    let body = [];
+    req.on('data', (chunk) => { body.push(chunk); });
+    req.on('end', function() {
+        let userDesc = Buffer.concat(body).toString();
+        try { userDesc = JSON.parse(userDesc); }
+        catch(err) {
+            this.service.sendAndClose(res, 400, '{"status":"error", "msg":"malformed application/json"}'); return;
+        }
+        if (!('user_id' in userDesc)) {
+            this.service.sendAndClose(res, 400, '{"status":"error", "msg":"missing user_id"}'); return;
+        }
+        if (!('user_name' in userDesc)) {
+            this.service.sendAndClose(res, 400, '{"status":"error", "msg":"missing user_name"}'); return;
+        }
+        if (!('user_name' in userDesc)) { userDesc.group_name = null; }
+        let cookie = this.service.ac.forgeTokenCookie(this.aclStatus, userDesc.user_id, userDesc.user_name, userDesc.group_name);
+        if (!cookie) return;
+        else {
+            content = '{ "status": "OK" } ]';
+            res.setHeader('cookie', cookie);
+            res.write(content);
+            res.status(200).end();
+        };
+    }.bind({service:this, aclStatus:aclStatus}));
+}
+
 /**
  * Serves a post of a new media.
  * The post HTTP header must contain the ":file_metadata" with all necessary fields.
@@ -309,16 +388,14 @@ HttpService.prototype.sendAndClose = function(res, code, msg) {
  * @param {object} res - the HTTP response.
  */
 HttpService.prototype.postFile = function(req, res) {
-    const [ access, user ] = this.ac ? this.ac.checkAccessRights(req, res, '-w-') : null;
-    if (!access) return;
-    if (access[1] != 'w') { res.status(401).send('Write access not set for user ('+user+':'+access+')'); return; }
+    const aclStatus = this.ac.getAccessStatus(req, res, 'API');
+    if (!this.ac.checkSystemAccessStatus(aclStatus, '-w-')) return;
     res.header("Access-Control-Allow-Origin", "*");
     res.type('application/json');
     res.write('[');
 
-    var content= [];
     if (!('file_metadata' in req.headers)) {
-        content = '{ "status": "error", "msg":"no meta-data provided" } ]';
+        let content = '{ "status": "error", "msg":"no meta-data provided" } ]';
         res.write(content);
         res.status(400).end();
         return;
@@ -326,7 +403,7 @@ HttpService.prototype.postFile = function(req, res) {
     var metadata = req.headers.file_metadata;
     try { metadata = JSON.parse(metadata); }
     catch(err) {
-        content = '{ "status": "error", "msg":"malformed metadata" } ]';
+        let content = '{ "status": "error", "msg":"malformed metadata" } ]';
         this.syslog.error('malformed metadata: '+metadata, 'core');
         res.write(content);
         res.status(400).end();
@@ -334,10 +411,10 @@ HttpService.prototype.postFile = function(req, res) {
     }
 
     // Bufferize file data
-    const chunkSize = 65536*4;
-    const file_size = metadata.file_size || chunkSize;
+    var chunkSize = 65536*4;
+    const file_size = metadata.file_size || parseInt(req.headers['content-length']) || chunkSize;
     if (file_size > 500e6) {
-        content = '{ "status": "error", "msg":"file too large, use a different upload method" } ]';
+        let content = '{ "status": "error", "msg":"file too large, use a different upload method" } ]';
         this.syslog.error('file too large, use a different upload method: ' + JSON.stringify(metadata));
         res.write(content);
         res.status(400).end();
@@ -345,43 +422,96 @@ HttpService.prototype.postFile = function(req, res) {
     }
 
     // Bufferize file data
-    var realcontentsize = 0;
-    var bufferSize = file_size;
-    var filecontent = Buffer.allocUnsafe(bufferSize);
+    let dwnld = new DownloadService(chunkSize, file_size);
+    res.write('{ "status": "download" }, ');
     req.on('readable', function() {
-        var chunk;
-        content = '{ "status" "ongoing" }, ';
-        while (null !== (chunk = req.read())) {
-            const nsize = realcontentsize + chunk.length;
-            if (nsize > bufferSize) {
-                if (bufferSize > 2 * chunkSize) chunkSize = chunkSize * 2;
-                bufferSize += chunkSize + chunk.length;
-                newfilecontent = Buffer.allocUnsafe(bufferSize);
-                filecontent.copy(newfilecontent);
-                filecontent = newfilecontent;
-            }
-            chunk.copy(filecontent, realcontentsize);
-            realcontentsize += chunk.length;
-            res.write(' ' + realcontentsize + ',');
-        }
+        const update = function(size)  { res.write(' ' + size + ',') }
+        dwnld.read(req, update);
     });
     // Build the entry, Close the request
     req.on('end', function() {
-        this.service.syslog.debug('content: '+filecontent.length, 'core');
-
-        const context = this.service.generateContext(req, access, user);
-        const data = filecontent.slice(0, realcontentsize);
-        const nid = this.service.db.addEntry(metadata, context, data, function() {
-            content = '{ "status": "error", "msg":"invalid request" } ]';
+        const data = dwnld.finish();
+        this.service.syslog.debug('content: '+dwnld.buffer_length, 'core');
+        const nid = this.service.db.addEntry(metadata, this.aclStatus, data, function() {
+            let content = '{ "status": "error", "msg":"invalid request" } ]';
             res.write(content);
             res.status(400).end();
-        }, function() {
-            content = '{ "status": "OK" } ]';
+        }, function(zone, commitUrl) {
+            let content  = '';
+            if (commitUrl) content += '{ "zone_name": "'+zone+'", "commit_uuid": "'+commitUrl+'" }, ';
+            content += '{ "status": "OK" } ]';
             res.write(content);
             res.status(200).end();
         });
-    }.bind({service:this}));
+    }.bind({service:this,aclStatus:aclStatus}));
 };
+
+/**
+ * Serves a post of a new media.
+ * The post HTTP header must contain the ":file_metadata" with all necessary fields.
+ *
+ * @param {object} req - the HTTP request
+ * @param {object} res - the HTTP response.
+ */
+HttpService.prototype.commitMedia = function(req, res) {
+    const aclStatus = this.ac.getAccessStatus(req, res, 'API');
+    if (!this.ac.checkSystemAccessStatus(aclStatus, '--x')) return;
+    res.header("Access-Control-Allow-Origin", "*");
+
+    const processCommit = function(zone_name, commit_uuid) {
+        this.service.db.commit(zone_name, commit_uuid, this.aclStatus, function(err) {
+            this.service.sendAndClose(this.res, 400, '{ "status": "error", "msg":"'+err+'"}');
+        }.bind({service:this.service,res:this.res}), function() {
+            this.service.sendAndClose(this.res, 200, '{ "status": "OK" }');
+        }.bind({service:this.service,res:this.res}));
+    }.bind({service:this,aclStatus:aclStatus,res:res});
+    const processJson = function(metadata) {
+        try { metadata = JSON.parse(metadata); }
+        catch(err) {
+            this.service.syslog.error('malformed commit message: '+metadata, 'core');
+            this.service.sendAndClose(this.res, 400, '{"status":"error", "msg":"malformed metadata"}');
+            return;
+        }
+
+        if (!metadata.commit_uuid) {
+            this.service.syslog.error('commit_uuid missing in metadata: ' + JSON.stringify(metadata));
+            this.service.sendAndClose(this.res, 400, '{ "status": "error", "msg":"commit_uuid missing in metadata"}');
+            return;
+        }
+        if (!metadata.zone_name) {
+            this.service.syslog.error('zone_name missing in metadata: ' + JSON.stringify(metadata));
+            this.service.sendAndClose(this.res, 400, '{ "status": "error", "msg":"zone_name missing in metadata"}');
+            return;
+        }
+        processCommit(metadata.zone_name, metadata.commit_uuid);
+    }.bind({service:this,res:res});
+
+    let commit_uuid = '-';
+    let zone_name = '-';
+    if ("zone_name" in req.query && "commit_uuid" in req.query) {
+        zone_name = req.query.zone_name;
+        commit_uuid = req.query.commit_uuid;
+        processCommit(zone_name, commit_uuid);
+    }
+    else {
+        var metadata = req.body;
+        if ('media_commit' in req.headers) {
+            metadata = req.headers.media_commit;
+            processJson(metadata);
+        }
+        else {
+            // Bufferize file data
+            const size = parseInt(req.headers['content-length']) || 4096;
+            let dwnld = new DownloadService(4096, size);
+            req.on('readable', function() { dwnld.read(req); });
+            // Build the entry, Close the request
+            req.on('end', function() {
+                metadata = dwnld.finish().toString('utf-8');
+                processJson(metadata);
+            });
+        }
+    }
+}
 
 /**
  * Serves the media connector creation API.
@@ -389,8 +519,8 @@ HttpService.prototype.postFile = function(req, res) {
  * @param {object} res - the HTTP response.
  */
 HttpService.prototype.media = function(req, res) {
-    const [ access, user ] = this.ac ? this.ac.checkAccessRights(req, res) : null;
-    if (!access) return;
+    const aclStatus = this.ac.getAccessStatus(req, res);
+    if (!this.ac.checkSystemAccessStatus(aclStatus, '---')) return;
 
     let req_uuid = '-';
     if ("uuid" in req.params) req_uuid = req.params.uuid;
@@ -415,12 +545,10 @@ HttpService.prototype.media = function(req, res) {
         req_uuid = metadata.media_id;
     }
 
-    const context = this.generateContext(req, access, user);
-
     //console.log('OPTION: '+util.inspect(req.headers));
     const access_mode = req.headers['media-access-method'];
     if (access_mode == 'Direct') {
-        const nid = this.db.get(req_uuid, context);
+        const nid = this.db.get(req_uuid, aclStatus);
         if (!nid) HttpService.prototype.sendAndClose(res, 404, '{"status":"error", "msg":"media uuid not found"}');
         else {
             req.params.fileid = nid;
@@ -428,7 +556,7 @@ HttpService.prototype.media = function(req, res) {
         }
     }
     else if (access_mode == 'Check') {
-        const nid = this.db.check(req_uuid, context, function(err) {
+        const nid = this.db.check(req_uuid, aclStatus, function(err) {
             HttpService.prototype.sendAndClose(res, 404, '{"status":"error", "msg":"'+err.toString()+'"}');
         }.bind({res:res}), function(hash, previousHash, size) {
             if (hash != previousHash && previousHash != '-') {
@@ -439,7 +567,7 @@ HttpService.prototype.media = function(req, res) {
         }.bind({res:res,syslog:this.syslog}));
     }
     else {
-        const nid = this.db.get(req_uuid, context);
+        const nid = this.db.get(req_uuid, aclStatus);
         if (!nid) HttpService.prototype.sendAndClose(res, 404, '{"status":"error", "msg":"media uuid not found"}');
         else  {
             content = { url:this.server + this.httpPrefix+'storage/'+ nid };
@@ -488,13 +616,12 @@ HttpService.prototype.checkFile = function(req, res) {
  * @param {object} res - the HTTP response.
  */
 HttpService.prototype.fileService = function(req, res) {
-    const [ access, user ] = this.ac ? this.ac.checkAccessRights(req, res) : null;
-    if (!access) return;
+    const aclStatus = this.ac.getAccessStatus(req, res);
+    if (!this.ac.checkSystemAccessStatus(aclStatus, '---')) return;
 
     const fileid = req.params.fileid;
-    const context = this.generateContext(req, access, user);
 
-    this.db.find(fileid, context, function(err) {
+    this.db.find(fileid, aclStatus, function(err) {
         HttpService.prototype.sendAndClose(res, 401, '{"status":"error", "msg":"could not get media content"}');
     }, function(data, name, mimetype) {
         this.syslog.info('full read with connector: '+fileid, 'core');
