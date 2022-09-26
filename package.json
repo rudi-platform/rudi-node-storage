@@ -21,6 +21,7 @@
         "md5": "^2.3.0",
         "minimist": "^1.2.5",
         "mongodb": "^3.6.6",
+        "unix-dgram": "^2.0.4",
         "uuid": "^8.3.2"
     },
     "devDependencies": {
@@ -31,6 +32,7 @@
         "unix-dgram": "^2.0.4"
     },
     "scripts": {
+        "build": "(cd jwti && ls && npm install && npm run prestart && npm run build )",
         "start": "nodejs index.js",
         "debug": "nodemon index.js -p 3201 -l './mylog'",
         "debug_ini": "nodemon index.js --ini local.ini",

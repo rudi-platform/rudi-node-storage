@@ -44,7 +44,7 @@ function BasicFileEntry(metadata, filecontent, zone, aclStatus, filename, uuid, 
         else                             this.mimetype = butils.mimeFromContent(filecontent);
         if ('charset'    in metadata)  { this.encoding = metadata.charset;    delete metadata.charset; }
         else                             this.encoding = butils.charsetFromContent(filecontent);
-        if ('file_size'  in metadata)  { this.size     = metadata.size;       delete metadata.size; }
+        if ('file_size'  in metadata)  { this.size     = metadata.file_size;  delete metadata.file_size; }
         else                             this.size     = filecontent.length;
         this.md5 = crypto.createHash('md5').update(filecontent).digest('hex');
         this.metadata = metadata;

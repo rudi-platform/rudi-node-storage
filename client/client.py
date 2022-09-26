@@ -5,7 +5,7 @@ import json
 import time
 import sys, os
 import logging
-import jwt
+import jwt # pip PyJWT
 import base64
 
 # openssl req -x509 -nodes -newkey rsa:2048 -keyout private_key.pem -out public_key.pem -subj "/CN=rudiadmin.aqmo.org"
@@ -23,7 +23,7 @@ def dumps(obj, indent = 0, cut=False):
     elif isinstance(obj, dict):  return padb + '{' + padf + (','+padn).join([ (dumps(k, indent, cut) + ':' + dumps(v, indent, cut)) for k,v in obj.items() ]) + pade + '}'
     elif cut:
         r = str(obj).split('.')
-        if len(r) > 1: r = [ i[0:14] for i in r ]
+        if len(r) == 5: r = [ i[0:14] + ('(...)' if len(i)>15 else '') for i in r ]
         return '.'.join(r)
     else: return str(obj)
 
@@ -33,17 +33,20 @@ class User(object):
         self.group = 'auth'
         self.uid = uid if uid else str(uuid.uuid4())
         self.gid = gid if gid else str(uuid.uuid4())
-        self.privkeyfile = None
+        self.privkeyfile = privkeyfile
         self.password = None
         self.cookie = None
-        if privkeyfile and os.path.exists(privkeyfile):
-            try: self.privkeyfile = open(privkeyfile, 'r').read()
-            except Exception as e: pass
+        if privkeyfile:
+            if os.path.exists(privkeyfile):
+                try: self.privkeyfile = open(privkeyfile, 'r').read(); print('[%s] Key loaded'%(self.name))
+                except Exception as e: pass
+            else: raise Exception('private key not found: '+privkeyfile)
         elif password:
             try:
                 password = base64.b64decode(password)
                 self.password = base64.b64encode(self.name.encode(r'utf-8')+b':'+password).decode(r'ascii')
             except Exception as e: pass
+        else: print('[%s] no authentication set'%(self.name))
 
     def setGroup(self, group):
         self.group = group
@@ -78,14 +81,16 @@ class User(object):
         else: return {}
 
 class MediaClient(object):
-    def __init__(self, user, host = "localhost", port = 3202, https = False, verify = True):
+    def __init__(self, user, host = "localhost", port = 3202, prefix = r'', https = False, verify = True):
         self.user = user
         self.https = https
         self.host = host
         self.port = port
+        self.prefix = prefix
         if verify and not self.home():
             logging.error('Could not contact server '+host)
-            sys.exit(-1)
+            raise Exception('Could not contact server '+host)
+            #sys.exit(-1)
 
     def execCmd(self, argv, params = None):
         qs = None
@@ -96,10 +101,11 @@ class MediaClient(object):
             print('\t%s: %-20s' % (code, message))
         show('<nothing>', r'ask')
 
-    def rawConn(self, https, host, port, ctype, path, body = None, headers = None, uheaders = {}):
+    def rawConn(self, https, host, port, ctype, path, body = None, headers = None, uheaders = {}, cut=True):
         """ Interface for an easy request connexion 
         """
         try:
+            path = self.prefix + path
             if https: conn = http.client.HTTPSConnection(host, port)
             else:     conn = http.client.HTTPConnection(host, port)
             if not headers: headers = {"Content-Type": "text/plain", "Accept": "application/json" }
@@ -107,7 +113,7 @@ class MediaClient(object):
             if body and type(body) == dict:
                 headers[r'Content-Type'] = r'application/json'
                 body = json.dumps(body)
-            logging.warning("Request: %s: %s => %s"%(path, dumps(headers, cut=True), body))
+            logging.warning("Request: %s: %s => %s"%(path, dumps(headers, cut=cut), body))
             if body: conn.request(ctype, path, body, headers)
             else:
                 conn.putrequest(ctype, path)
@@ -120,12 +126,12 @@ class MediaClient(object):
             return None
         return conn
 
-    def rawConnUrl(self, url, ctype, body = None, headers = None):
+    def rawConnUrl(self, url, ctype, body = None, headers = None, cut = True):
         pu = urllib.parse.urlparse(url)
-        return self.rawConn(pu.scheme == 'https', pu.hostname, pu.port, ctype, pu.path, body, headers)
+        return self.rawConn(pu.scheme == 'https', pu.hostname, pu.port, ctype, pu.path, body, headers, cut=cut)
 
-    def conn(self, ctype, path, body = None, headers = None, group = None):
-        return self.rawConn(self.https, self.host, self.port, ctype, path, body, headers, self.user.authHeader())
+    def conn(self, ctype, path, body = None, headers = None, group = None, cut = True):
+        return self.rawConn(self.https, self.host, self.port, ctype, path, body, headers, self.user.authHeader(), cut = cut)
 
     def cresult(self, conn, dump = True, raw = False):
         """ Basic parsing of the result
@@ -170,7 +176,9 @@ class MediaClient(object):
     # Main API
     #
     def askToken(self, user):
-        conn = self.conn(r'POST', r'/jwt/forge', { r'user_id': user.uid, r'user_name': user.name, r'group_name': user.group })
+        conn = self.conn(r'POST', r'/jwt/forge',
+                         { r'user_id': user.uid, r'user_name': user.name, r'group_name': user.group },
+                         cut = False)
         self.cresult(conn)
         user.cookie = conn.s_cookie
         return conn
@@ -194,8 +202,8 @@ class MediaClient(object):
         try:
             with open(filename, 'rb') as fd:
                 conn = self.conn(r'POST', r'/post', body=None, headers = headers)
-                while chunk := fd.read(16000): conn.send((b'%x\r\n%s\r\n'%(len(chunk),chunk)))# ; print('.',end='');
-                conn.send(b'0\r\n\r\n')
+                chunk=True
+                while chunk: chunk = fd.read(16000) ; conn.send((b'%x\r\n%s\r\n'%(len(chunk),chunk)))# ; print('.',end='');
             return self.cresult(conn)
         except Exception as e: data = ''; print('Error posting data: '+str(e)) #; raise Exception()
         return ''
@@ -207,7 +215,8 @@ class MediaClient(object):
         response = self.cresult(conn, False, True)
         if response:
             with open(outfilename, 'wb') as fd:
-                while chunk := response.read(2000): fd.write(chunk)
+                chunk=True
+                while chunk: chunk = response.read(2000) ; fd.write(chunk)
             print('%s saved'%(outfilename))
             conn.close()
 
@@ -219,7 +228,8 @@ class MediaClient(object):
         if method == 'Direct':
             response = self.cresult(conn, False, True)
             with open(outfilename, 'wb') as fd:
-                while chunk := response.read(2000): fd.write(chunk)
+                chunk=True
+                while chunk: chunk = response.read(2000); fd.write(chunk)
             print('%s saved'%(outfilename))
             conn.close()
         elif method != 'Check':
@@ -247,6 +257,9 @@ class MediaClient(object):
         return self.cresult(conn)
 
 def main():
+    host=r'localhost'
+    port=3202
+    prefix=r''
     rudimanager = User(r'rudimanager', privkeyfile = r'./adminpriv.pem')
     rudiconsole = User(r'rudiconsole', '1000')
     rudiadmin = User(r'rudiadmin', password = base64.b64encode(r'sysadminisgreat!'.encode('utf-8')))
@@ -255,7 +268,7 @@ def main():
     mcManager = None
     if True:
         print(r'--------------- Création du client HTTP pour utilisateur rudimanager (teste le /) -----------' )
-        mcManager = MediaClient(rudimanager)
+        mcManager = MediaClient(rudimanager,host,port,prefix)
         time.sleep(1)
 
     mcConsole = None
@@ -263,9 +276,9 @@ def main():
         rudiconsole.setGroup('producer')
         print(r'--------------- Demande un token pour utilisateur "rudiconsole" -----------' )
         mcManager.askToken(rudiconsole)
-        time.sleep(2)
+        time.sleep(1)
         print(r'--------------- Création du client HTTP pour utilisateur console -----------' )
-        mcConsole = MediaClient(rudiconsole, verify = False)
+        mcConsole = MediaClient(rudiconsole,host,port,prefix, verify = False)
         time.sleep(1)
 
     if mcManager and True:
@@ -298,24 +311,47 @@ def main():
         mcManager.commit(stageId)
         print(r'--------------- utilisateur console check md5: succès -----------' )
         mcConsole.media('2b67bfd7-b7a2-40f8-bba0-56abbbbff054', '_OO', method = 'Check')
-        time.sleep(2)
+        time.sleep(1)
 
     if mcConsole and True:
         print(r'--------------- utilisateur console télécharge: succès -----------' )
         mcConsole.media('2b67bfd7-b7a2-40f8-bba0-56abbbbff054', '_OO')
-        time.sleep(2)
+        time.sleep(1)
 
     if mcConsole and True:
+        print(r'--------------- utilisateur console liste les fichiers: succès -----------' )
         mcConsole.mediaList()
+        time.sleep(1)
 
     if mcManager and True:
+        print(r'--------------- utilisateur console liste les fichiers: succès -----------' )
         mcManager.mediaList()
+        time.sleep(1)
 
     if True:
         print(r'--------------- utilisateur admin par mot de passe -----------' )
-        mcAdmin = MediaClient(admin)
+        mcAdmin = MediaClient(admin,host,port,prefix)
         #mcAdmin.logs()
         print(r'--------------- utilisateur admin poste sans commit: succès -----------' )
         mcAdmin.post('2b67bfd7-b7a2-40f8-bba0-56abbbbff054', 'zoom_amd64.deb')
 
-if __name__ == '__main__': main()
+def getCookie(pkey = r'./keys/rudimanager.pem', login='rudiconsole', uid = '1000', host = r'localhost', port = 3201, https = False, prefix = r'/media'):
+    rudimanager = User(r'rudimanager', privkeyfile = pkey)
+    rudiconsole = User(login, uid)
+    rudiconsole.setGroup('producer')
+    mcManager = MediaClient(rudimanager,host,port,prefix,https)
+    mcManager.askToken(rudiconsole)
+    print(rudiconsole.cookie)
+    time.sleep(2)
+    mcConsole = MediaClient(rudiconsole,host,port,prefix,https)
+
+#PYTHONPATH=./client/ ipython -i -m client -- -i
+#PYTHONPATH=./client/ python  -m client -c "getCookie('./keys/rudimanager_shared.pem','rudiconsole','1000','shared-rudi.aqmo.org',443,True,'/media')"
+asModule= len(sys.argv) >= 2 and ( sys.argv[1] == '-i' or sys.argv[1] == '-c' )
+print(sys.argv, __name__)
+if __name__ == '__main__':
+    if not asModule: main()
+    elif sys.argv[1] == '-c':
+        code = ' '.join(sys.argv[2:])
+        print('eval: '+code)
+        eval(code)

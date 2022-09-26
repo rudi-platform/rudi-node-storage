@@ -12,6 +12,7 @@ const uuid = require('uuid');
 const logger = require('@aqmo.org/rudi_logger');
 const jcrypt = require('./jwti/dist/crypt.js');
 const jwti = require('./jwti/dist/jwt.js');
+const cycle = require('./cycle.js');
 
 const G_ADMIN_UID = 4;
 
@@ -156,7 +157,7 @@ User.prototype.checkPassword = function (input) {
  * @class ACL: defines an ACL entry.
  */
 function Acl(aclDesc) {
-    const err = function(msg) { throw Error(`${msg} in acl ("${JSON.stringify(aclDesc)}")`); }
+    const err = function(msg) { throw Error(`${msg} in acl ("${JSON.safeStringify(aclDesc)}")`); }
     if (!('core' in aclDesc)) err('Missing core');
     if (!('users' in aclDesc)) err('Missing users');
     if (!('groups' in aclDesc)) err('Missing groups');
@@ -233,7 +234,7 @@ function AclDB(cfg, syslog) {
         for (ui in au)      this.newUser(ui, au[ui]);
     }
     catch (err) {
-        const errStr = 'Could not initialize ACL DB: ${err}';
+        const errStr = `Could not initialize ACL DB: ${err}`;
         this.error(errStr); throw Error(errStr);
     }
 }
@@ -260,7 +261,7 @@ AclDB.prototype.newUser = function(name, userDesc) {
 }
 AclDB.prototype.newAcl = function(aclconf) {
     const acl = new Acl(aclconf);
-    const err = function(msg) { throw Error(`${msg} in acl ("${JSON.stringify(aclconf)}")`); }
+    const err = function(msg) { throw Error(`${msg} in acl ("${JSON.safeStringify(aclconf)}")`); }
     if (!(acl.owner in this.systemUsers))  err(`Users ${this.owner} not found`);
     for (ui in acl.users) {
         if (!(ui in this.systemUsers))  err(`Users ${ui} not found`);
@@ -330,7 +331,7 @@ AclDB.prototype.findIdsFromJwt = function (value) {
         if ((typeof rawJwt != 'object') || rawJwt.length != 3) return this.newAclError('E20');
         const jwt = jwti.tokenStringToJwtObject(value);
         if (!jwt) return this.newAclError('E21');
-        this.debug(`Decoded JWT: ${JSON.stringify(jwt)}`);
+        this.debug(`Decoded JWT: ${JSON.safeStringify(jwt)}`);
 
         const gname = ('sub' in jwt['payload']) ? jwt['payload']['sub'] : '-';
         const uname = ('client_id' in jwt['payload']) ? jwt['payload']['client_id'] : '-' ;

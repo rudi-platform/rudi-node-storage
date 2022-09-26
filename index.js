@@ -127,15 +127,13 @@ function DownloadService(chunkSize, file_size) {
     this.realcontentsize = 0;
 }
 DownloadService.prototype.read = function(req, update = null) {
-    let bufferSize = this.bufferSize;
-    let chunkSize = this.chunkSize;
     let chunk;
     while (null !== (chunk = req.read())) {
         const nsize = this.realcontentsize + chunk.length;
-        if (nsize > bufferSize) {
-            if (bufferSize > 2 * chunkSize) chunkSize = chunkSize * 2;
-            bufferSize += chunkSize + chunk.length;
-            const newfilecontent = Buffer.allocUnsafe(bufferSize);
+        if (nsize > this.bufferSize) {
+            if (this.bufferSize > (2 * this.chunkSize)) this.chunkSize *= 2;
+            this.bufferSize += this.chunkSize + chunk.length;
+            const newfilecontent = Buffer.allocUnsafe(this.bufferSize);
             this.filecontent.copy(newfilecontent);
             this.filecontent = newfilecontent;
         }
@@ -328,7 +326,7 @@ HttpService.prototype.generateContext = function(req, aclStatus) {
  */
 HttpService.prototype.optionCors = function(req, res) {
     //console.log('OPTION: '+util.inspect(req.headers));
-    const baseHeaderList = 'Content-Type, Authorization, Content-Length, X-Requested-With, file_metadata, Media-Access-Method';
+    const baseHeaderList = 'Content-Type, Authorization, Content-Length, X-Requested-With, file_metadata, Media-Access-Method, media_cookie';
     const extendedHeaderList = 'Cache-Control, Pragma, Sec-GPC';
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
@@ -353,7 +351,6 @@ HttpService.prototype.sendAndClose = function(res, code, msg) {
 }
 
 HttpService.prototype.listMedias = function(req, res) {
-    console.log('---------------');
     const aclStatus = this.ac.getAccessStatus(req, res);
     if (!this.ac.checkSystemAccessStatus(aclStatus, '---')) return;
 
@@ -394,7 +391,7 @@ HttpService.prototype.forgeUserToken = function(req, res) {
         const cookie = this.service.ac.forgeTokenCookie(this.aclStatus, userDesc.user_id, userDesc.user_name, userDesc.group_name);
         if (!cookie) return;
         else {
-            this.service.syslog.info('forged token for '+userDesc.user_name+':'+userDesc.group_name?userDesc.group_name:'-', 'core');
+            this.service.syslog.info('forged token for '+userDesc.user_name+':'+(userDesc.group_name?userDesc.group_name:'-'), 'core');
             const content = '{ "status": "OK" } ]';
             res.setHeader('cookie', cookie);
             res.write(content);
@@ -448,20 +445,20 @@ HttpService.prototype.postFile = function(req, res) {
     const dwnld = new DownloadService(chunkSize, file_size);
     res.write('{ "status": "download" }, ');
     req.on('readable', function() {
-        const update = function(size)  { res.write(' ' + size + ',') }
+        const update = function(size)  { res.write(' ' + size + ','); }
         dwnld.read(req, update);
     });
     // Build the entry, Close the request
     req.on('end', function() {
         const data = dwnld.finish();
-        this.service.syslog.debug('content: '+dwnld.buffer_length, 'core');
+        this.service.syslog.debug('content: '+data.length, 'core');
         const nid = this.service.db.addEntry(metadata, this.aclStatus, data, function(err, code = 400) {
             const content = '{ "status": "error", "msg":"'+err+'" } ]';
             res.write(content);
             res.status(code).end();
         }, function(zone, commitUrl) {
             let content  = '';
-            if (commitUrl) content += '{ "zone_name": "'+zone+'", "commit_uuid": "'+commitUrl+'" }, ';
+            if (commitUrl) content += '{ "status": "commit_ready" , "zone_name": "'+zone+'", "commit_uuid": "'+commitUrl+'" }, ';
             content += '{ "status": "OK" } ]';
             res.write(content);
             res.status(200).end();

@@ -8,6 +8,7 @@ const fs = require('fs');
 const util = require('util');
 const crypto = require('crypto'); 
 const BasicZone = require('./basiczone.js');
+const cycle = require('./cycle.js');
 
 /**
  * Represents a basic media DB.
@@ -199,12 +200,12 @@ BasicFileDB.prototype.recordEntry = function(aclStatus, zone, entry, none, done)
         }.bind({service:this});
 
         const errFct = function(err) {
-            this.service.warn('Could not update DB: '+err+'; with '+JSON.stringify(opdesc));
+            this.service.warn('Could not update DB (init add): '+err+'; with '+JSON.safeStringify(opdesc));
             doneFct(entry); // We stand at a warning level for Mongo up to now.
-        };
+        }.bind({service:this});
         if (this.mongodb) {
-            this.mongodb.addMedia(entry.toJson(), errFct.bind({service:this,desc:entry}), function(mongodb) {
-                this.mongodb.addEvent(opdesc, errFct.bind({service:this.service,desc:opdesc}), function(mongodb) {
+            this.mongodb.addMedia(entry.toJson(), errFct, function(mongodb) {
+                this.mongodb.addEvent(opdesc, errFct, function(mongodb) {
                     doneFct(entry);
                 }.bind({service:this.service}));
             }.bind({service:this,mongodb:this.mongodb}));
@@ -227,11 +228,11 @@ BasicFileDB.prototype.recordEntry = function(aclStatus, zone, entry, none, done)
  */
 BasicFileDB.prototype.addEntry = function(metadata, aclStatus, filecontent, none, done) {
     if (!('media_type' in metadata)) {
-        this.errorCtx('(ignored) Missing media type: '+ JSON.stringify(metadata), 'add_media', '-', aclStatus);
+        this.errorCtx('(ignored) Missing media type: '+ JSON.safeStringify(metadata), 'add_media', '-', aclStatus);
         metadata.media_type = "FILE";
     }
     if (!('media_id' in metadata)) {
-        this.errorCtx('Missing media UUID: '+ JSON.stringify(metadata), 'add_media', '-', aclStatus);
+        this.errorCtx('Missing media UUID: '+ JSON.safeStringify(metadata), 'add_media', '-', aclStatus);
         if (none) none('Missing media UUID', 400);
         return;
     }
@@ -327,12 +328,12 @@ BasicFileDB.prototype.logEntry = function(zone, type, aclStatus, entry, none, do
             if (done) done();
         }.bind({service:this});
         const errFct = function(err) {
-            this.service.warn('Could not update DB: '+err+' with '+JSON.stringify(this.desc));
+            this.service.warn('Could not update DB (add): '+err+' with '+JSON.safeStringify(opdesc));
             doneFct(entry); // We stand at a warning level for Mongo up to now.
-        };
+        }.bind({service:this});
         if (this.mongodb) {
-            this.mongodb.addMedia(entry.toJson(), errFct.bind({service:this,desc:entry}), function(mongodb) {
-                this.mongodb.addEvent(opdesc, errFct.bind({service:this.service,desc:opdesc}), function(mongodb) {
+            this.mongodb.addMedia(entry.toJson(), errFct, function(mongodb) {
+                this.mongodb.addEvent(opdesc, errFct, function(mongodb) {
                     doneFct(entry);
                 }.bind({service:this.service}));
             }.bind({service:this,mongodb:this.mongodb}));
@@ -352,7 +353,7 @@ BasicFileDB.prototype.list = function(aclStatus) {
         const zone = this.zone_db[zoneName];
         try {
             const content = zone.listMedias(aclStatus);
-            this.debug('list medias: name='+JSON.stringify(content));
+            this.debug('list medias: name='+JSON.safeStringify(content));
             mediaList[zoneName] = {
                 'list': content, 'status': 'OK'
             }
@@ -387,9 +388,11 @@ BasicFileDB.prototype.get = function(uuid, aclStatus) {
         const opdesc = { operation: 'new_conn', uuid: niddesc.fileid, ref: uuid, zone: niddesc.zone, context: aclStatus.context.toJson() };
         this.logReq(aclStatus, opdesc);
 
-        const errFct = function(err) { this.service.error('Could not update DB: '+err+' with '+JSON.stringify(this.desc)); };
+        const errFct = function(err) {
+            this.service.error('Could not update DB (new): '+err+' with '+JSON.safeStringify(this.desc));
+        }.bind({service:this, desc:opdesc});
         if (this.mongodb) {
-            this.mongodb.addEvent(opdesc, errFct.bind({service:this,desc:opdesc}), function(mongodb) {});
+            this.mongodb.addEvent(opdesc, errFct, function(mongodb) {});
         }
 
         setTimeout(function() {
@@ -418,7 +421,7 @@ BasicFileDB.prototype.deleleteFileId = function(fileid, aclStatus, none, done) {
         const opdesc = { operation: 'del_conn', uuid: niddesc.fileid, ref: niddesc.ref, zone: niddesc.zone, context: aclStatus.context.toJson(), value: niddesc };
         this.logReq(aclStatus, opdesc);
         if (this.mongodb) {
-            this.mongodb.addEvent(opdesc, none.bind({service:this,desc:opdesc}), done);
+            this.mongodb.addEvent(opdesc, none.bind({service:this, desc:opdesc}), done);
         }
     }
 }
@@ -443,9 +446,11 @@ BasicFileDB.prototype.find = function(fileid, aclStatus, none, done) {
     const accessEntry = { date:now, client: aclStatus.context.toJson()};
     const opdesc = { operation: 'acc_conn', uuid: iddesc.fileid, ref:iddesc.ref, zone: iddesc.zone, context: accessEntry };
     this.logReq(aclStatus, opdesc);
-    const errFct = function(err) { this.service.error('Could not update DB: '+err+' with '+JSON.stringify(this.desc)); };
+    const errFct = function(err) {
+        this.service.error('Could not update DB (get): '+err+' with '+JSON.safeStringify(opdesc));
+    }.bind({service:this});
     if (this.mongodb) {
-        this.mongodb.addEvent(opdesc, errFct.bind({service:this,desc:opdesc}), function(mongodb) {});
+        this.mongodb.addEvent(opdesc, errFct, function(mongodb) {});
     }
     iddesc.count += 1;
     iddesc.access.push(accessEntry);
@@ -472,9 +477,11 @@ BasicFileDB.prototype.check = function(uuid, aclStatus, none, done) {
         this.logReq(aclStatus, opdesc);
         media.getRealMd5(none, done);
 
-        const errFct = function(err) { this.service.error('Could not update DB: '+err+' with '+JSON.stringify(this.desc)); };
+        const errFct = function(err) {
+            this.service.error('Could not update DB (check): '+err+' with '+JSON.safeStringify(opdesc));
+        }.bind({service:this});
         if (this.mongodb) {
-            this.mongodb.addEvent(opdesc, errFct.bind({service:this,desc:opdesc}), function(mongodb) {});
+            this.mongodb.addEvent(opdesc, errFct, function(mongodb) {});
         }
         return media.md5;
     }

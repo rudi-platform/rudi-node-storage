@@ -102,7 +102,7 @@ function AccessControl(cfg, slogger) {
     }
     catch (err) {
         this.error(`Internal error: ${err}`);
-        throw Error('Could not initialize AccessControl unit: ${err}');
+        throw Error(`Could not initialize AccessControl unit: ${err}`);
     }
 }
 AccessControl.prototype.error   = function(message, context = null) { if (this.syslog) this.syslog.error(message, 'ac',context); }
@@ -203,27 +203,40 @@ AccessControl.prototype._readBasicAccessRights = function (header) {
             const [login, password] = Buffer.from(b64auth, 'base64').toString().split(':')
             if (password != null) {
                 aclStatus = this.acldb.findUser(login, '-', password);
+                this.debug(`login: ${aclStatus.uname}`);
             }
             else aclStatus = this.acldb.newAclError('E05');
         }
+        else if (authType.toLowerCase() == 'bearer') {
+            aclStatus = this._jwtAccessRights('rudi.media.auth', b64auth);
+            this.debug(`bearer: ${aclStatus.uname} (${b64auth})`);
+            if (!aclStatus) aclStatus = this.acldb.newAclError('E05');
+        }
         else aclStatus = this.acldb.newAclError('E05');
-        this.debug(`login: ${aclStatus.uname}`);
     }
     return aclStatus;
 }
 
 AccessControl.prototype._readJwtAccessRights = function (header) {
-    let aclStatus = null;
-    if ('cookie' in header) {
-        const cookies = header['cookie'].split(' ');
-        for (ci in cookies) {
-            const c = cookies[ci];
-            const [key, value] = c.split('=');
-            if (key.toLowerCase() != 'rudi.media.auth') continue;
-            aclStatus = this.acldb.findIdsFromJwt(value);
-            break;
+    const klist = [ 'cookie', 'media_cookie'];
+    for (ik in klist) {
+        const key = klist[ik];
+        if (key in header) {
+            const cookies = header[key].split(' ');
+            for (ci in cookies) {
+                const c = cookies[ci];
+                const [key, value] = c.split('=');
+                const aclStatus = this._jwtAccessRights(key, value);
+                if (aclStatus) return aclStatus;
+            }
         }
     }
+    return null;
+}
+
+AccessControl.prototype._jwtAccessRights = function (key, value) {
+    if (key.toLowerCase() != 'rudi.media.auth') return null;
+    aclStatus = this.acldb.findIdsFromJwt(value);
     return aclStatus;
 }
 
