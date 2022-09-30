@@ -20,6 +20,7 @@ const basicdb = require('./basicdb.js');
  * @param {string}      eventSchema  - the name of the event schema
  */
 function MongoService(config, schemaSet, mediaSchema, urlSchema, eventSchema) {
+    this.disabled = (config.disabled !== undefined) && (config.disabled == true)
     this.mongoClient = mongodb.MongoClient;
     this.schemaSet = schemaSet;
     this.mediaSchema = mediaSchema;
@@ -57,6 +58,7 @@ MongoService.prototype.open = function(err_cb, done) {
         }
     }
     catch(err) { err_cb(this, err); }
+    if (this.disabled) err_cb(this, 'Connexion disabled');
 
     this.mongoClient.connect(this.mongoServerURL,  this.mongoOptions, function(err, db) {
         if (err) { this.service.currentError = err; if (err_cb) err_cb(this.service, err); return; }

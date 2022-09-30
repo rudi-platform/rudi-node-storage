@@ -53,6 +53,7 @@ const DEFAULT_CONF = {
         ]
     },
     database: {
+        disabled: false,
         db_url: "mongodb://localhost:27017/",
         db_name: "rudi_media",
         db_options: { useUnifiedTopology: true }

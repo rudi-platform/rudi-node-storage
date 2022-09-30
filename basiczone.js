@@ -51,8 +51,8 @@ function BasicZone(acldb, parent, zoneconf) {
     this.acldb     = acldb;
     this.parent    = parent;
     this.name      = zoneconf.name;
-    this.csv       = 'csv' in zoneconf ? zoneconf.csv : '_file.csv';
-    this.abspath   = 'abspath' in zoneconf ? zoneconf.abspath : false;
+    this.csv       = 'csv' in zoneconf && zoneconf.csv ? zoneconf.csv : '_file.csv';
+    this.abspath   = 'abspath' in zoneconf && zoneconf.abspath ? zoneconf.abspath : false;
     this.db        = {}
     if (!('path' in zoneconf)) {
         const basedir    = !parent ? '' : (typeof parent == 'object' ? parent.dirname() : ''+parent);

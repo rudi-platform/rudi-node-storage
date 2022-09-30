@@ -75,7 +75,7 @@ function HttpService(configuration) {
 
     this.mongodb.open(function(service, err) {
         this.syslog.error('DB initialization failed: '+err, 'core');
-        this.db.init(configuration.storage.media_files, false);
+        this.db.init(configuration.storage.zones, false);
     }.bind({syslog:this.syslog,db:this.db}), function(db) {
         this.syslog.info('DB initialized', 'core');
         this.db.init(configuration.storage.zones, true);

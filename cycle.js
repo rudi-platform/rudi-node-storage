@@ -69,13 +69,13 @@ if (typeof JSON.decycle !== "function") {
 // one of the weird builtin objects.
 
             if (
-                typeof value === "object"
-                && value !== null
-                && !(value instanceof Boolean)
-                && !(value instanceof Date)
-                && !(value instanceof Number)
-                && !(value instanceof RegExp)
-                && !(value instanceof String)
+                typeof value === "object"      &&
+                   value !== null              &&
+                   !(value instanceof Boolean) &&
+                   !(value instanceof Date)    &&
+                   !(value instanceof Number)  &&
+                   !(value instanceof RegExp)  &&
+                   !(value instanceof String)
             ) {
 
 // If the value is an object or array, look to see if we have already
@@ -182,8 +182,8 @@ if (typeof JSON.retrocycle !== "function") {
 }
 
 if (typeof JSON.safeStringify !== "function") {
-    JSON.safeStringify = function safeStringify(object, replacer) {
+    JSON.safeStringify = function safeStringify(object, replacer, options) {
         const odc = JSON.decycle(object, replacer);
-        return JSON.stringify(odc);
+        return JSON.stringify(odc, null, options);
     }
 }
