@@ -13,8 +13,11 @@ const logger = require('@aqmo.org/rudi_logger');
 const jcrypt = require('./jwti/dist/crypt.js');
 const jwti = require('./jwti/dist/jwt.js');
 const cycle = require('./cycle.js');
+const sshpk = require('sshpk');
+const fs = require('fs');
 
 const G_ADMIN_UID = 4;
+const G_USER_START_UID = 1000;
 
 /**
  * @function UUID/ID Extraction. Throw an exception.
@@ -35,14 +38,14 @@ function idFromStr(name, idstr) {
         const idbytes = uuid.parse(idstr);
         uid = idstr;
         if (version == 4) {
-            id = 1000 + (idbytes[10] << 8) + idbytes[11];
+            id = G_USER_START_UID + (idbytes[10] << 8) + idbytes[11];
         }
         else if (version == 5) throw Error(`Cannot revert uid from uuid-v5`);
         else throw Error(`Invalid uuid version for ${name}`);
     }
     else if (idt == 'number') {
         id = idstr;
-        if ((id == NaN) || (id < 100) || (id >= 200 && id < 1000))
+        if ((id == NaN) || (id < 100) || (id >= 200 && id < G_USER_START_UID))
             if ((id != G_ADMIN_UID) || (name != 'admin')) throw Error(`Invalid id for ${name}: not in valid range`);
         uid = uuid.v5(id.toString()+'.media.rudi.aqmo.org',uuid.v5.URL);
     }
@@ -83,10 +86,19 @@ function User(acldb, name, userDesc) {
         try {
             this.privkey = jcrypt.readPrivatePemKeyFile(userDesc[3]);
             this.acldb.debug(`Private key setup for ${this.name}`);
+        } catch (err) {}
+        let pubkey = null;
+        try {
+            const keyFile = fs.readFileSync(userDesc[3], 'ascii');
+            const pbkey = sshpk.parseKey(keyFile);
+            pubkey = pbkey.toBuffer('pkcs8');
+            this.acldb.debug(`Public SSH key setup for ${this.name}: ${pbkey.type} ${pbkey.comment}`);
+        } catch (err) {}
+        if (!pubkey) {
+            pubkey = jcrypt.readPublicPemKeyFile(userDesc[3]);
+            this.acldb.debug(`Public key setup for ${this.name}`);
         }
-        catch (err) {}
-        this.keys.push(jcrypt.readPublicPemKeyFile(userDesc[3]));
-        this.acldb.debug(`Public key setup for ${this.name}`);
+        if (pubkey) this.keys.push(pubkey);
     }
 }
 
@@ -200,11 +212,13 @@ AclStatus.prototype.setAcl = function(acl) {
 AclStatus.prototype.refused = function(amode) {
     let acEr = null;
     amode = ( amode !== undefined && amode) ? amode : '---';
-    if (amode[2] == 'x' && this.context && !this.context.validApi()) acEr = 'E12';
-    if (amode[2] != '-' && amode[2] != this.access[2])          acEr = 'E08';
+    if      (this.accError)                                               acEr = this.accError;
+    else if (amode[2] == 'x' && this.context && !this.context.validApi()) acEr = 'E12';
+    else if (amode[2] != '-' && amode[2] != this.access[2])               acEr = 'E08';
     else if (!(amode[0] == '-' && amode[1] == '-'&& amode[2] == '-')) {       // else no restriction specified, http OK
         if      (this.uname === '-')                            acEr = 'E01'; // http 401, no credentials
-        else if (this.access === '---')                         acEr = 'E02'; // http 401, wrong user/pass
+        else if (!this.user)                                    acEr = 'E02'; // http 401, no credentials
+        else if (this.access === '---')                         acEr = 'E03'; // http 401, invalid credentials
         else if (amode[0] != '-' && amode[0] != this.access[0]) acEr = 'E06'; // http 401, invalid credentials
         else if (amode[1] != '-' && amode[1] != this.access[1]) acEr = 'E07'; // http 401, invalid credentials
     }
@@ -213,7 +227,7 @@ AclStatus.prototype.refused = function(amode) {
     }
     return acEr;
 }
-AclStatus.prototype.toString = function() { return `ACL:${this.uname}[${this.user ? this.user.id : -1}]:${this.gname}:${this.access}`; }
+AclStatus.prototype.toString = function() { return `ACL:${this.uname}[${this.user ? this.user.id : -1}]:${this.gname}:${this.access}${this.accError? ' => ' + this.accError : '' }`; }
 
 /**
  * @class ACL: defines an ACL entry.
@@ -310,9 +324,21 @@ AclDB.prototype.findUser = function (login, gname = '-', password = null) {
 AclDB.prototype.forgeJwtFor = function (sysid, name, gname = 'producer', attributes = {}) {
     let user = null, group = null;
     try {
-        const [ id, uuidv ] = idFromStr(name, sysid);
-        if (id in this.usersByID) user = this.usersByID[id];
-        else                      user = this.newUser(name, [ id, '', [ gname ], '' ]);
+        if (name in this.systemUsers) {
+            user = this.systemUsers[name];
+            if (user.id != sysid) {
+                if (user.id < G_USER_START_UID) { // Special case, we can overload external users with a new ID.
+                    return this.forgeJwtFor(sysid, 'ext::' + name, gname, attributes);
+                }
+                else this.error(`Inconsistent user: ${name}/${sysid}`); return [ null, 'E32' ];
+            }
+        }
+        else {
+            const [ id, uuidv ] = idFromStr(name, sysid);
+            if (id in this.usersByID) user = this.usersByID[id];
+            else                      user = this.newUser(name, [ id, '', [ gname ], '' ]);
+            this.debug(`Forge deletation for ${name}:${gname} => ${id}:${sysid}`);
+        }
         group = user.validGroup(gname);
     }
     catch (error) { this.error(`Invalid user: ${error}`); return [ null, 'E30' ]; }
@@ -342,8 +368,10 @@ AclDB.prototype.findIdsFromJwt = function (value) {
         if (expire && (nowepoch > expire))   return new AclStatus(uname, gname, null, 'E23');
         else if (expire && (nowepoch < nbf)) return new AclStatus(uname, gname, null, 'E24');
 
-        const digest = jwt['header']['alg'] ? jwti.jwtAlgToDigestAlgo(jwt['header']['alg']) : 'SHA256';
-        this.debug(`Digest: ${jwt['header']['alg']} ${digest}`);
+        const algo = jwt['header']['alg'];
+        let digest = algo ? jwti.jwtAlgToDigestAlgo(algo) : 'SHA256';
+        this.debug(`Digest: ${algo} ${digest}`);
+        if (algo == 'EdDSA' && digest == 'SHA512') digest = null;
 
         aclStatus = this.findUser(uname, gname);
         if (aclStatus.accError) return aclStatus;
@@ -397,12 +425,13 @@ AclDB.prototype.errDesc = function (accError) {
         case 'E12': accessMsg = 'Incorrect API version, or version unspecified'; /* */ break;
         case 'E20': accessMsg = 'Malformed JWT'; /* */ break;
         case 'E21': accessMsg = 'Could not decode JWT'; /* */ break;
-        case 'E22': accessMsg = 'Invalid JWT'; /* */ break;
+        case 'E22': accessMsg = 'Invalid signature for JWT'; /* */ break;
         case 'E23': accessMsg = 'Outdated JWT'; /* */ break;
         case 'E24': accessMsg = 'Overdated JWT'; /* */ break;
         case 'E25': accessMsg = 'Tier authority unknown or key missing'; /* */ break;
         case 'E30': accessMsg = 'Invalid user/group specification (did you change the user\'s group ?)'; /* */ break;
         case 'E31': accessMsg = 'Could not forge JWT'; /* */ break;
+        case 'E32': accessMsg = 'User defined with different id'; /* */ break;
         }
     }
     return [ accessMsg, accessRealm ];

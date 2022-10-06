@@ -45,7 +45,7 @@ AccessContext.prototype.errorCode = function(accError) {
     case 'E12': code = 412; /* */ break;
     case 'E20': case 'E21': case 'E22': case 'E23': case 'E24': case 'E25':
         code = 460; /* */ break;
-    case 'E30': case 'E31':
+    case 'E30': case 'E31': case 'E32':
         code = 461; /* */ break;
     }
     return code;
@@ -135,6 +135,7 @@ AccessControl.prototype.checkSystemAccessStatus = function (aclStatus, amode) {
 }
 
 AccessControl.prototype.forgeTokenCookie = function (aclStatus, user_id, user_name, group_name) {
+    this.debug(`Forge token for ${user_name}[${user_id}]:${group_name}`);
     const [ token, accError ] = this.acldb.forgeJwtFor(user_id, user_name, group_name);
     if (accError) {
         aclStatus.context.process(user_name, user_id, '---', accError);
@@ -208,8 +209,9 @@ AccessControl.prototype._readBasicAccessRights = function (header) {
             else aclStatus = this.acldb.newAclError('E05');
         }
         else if (authType.toLowerCase() == 'bearer') {
+            this.debug(`bearer: ${b64auth}`);
             aclStatus = this._jwtAccessRights('rudi.media.auth', b64auth);
-            this.debug(`bearer: ${aclStatus.uname} (${b64auth})`);
+            this.debug(`token: ${aclStatus.uname}:${aclStatus.gname}`);
             if (!aclStatus) aclStatus = this.acldb.newAclError('E05');
         }
         else aclStatus = this.acldb.newAclError('E05');
