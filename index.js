@@ -351,6 +351,7 @@ HttpService.prototype.sendAndClose = function(res, code, msg) {
 }
 
 HttpService.prototype.listMedias = function(req, res) {
+    this.syslog.debug('[listMedias]'+req.originalUrl, 'http');
     const aclStatus = this.ac.getAccessStatus(req, res);
     if (!this.ac.checkSystemAccessStatus(aclStatus, '---')) return;
 
@@ -364,6 +365,7 @@ HttpService.prototype.listMedias = function(req, res) {
 }
 
 HttpService.prototype.forgeUserToken = function(req, res) {
+    this.syslog.debug('[forgeUserToken]'+req.originalUrl, 'http');
     const aclStatus = this.ac.getAccessStatus(req, res);
     if (!this.ac.checkSystemAccessStatus(aclStatus, '--x')) return;
 
@@ -408,6 +410,7 @@ HttpService.prototype.forgeUserToken = function(req, res) {
  * @param {object} res - the HTTP response.
  */
 HttpService.prototype.postFile = function(req, res) {
+    this.syslog.debug('[postFile]'+req.originalUrl, 'http');
     const aclStatus = this.ac.getAccessStatus(req, res, 'API');
     if (!this.ac.checkSystemAccessStatus(aclStatus, '-w-')) return;
     res.header("Access-Control-Allow-Origin", "*");
@@ -474,6 +477,7 @@ HttpService.prototype.postFile = function(req, res) {
  * @param {object} res - the HTTP response.
  */
 HttpService.prototype.commitMedia = function(req, res) {
+    this.syslog.debug('[commitMedia]'+req.originalUrl, 'http');
     const aclStatus = this.ac.getAccessStatus(req, res, 'API');
     if (!this.ac.checkSystemAccessStatus(aclStatus, '--x')) return;
     res.header("Access-Control-Allow-Origin", "*");
@@ -534,6 +538,7 @@ HttpService.prototype.commitMedia = function(req, res) {
 }
 
 HttpService.prototype.deleteMedia = function(req, res) {
+    this.syslog.debug('[deleteMedia]'+req.originalUrl, 'http');
     const aclStatus = this.ac.getAccessStatus(req, res, 'API');
     if (!this.ac.checkSystemAccessStatus(aclStatus, '-wx')) return;
     res.header("Access-Control-Allow-Origin", "*");
@@ -595,6 +600,7 @@ HttpService.prototype.deleteMedia = function(req, res) {
  * @param {object} res - the HTTP response.
  */
 HttpService.prototype.media = function(req, res) {
+    this.syslog.debug('[media]'+req.originalUrl, 'http');
     const aclStatus = this.ac.getAccessStatus(req, res);
     if (!this.ac.checkSystemAccessStatus(aclStatus, '---')) return;
 
@@ -692,6 +698,7 @@ HttpService.prototype.checkFile = function(req, res) {
  * @param {object} res - the HTTP response.
  */
 HttpService.prototype.fileService = function(req, res) {
+    this.syslog.debug('[fileService]'+req.originalUrl, 'http');
     const aclStatus = this.ac.getAccessStatus(req, res);
     if (!this.ac.checkSystemAccessStatus(aclStatus, '---')) return;
 
