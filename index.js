@@ -394,9 +394,7 @@ HttpService.prototype.forgeUserToken = function(req, res) {
         if (!jwt) return;
         else {
             this.service.syslog.info('forged token for '+userDesc.user_name+':'+(userDesc.group_name?userDesc.group_name:'-'), 'core');
-            const content = jwt;
-            res.write(content);
-            res.status(200).end();
+            res.status(200).send(jwt);
         };
     }.bind({service:this, aclStatus:aclStatus}));
 }
