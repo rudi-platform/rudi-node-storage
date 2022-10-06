@@ -134,14 +134,14 @@ AccessControl.prototype.checkSystemAccessStatus = function (aclStatus, amode) {
     return access;
 }
 
-AccessControl.prototype.forgeTokenCookie = function (aclStatus, user_id, user_name, group_name) {
+AccessControl.prototype.forgeJwt = function (aclStatus, user_id, user_name, group_name) {
     this.debug(`Forge token for ${user_name}[${user_id}]:${group_name}`);
     const [ token, accError ] = this.acldb.forgeJwtFor(user_id, user_name, group_name);
     if (accError) {
         aclStatus.context.process(user_name, user_id, '---', accError);
         return null;
     }
-    return 'rudi.media.auth='+token;
+    return token;
 }
 
 /**

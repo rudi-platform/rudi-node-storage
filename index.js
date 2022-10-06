@@ -390,12 +390,11 @@ HttpService.prototype.forgeUserToken = function(req, res) {
             this.service.sendAndClose(res, 400, '{"status":"error", "msg":"missing user_name"}'); return;
         }
         if (!('user_name' in userDesc)) { userDesc.group_name = null; }
-        const cookie = this.service.ac.forgeTokenCookie(this.aclStatus, userDesc.user_id, userDesc.user_name, userDesc.group_name);
-        if (!cookie) return;
+        const jwt = this.service.ac.forgeJwt(this.aclStatus, userDesc.user_id, userDesc.user_name, userDesc.group_name);
+        if (!jwt) return;
         else {
             this.service.syslog.info('forged token for '+userDesc.user_name+':'+(userDesc.group_name?userDesc.group_name:'-'), 'core');
-            const content = '{ "status": "OK" } ]';
-            res.setHeader('cookie', cookie);
+            const content = jwt;
             res.write(content);
             res.status(200).end();
         };
