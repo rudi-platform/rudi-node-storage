@@ -44,9 +44,9 @@ AccessContext.prototype.errorCode = function(accError) {
         code = 401; /* */ break;
     case 'E12': code = 412; /* */ break;
     case 'E20': case 'E21': case 'E22': case 'E23': case 'E24': case 'E25':
-        code = 460; /* */ break;
+        code = 401; /* */ break;
     case 'E30': case 'E31': case 'E32':
-        code = 461; /* */ break;
+        code = 401; /* */ break;
     }
     return code;
 }

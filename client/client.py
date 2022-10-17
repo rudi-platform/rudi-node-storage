@@ -5,7 +5,7 @@ import json
 import time
 import sys, os
 import logging
-import jwt # pip PyJWT
+import jwt # pip PyJWT ; pip privex-pyjwt
 import base64
 
 # openssl req -x509 -nodes -newkey rsa:2048 -keyout private_key.pem -out public_key.pem -subj "/CN=rudiadmin.aqmo.org"
@@ -74,7 +74,12 @@ class User(object):
             return { "Cookie": self.cookie }
         elif self.privkeyfile:
             if not group: group = self.group
-            encoded_jwt = jwt.encode(self.jwtData(group), self.privkeyfile, algorithm="RS256")
+            encoded_jwt = 'None'
+            kf = bytes(self.privkeyfile, 'latin1')
+            try: encoded_jwt = jwt.encode(self.jwtData(group), kf, algorithm="RS256")
+            except Exception as e: pass
+            try: encoded_jwt = jwt.encode(self.jwtData(group), kf, algorithm="EdDSA")
+            except Exception as e: raise(e)
             return { "Cookie": "rudi.media.auth=" + encoded_jwt }
         elif self.password:
             return { r'Authorization' : 'Basic %s' % (self.password) }
@@ -335,7 +340,7 @@ def main():
         print(r'--------------- utilisateur admin poste sans commit: succès -----------' )
         mcAdmin.post('2b67bfd7-b7a2-40f8-bba0-56abbbbff054', 'zoom_amd64.deb')
 
-def getCookie(pkey = r'./keys/rudimanager.pem', login='rudiconsole', uid = '1000', host = r'localhost', port = 3201, https = False, prefix = r'/media'):
+def getCookie(pkey = r'adminpriv.pem', login='rudiconsole', uid = '1000', host = r'localhost', port = 3202, https = False, prefix = r''):
     rudimanager = User(r'rudimanager', privkeyfile = pkey)
     rudiconsole = User(login, uid)
     rudiconsole.setGroup('producer')

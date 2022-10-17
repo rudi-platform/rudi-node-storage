@@ -371,7 +371,7 @@ AclDB.prototype.findIdsFromJwt = function (value) {
         const algo = jwt['header']['alg'];
         let digest = algo ? jwti.jwtAlgToDigestAlgo(algo) : 'SHA256';
         this.debug(`Digest: ${algo} ${digest}`);
-        if (algo == 'EdDSA' && digest == 'SHA512') digest = null;
+        if (algo == 'EdDSA') digest = null;
 
         aclStatus = this.findUser(uname, gname);
         if (aclStatus.accError) return aclStatus;
@@ -382,7 +382,8 @@ AclDB.prototype.findIdsFromJwt = function (value) {
         let validated = false;
         for (ky in user.keys) {
             const pubkey = user.keys[ky];
-            const jwtOk = jcrypt.atomicVerify(pubkey, rawJwt[0]+'.'+rawJwt[1], rawJwt[2], digest, 'base64url');
+            //const jwtOk = jcrypt.atomicVerify(pubkey, rawJwt[0]+'.'+rawJwt[1], rawJwt[2], digest, 'base64url');
+            const jwtOk = jcrypt.verifyToken(pubkey, jwt);
             if (jwtOk) { validated = true; break; }
         }
         if (validated) {

@@ -387,13 +387,14 @@ HttpService.prototype.forgeUserToken = function(req, res) {
             this.service.sendAndClose(res, 400, '{"status":"error", "msg":"missing user_id"}'); return;
         }
         if (!('user_name' in userDesc)) {
-            userDesc.group_name = null;
             this.service.sendAndClose(res, 400, '{"status":"error", "msg":"missing user_name"}'); return;
         }
+        if (!('group_name' in userDesc)) userDesc.group_name = null;
         const jwt = this.service.ac.forgeJwt(this.aclStatus, userDesc.user_id, userDesc.user_name, userDesc.group_name);
         if (!jwt) return;
         else {
             this.service.syslog.info('forged token for '+userDesc.user_name+':'+(userDesc.group_name?userDesc.group_name:'-'), 'core');
+            res.setHeader('cookie', 'rudi.media.auth='+jwt);
             res.status(200).send({status: 'OK', token: jwt});
         };
     }.bind({service:this, aclStatus:aclStatus}));
