@@ -87,16 +87,15 @@ function User(acldb, name, userDesc) {
             this.privkey = jcrypt.readPrivatePemKeyFile(userDesc[3]);
             this.acldb.debug(`Private key setup for ${this.name}`);
         } catch (err) {}
-        let pubkey = null;
+        let pubkey;
         try {
+            pubkey = jcrypt.readPublicPemKeyFile(userDesc[3]);
+            this.acldb.debug(`Public key setup for ${this.name}`);
+        } catch (err) {
             const keyFile = fs.readFileSync(userDesc[3], 'ascii');
             const pbkey = sshpk.parseKey(keyFile);
             pubkey = pbkey.toBuffer('pkcs8');
             this.acldb.debug(`Public SSH key setup for ${this.name}: ${pbkey.type} ${pbkey.comment}`);
-        } catch (err) {}
-        if (!pubkey) {
-            pubkey = jcrypt.readPublicPemKeyFile(userDesc[3]);
-            this.acldb.debug(`Public key setup for ${this.name}`);
         }
         if (pubkey) this.keys.push(pubkey);
     }
