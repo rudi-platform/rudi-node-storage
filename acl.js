@@ -383,8 +383,10 @@ AclDB.prototype.findIdsFromJwt = function (value) {
         for (ky in user.keys) {
             const pubkey = user.keys[ky];
             //const jwtOk = jcrypt.atomicVerify(pubkey, rawJwt[0]+'.'+rawJwt[1], rawJwt[2], digest, 'base64url');
-            const jwtOk = jcrypt.verifyToken(pubkey, jwt);
-            if (jwtOk) { validated = true; break; }
+            // if (jwtOk) { validated = true; break; }
+            try { jwti.verifyToken(pubkey, jwt); }
+            catch(err) { this.debug(`jwt error: ${err}`); continue; }
+            validated = true; break;
         }
         if (validated) {
             let extraNotice = '';
