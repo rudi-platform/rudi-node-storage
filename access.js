@@ -6,11 +6,9 @@
  */
 
 const util = require('util');
-const crypto = require('crypto');
 const uuid = require('uuid');
 const logger = require('@aqmo.org/rudi_logger');
-const jcrypt = require('./jwti/dist/crypt.js');
-const jwti = require('./jwti/dist/jwt.js');
+const jwtLib = require('./jwti');
 const AclDB = require('./acl.js');
 
 /**
@@ -96,7 +94,7 @@ function AccessControl(cfg, slogger) {
     cfg.media_priv_keyfile = cfg.media_priv_keyfile !== undefined  ? cfg.media_priv_keyfile : './mediapriv.pem';
     try {
         this.authorizedVersion = JSON.parse(JSON.stringify(cfg.authorized_version)); // json -> deep-copy
-        this.privkey = jcrypt.readPrivateKeyFile(cfg.media_priv_keyfile);
+        this.privkey = jwtLib.readPrivateKeyFile(cfg.media_priv_keyfile);
         this.acldb = new AclDB(cfg, slogger)
         this.systemAcl = this.acldb.newAcl(cfg.system_acl);
     }

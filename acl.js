@@ -10,8 +10,7 @@ const util = require('util');
 const crypto = require('crypto');
 const uuid = require('uuid');
 const logger = require('@aqmo.org/rudi_logger');
-const jcrypt = require('./jwti/dist/crypt.js');
-const jwti = require('./jwti/dist/jwt.js');
+const jwtLib = require('./jwti');
 const cycle = require('./cycle.js');
 const sshpk = require('sshpk');
 const fs = require('fs');
@@ -84,12 +83,12 @@ function User(acldb, name, userDesc) {
     this.keys = [];
     if (userDesc[3] && userDesc[3] != '') {
         try {
-            this.privkey = jcrypt.readPrivateKeyFile(userDesc[3]);
+            this.privkey = jwtLib.readPrivateKeyFile(userDesc[3]);
             this.acldb.debug(`Private key setup for ${this.name}`);
         } catch (err) {}
         let pubkey;
         try {
-            pubkey = jcrypt.readPublicKeyFile(userDesc[3]);
+            pubkey = jwtLib.readPublicKeyFile(userDesc[3]);
             this.acldb.debug(`Public key setup for ${this.name}`);
         } catch (err) {
             const keyFile = fs.readFileSync(userDesc[3], 'ascii');
@@ -122,7 +121,7 @@ User.prototype.forgeDelegatedUserJwt = function(duser, dgroup, attributes, durat
     if (attributes === undefined || !attributes) attributes = {}
     const jti = uuid.v4();
     const xattr = Object.assign({}, { "name":duser.name, "uuid":duser.uuid, "group":dgroup.name }, attributes);
-    const token = jwti.forgeToken(this.privkey,
+    const token = jwtLib.forgeToken(this.privkey,
                                 { typ: 'jwt' },
                                 { "jti": jti, "client_id": this.name, "sub":"delegate",
                                   "user_id": duser.id, "group_id": dgroup.id,
@@ -353,11 +352,10 @@ AclDB.prototype.findIdsFromJwt = function (value) {
     let aclStatus = null;
     try {
         const valueStr = `${value}`;
-        if(!valueStr.match(jwti.REGEX_JWT_B64URL)) return this.newAclError('E20');
-        const rawJwt = valueStr.split('.');
+        if(!valueStr.match(jwtLib.getJwtRegex())) return this.newAclError('E20');
         let jwt
         try{
-            jwt = jwti.tokenStringToJwtObject(value);
+            jwt = jwtLib.tokenStringToJwtObject(value);
         } catch(e) {
             return this.newAclError('E21');
         }
@@ -381,14 +379,15 @@ AclDB.prototype.findIdsFromJwt = function (value) {
         let validated = false;
         for (ky in user.keys) {
             const pubkey = user.keys[ky];
-            //const jwtOk = jcrypt.atomicVerify(pubkey, rawJwt[0]+'.'+rawJwt[1], rawJwt[2], digest, 'base64url');
-            // if (jwtOk) { validated = true; break; }
             try {
-                jwti.verifyToken(pubkey, jwt);
+                validated = jwtLib.verifyToken(pubkey, jwt);
+                this.debug(`pubKey validated the JWT: ${pubkey}`)
+                break;
             } catch(err) {
-                this.debug(`jwt error: ${err}`); continue;
+                this.debug(`jwt error: ${err}`);
+                this.debug(`pubKey didn't validated the JWT: ${pubkey}`)
+                continue;
             }
-            validated = true; break;
         }
         if (validated) {
             let extraNotice = '';
