@@ -84,12 +84,12 @@ function User(acldb, name, userDesc) {
     this.keys = [];
     if (userDesc[3] && userDesc[3] != '') {
         try {
-            this.privkey = jcrypt.readPrivatePemKeyFile(userDesc[3]);
+            this.privkey = jcrypt.readPrivateKeyFile(userDesc[3]);
             this.acldb.debug(`Private key setup for ${this.name}`);
         } catch (err) {}
         let pubkey;
         try {
-            pubkey = jcrypt.readPublicPemKeyFile(userDesc[3]);
+            pubkey = jcrypt.readPublicKeyFile(userDesc[3]);
             this.acldb.debug(`Public key setup for ${this.name}`);
         } catch (err) {
             const keyFile = fs.readFileSync(userDesc[3], 'ascii');

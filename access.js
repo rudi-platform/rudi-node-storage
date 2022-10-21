@@ -96,7 +96,7 @@ function AccessControl(cfg, slogger) {
     cfg.media_priv_keyfile = cfg.media_priv_keyfile !== undefined  ? cfg.media_priv_keyfile : './mediapriv.pem';
     try {
         this.authorizedVersion = JSON.parse(JSON.stringify(cfg.authorized_version)); // json -> deep-copy
-        this.privkey = jcrypt.readPrivatePemKeyFile(cfg.media_priv_keyfile);
+        this.privkey = jcrypt.readPrivateKeyFile(cfg.media_priv_keyfile);
         this.acldb = new AclDB(cfg, slogger)
         this.systemAcl = this.acldb.newAcl(cfg.system_acl);
     }
