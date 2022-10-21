@@ -117,7 +117,7 @@ User.prototype.accessMask = function(acl, group) {
     return access;
 }
 
-User.prototype.forgeDeletatedJwtUser = function(duser, dgroup, attributes, duration = 300) {
+User.prototype.forgeDelegatedUserJwt = function(duser, dgroup, attributes, duration = 300) {
     if (!this.privkey) throw Error(`No private key defined for "${this.name}"`);
     if (attributes === undefined || !attributes) attributes = {}
     const jti = uuid.v4();
@@ -343,7 +343,7 @@ AclDB.prototype.forgeJwtFor = function (sysid, name, gname = 'producer', attribu
     catch (error) { this.error(`Invalid user: ${error}`); return [ null, 'E30' ]; }
     try {
         const admin = this.systemUsers['admin'];
-        const token = admin.forgeDeletatedJwtUser(user, group, attributes);
+        const token = admin.forgeDelegatedUserJwt(user, group, attributes);
         return [ token, null ];
     }
     catch (error) { this.error(`Could not forge JWT: ${error}`); return [ null, 'E31' ]; }
@@ -352,25 +352,25 @@ AclDB.prototype.forgeJwtFor = function (sysid, name, gname = 'producer', attribu
 AclDB.prototype.findIdsFromJwt = function (value) {
     let aclStatus = null;
     try {
-        const rawJwt = value.split('.');
-        if ((typeof rawJwt != 'object') || rawJwt.length != 3) return this.newAclError('E20');
-        const jwt = jwti.tokenStringToJwtObject(value);
-        if (!jwt) return this.newAclError('E21');
+        const valueStr = `${value}`;
+        if(!valueStr.match(jwti.REGEX_JWT_B64URL)) return this.newAclError('E20');
+        const rawJwt = valueStr.split('.');
+        let jwt
+        try{
+            jwt = jwti.tokenStringToJwtObject(value);
+        } catch(e) {
+            return this.newAclError('E21');
+        }
         this.debug(`Decoded JWT: ${JSON.safeStringify(jwt)}`);
 
-        const gname = ('sub' in jwt['payload']) ? jwt['payload']['sub'] : '-';
-        const uname = ('client_id' in jwt['payload']) ? jwt['payload']['client_id'] : '-' ;
+        const gname = jwt.payload.sub || '-';
+        const uname = jwt.payload.client_id || '-' ;
 
         const nowepoch = Math.floor(+new Date() / 1000);
-        const expire = ('exp' in jwt['payload']) ? jwt['payload']['exp'] : 0 ;
-        const nbf = ('nbf' in jwt['payload']) ? jwt['payload']['nbf'] : 0 ;
-        if (expire && (nowepoch > expire))   return new AclStatus(uname, gname, null, 'E23');
+        const expire = jwt.payload.exp || 0;
+        const nbf = jwt.payload.nbf || 0;
+        if (nowepoch > expire)   return new AclStatus(uname, gname, null, 'E23');
         else if (expire && (nowepoch < nbf)) return new AclStatus(uname, gname, null, 'E24');
-
-        const algo = jwt['header']['alg'];
-        let digest = algo ? jwti.jwtAlgToDigestAlgo(algo) : 'SHA256';
-        this.debug(`Digest: ${algo} ${digest}`);
-        if (algo == 'EdDSA') digest = null;
 
         aclStatus = this.findUser(uname, gname);
         if (aclStatus.accError) return aclStatus;
@@ -383,17 +383,20 @@ AclDB.prototype.findIdsFromJwt = function (value) {
             const pubkey = user.keys[ky];
             //const jwtOk = jcrypt.atomicVerify(pubkey, rawJwt[0]+'.'+rawJwt[1], rawJwt[2], digest, 'base64url');
             // if (jwtOk) { validated = true; break; }
-            try { jwti.verifyToken(pubkey, jwt); }
-            catch(err) { this.debug(`jwt error: ${err}`); continue; }
+            try {
+                jwti.verifyToken(pubkey, jwt);
+            } catch(err) {
+                this.debug(`jwt error: ${err}`); continue;
+            }
             validated = true; break;
         }
         if (validated) {
             let extraNotice = '';
             if (group.name == 'delegate') {
-                extraNotice = ' by '+user.name;
-                this.debug("JWT delegation"+extraNotice);
-                const dgname = ('group_id' in jwt['payload']) ? jwt['payload']['group_id'] : '-';
-                const duname = ('user_id' in jwt['payload']) ? jwt['payload']['user_id'] : '-' ;
+                extraNotice = ' by '+ user.name;
+                this.debug("JWT delegation" + extraNotice);
+                const dgname = jwt.payload.group_id || '-';
+                const duname = jwt.payload.user_id || '-' ;
                 aclStatus = this.findUser(duname, dgname);
                 if (aclStatus.accError) return aclStatus;
                 user = aclStatus.user;
