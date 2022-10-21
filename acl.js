@@ -11,6 +11,8 @@ const crypto = require('crypto');
 const uuid = require('uuid');
 const logger = require('@aqmo.org/rudi_logger');
 const jwtLib = require('./jwti');
+const { REGEX_JWT_B64URL } = require('./jwti/dist/jwt');
+
 const cycle = require('./cycle.js');
 const sshpk = require('sshpk');
 const fs = require('fs');
@@ -352,7 +354,7 @@ AclDB.prototype.findIdsFromJwt = function (value) {
     let aclStatus = null;
     try {
         const valueStr = `${value}`;
-        if(!valueStr.match(jwtLib.getJwtRegex())) return this.newAclError('E20');
+        if(!valueStr.match(REGEX_JWT_B64URL)) return this.newAclError('E20');
         let jwt
         try{
             jwt = jwtLib.tokenStringToJwtObject(value);
