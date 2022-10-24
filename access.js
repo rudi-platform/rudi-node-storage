@@ -8,7 +8,7 @@
 const util = require('util');
 const uuid = require('uuid');
 const logger = require('@aqmo.org/rudi_logger');
-const jwtLib = require('./jwti');
+const jwtLib = require('@aqmo.org/jwt_lib');
 const AclDB = require('./acl.js');
 
 /**

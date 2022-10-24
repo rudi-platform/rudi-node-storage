@@ -10,8 +10,7 @@ const util = require('util');
 const crypto = require('crypto');
 const uuid = require('uuid');
 const logger = require('@aqmo.org/rudi_logger');
-const jwtLib = require('./jwti');
-const { REGEX_JWT_B64URL } = require('./jwti/dist/jwt');
+const jwtLib = require('@aqmo.org/jwt_lib');
 
 const cycle = require('./cycle.js');
 const sshpk = require('sshpk');
@@ -354,7 +353,7 @@ AclDB.prototype.findIdsFromJwt = function (value) {
     let aclStatus = null;
     try {
         const valueStr = `${value}`;
-        if(!valueStr.match(REGEX_JWT_B64URL)) return this.newAclError('E20');
+        if(!valueStr.match(jwtLib.getJwtRegex())) return this.newAclError('E20');
         let jwt
         try{
             jwt = jwtLib.tokenStringToJwtObject(value);
@@ -363,12 +362,13 @@ AclDB.prototype.findIdsFromJwt = function (value) {
         }
         this.debug(`Decoded JWT: ${JSON.safeStringify(jwt)}`);
 
-        const gname = jwt.payload.sub || '-';
-        const uname = jwt.payload.client_id || '-' ;
+        const jwtPayload = jwt.payload
+        const gname = jwtPaylod.sub || '-';
+        const uname = jwtPaylod.client_id || '-' ;
 
         const nowepoch = Math.floor(+new Date() / 1000);
-        const expire = jwt.payload.exp || 0;
-        const nbf = jwt.payload.nbf || 0;
+        const expire = jwtPaylod.exp || 0;
+        const nbf = jwtPaylod.nbf || 0;
         if (nowepoch > expire)   return new AclStatus(uname, gname, null, 'E23');
         else if (expire && (nowepoch < nbf)) return new AclStatus(uname, gname, null, 'E24');
 
@@ -396,8 +396,8 @@ AclDB.prototype.findIdsFromJwt = function (value) {
             if (group.name == 'delegate') {
                 extraNotice = ' by '+ user.name;
                 this.debug("JWT delegation" + extraNotice);
-                const dgname = jwt.payload.group_id || '-';
-                const duname = jwt.payload.user_id || '-' ;
+                const dgname = jwtPaylod.group_id || '-';
+                const duname = jwtPaylod.user_id || '-' ;
                 aclStatus = this.findUser(duname, dgname);
                 if (aclStatus.accError) return aclStatus;
                 user = aclStatus.user;
