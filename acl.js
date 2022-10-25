@@ -363,12 +363,12 @@ AclDB.prototype.findIdsFromJwt = function (value) {
         this.debug(`Decoded JWT: ${JSON.safeStringify(jwt)}`);
 
         const jwtPayload = jwt.payload
-        const gname = jwtPaylod.sub || '-';
-        const uname = jwtPaylod.client_id || '-' ;
+        const gname = jwtPayload.sub || '-';
+        const uname = jwtPayload.client_id || '-' ;
 
         const nowepoch = Math.floor(+new Date() / 1000);
-        const expire = jwtPaylod.exp || 0;
-        const nbf = jwtPaylod.nbf || 0;
+        const expire = jwtPayload.exp || 0;
+        const nbf = jwtPayload.nbf || 0;
         if (nowepoch > expire)   return new AclStatus(uname, gname, null, 'E23');
         else if (expire && (nowepoch < nbf)) return new AclStatus(uname, gname, null, 'E24');
 
@@ -396,8 +396,8 @@ AclDB.prototype.findIdsFromJwt = function (value) {
             if (group.name == 'delegate') {
                 extraNotice = ' by '+ user.name;
                 this.debug("JWT delegation" + extraNotice);
-                const dgname = jwtPaylod.group_id || '-';
-                const duname = jwtPaylod.user_id || '-' ;
+                const dgname = jwtPayload.group_id || '-';
+                const duname = jwtPayload.user_id || '-' ;
                 aclStatus = this.findUser(duname, dgname);
                 if (aclStatus.accError) return aclStatus;
                 user = aclStatus.user;
