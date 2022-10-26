@@ -352,8 +352,8 @@ AclDB.prototype.forgeJwtFor = function (sysid, name, gname = 'producer', attribu
 AclDB.prototype.findIdsFromJwt = function (value) {
     let aclStatus = null;
     try {
-        const valueStr = `${value}`;
-        if(!valueStr.match(jwtLib.getJwtRegex())) return this.newAclError('E20');
+        const jwtStr = `${value}`;
+        if(!jwtStr.match(jwtLib.getJwtRegex())) return this.newAclError('E20');
         let jwt
         try{
             jwt = jwtLib.tokenStringToJwtObject(value);
@@ -382,7 +382,7 @@ AclDB.prototype.findIdsFromJwt = function (value) {
         for (ky in user.keys) {
             const pubkey = user.keys[ky];
             try {
-                validated = !!jwtLib.verifyToken(pubkey, jwt);
+                validated = !!jwtLib.verifyToken(pubkey, jwtStr);
                 this.debug(`pubKey validated the JWT: ${pubkey}`)
                 break;
             } catch(err) {
