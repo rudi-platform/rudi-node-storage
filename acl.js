@@ -85,17 +85,17 @@ function User(acldb, name, userDesc) {
     if (userDesc[3] && userDesc[3] != '') {
         try {
             this.privkey = jwtLib.readPrivateKeyFile(userDesc[3]);
-            this.acldb.debug(`Private key setup for ${this.name}`);
-        } catch (err) {}
+            this.acldb.debug(`Private key setup for '${this.name}'`);
+        } catch (err) {
+            this.acldb.debug(`Couldn't read private key '${userDesc[3]}'`);
+        }
         let pubkey;
         try {
+            const pubKeyPem = fs.readFileSync(userDesc[3]);
             pubkey = jwtLib.readPublicKeyFile(userDesc[3]);
-            this.acldb.debug(`Public key setup for ${this.name}`);
+            this.acldb.debug(`Public key setup for '${this.name}':\n${pubKeyPem}`);
         } catch (err) {
-            const keyFile = fs.readFileSync(userDesc[3], 'ascii');
-            const pbkey = sshpk.parseKey(keyFile);
-            pubkey = pbkey.toBuffer('pkcs8');
-            this.acldb.debug(`Public SSH key setup for ${this.name}: ${pbkey.type} ${pbkey.comment}`);
+            this.acldb.debug(`Couldn't read public key '${userDesc[3]}'`);
         }
         if (pubkey) this.keys.push(pubkey);
     }
@@ -113,7 +113,7 @@ User.prototype.validGroup = function(gname) {
 
 User.prototype.accessMask = function(acl, group) {
     const access = acl.access(this, group);
-    this.acldb.debug(`Access mask computed: ${this.name}:${group.name} ${access}`);
+    // this.acldb.debug(`Access mask computed: ${this.name}:${group.name} ${access}`);
     return access;
 }
 
@@ -366,7 +366,7 @@ AclDB.prototype.findIdsFromJwt = function (value) {
         const gname = jwtPayload.sub || '-';
         const uname = jwtPayload.client_id || '-' ;
 
-        const nowepoch = Math.floor(+new Date() / 1000);
+        const nowepoch = Math.floor(new Date().getTime / 1000);
         const expire = jwtPayload.exp || 0;
         const nbf = jwtPayload.nbf || 0;
         if (nowepoch > expire)   return new AclStatus(uname, gname, null, 'E23');
@@ -382,7 +382,7 @@ AclDB.prototype.findIdsFromJwt = function (value) {
         for (ky in user.keys) {
             const pubkey = user.keys[ky];
             try {
-                validated = jwtLib.verifyToken(pubkey, jwt);
+                validated = !!jwtLib.verifyToken(pubkey, jwt);
                 this.debug(`pubKey validated the JWT: ${pubkey}`)
                 break;
             } catch(err) {
