@@ -4,15 +4,16 @@
  * @author: Laurent Morin
  * @version: 1.0.0
  */
-const fs = require('fs');
-const util = require('util');
-const crypto = require('crypto');
-const { v4: uuidv4 } = require('uuid');
-const butils = require('./basicutils.js');
+// const util = require('util');
+const fs = require("fs");
+const crypto = require("crypto");
+const { v4: uuidv4 } = require("uuid");
+const butils = require("./basicutils.js");
 
+/* eslint-disable no-multi-spaces */
 /**
  * Represents a basic media entry.
- * @class 
+ * @class
  *
  * @classdesc The media descriptor, contains all related information.
  *  The media entry is constructed with the following format:
@@ -38,15 +39,15 @@ function BasicFileEntry(metadata, filecontent, zone, aclStatus, filename, uuid, 
         this.date      = metadata.access_date; delete metadata.access_date;
         this.zone      = zone;
         this.aclStatus = aclStatus;
-        if ('media_name' in metadata)  { this.filename = metadata.media_name; delete metadata.media_name; }
-        else                             this.filename = 'media';
-        if ('file_type'  in metadata)  { this.mimetype = metadata.file_type;  delete metadata.file_type; }
+        if ("media_name" in metadata)  { this.filename = metadata.media_name; delete metadata.media_name; }
+        else                             this.filename = "media";
+        if ("file_type"  in metadata)  { this.mimetype = metadata.file_type;  delete metadata.file_type; }
         else                             this.mimetype = butils.mimeFromContent(filecontent);
-        if ('charset'    in metadata)  { this.encoding = metadata.charset;    delete metadata.charset; }
+        if ("charset"    in metadata)  { this.encoding = metadata.charset;    delete metadata.charset; }
         else                             this.encoding = butils.charsetFromContent(filecontent);
-        if ('file_size'  in metadata)  { this.size     = metadata.file_size;  delete metadata.file_size; }
+        if ("file_size"  in metadata)  { this.size     = metadata.file_size;  delete metadata.file_size; }
         else                             this.size     = filecontent.length;
-        this.md5 = crypto.createHash('md5').update(filecontent).digest('hex');
+        this.md5 = crypto.createHash("md5").update(filecontent).digest("hex");
         this.metadata = metadata;
     }
     else {
@@ -60,14 +61,15 @@ function BasicFileEntry(metadata, filecontent, zone, aclStatus, filename, uuid, 
         this.md5       = md5;
         this.date      = date;
     }
-}
+};
+/* eslint-enable no-multi-spaces */
 
 /**
  */
 BasicFileEntry.prototype.getStorageName = function() {
     if (this.abspath) return this.filename;
-    else return this.uuid + '_' + this.filename;
-}
+    else return this.uuid + "_" + this.filename;
+};
 
 /**
  * Generate the CSV line for the media.
@@ -75,10 +77,10 @@ BasicFileEntry.prototype.getStorageName = function() {
  * @returns {string}              - The CSV line.
  */
 BasicFileEntry.prototype.getCSVline = function() {
-    const filetype = this.filename +': '+ this.mimetype +'; '+ this.encoding;
-    const s = ';';
-    return '' + this.md5 +s+ this.uuid +s+ filetype +s+ (this.date/1000) +s+ this.size;
-}
+    const filetype = this.filename +": "+ this.mimetype +"; "+ this.encoding;
+    const s = ";";
+    return "" + this.md5 +s+ this.uuid +s+ filetype +s+ (this.date/1000) +s+ this.size;
+};
 
 /**
  * Generate a unique connector ID for the media.
@@ -91,22 +93,22 @@ BasicFileEntry.prototype.generateFileId = function() {
         count: 0, access: [], cdate:Date(),
         zone:this.zone.name, source: this.zone.getPathFromConnector(this),
         filename: this.filename,
-        type:this.mimetype        
+        type:this.mimetype
     };
-}
+};
 
 BasicFileEntry.prototype.clear = function(staged) {
     this.zone.commitClear(this);
-    staged.process('File ['+this.uuid+']:'+this.filename+' marked not confirmed');
-}
+    staged.process("File ["+this.uuid+"]:"+this.filename+" marked not confirmed");
+};
 BasicFileEntry.prototype.commit = function(staged) {
     const path = this.zone.commitPath(this);
-    staged.process('File ['+this.uuid+']:'+path+' commited');
-}
+    staged.process("File ["+this.uuid+"]:"+path+" commited");
+};
 BasicFileEntry.prototype.destroy = function(staged) {
     this.zone.destroyMedia(this, staged);
-    if (staged) staged.process('File ['+this.uuid+']:'+this.filename+' destroyed');
-}
+    if (staged) staged.process("File ["+this.uuid+"]:"+this.filename+" destroyed");
+};
 
 /**
  */
@@ -116,9 +118,9 @@ BasicFileEntry.prototype.toJson = function() {
         context: this.aclStatus.context.toJson(),
         filename: this.filename, mimetype:this.mimetype, encoding:this.encoding,
         md5: this.md5, size: this.size, date: this.date,
-        basefile:this.getStorageName(),
+        basefile:this.getStorageName()
     };
-}
+};
 
 /**
  * Generate the Json Schema for a *file* with the proper registering URL.
@@ -183,7 +185,7 @@ BasicFileEntry.fileSchema = function(contextRef, metaRef) {
             "mimetype"
         ]
     };
-}
+};
 
 /**
  * Load the media content.
@@ -194,19 +196,19 @@ BasicFileEntry.fileSchema = function(contextRef, metaRef) {
  *                                 Returns the content, then name, and the mime type.
  */
 BasicFileEntry.prototype.getFile = function(idesc, none, done) {
-    if (!('source' in idesc)) {
-        if (none) none('loading media: source missing in context', 404);
+    if (!("source" in idesc)) {
+        if (none) none("loading media: source missing in context", 404);
         return;
     }
-    fs.readFile(idesc.source, { flag:'r'}, function(err, data) {
+    fs.readFile(idesc.source, { flag:"r"}, function(err, data) {
         if (err) {
-            console.error('Error: critical failure: could not load '+idesc.source);
-            if (none) none('loading media: file error', 500);
+            console.error("Error: critical failure: could not load "+idesc.source);
+            if (none) none("loading media: file error", 500);
             return;
         }
         if (done) done(data, idesc.filename, idesc.type);
     });
-}
+};
 
 /**
  * Check the media content.
@@ -218,13 +220,13 @@ BasicFileEntry.prototype.getFile = function(idesc, none, done) {
  */
 BasicFileEntry.prototype.getRealMd5 = function(none, done) {
     const source = this.zone.getPathFromConnector(this);
-    fs.readFile(source, { flag:'r'}, function(err, data) {
+    fs.readFile(source, { flag:"r"}, function(err, data) {
         if (err) {
-            console.error('Error: critical failure: could not load '+source);
-            if (none) none('loading media: file error', 500);
+            console.error("Error: critical failure: could not load "+source);
+            if (none) none("loading media: file error", 500);
             return;
         }
-        const hash = crypto.createHash('md5').update(data).digest('hex');
+        const hash = crypto.createHash("md5").update(data).digest("hex");
         const previousHash = this.entry.md5;
         if (hash != previousHash) {
             this.entry.md5 = hash;
@@ -232,6 +234,6 @@ BasicFileEntry.prototype.getRealMd5 = function(none, done) {
         }
         if (done) done(hash, previousHash, this.entry.size);
     }.bind({entry:this}));
-}
+};
 
 module.exports = BasicFileEntry;

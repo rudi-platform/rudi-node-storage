@@ -2,3 +2,8 @@ package-lock.json
 keys
 *.pem
 .vscode
+/node_modules
+/_logs
+/media
+/_media
+*.pyc

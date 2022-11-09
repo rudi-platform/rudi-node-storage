@@ -4,16 +4,17 @@
  * @author: Laurent Morin
  * @version: 1.0.0
  */
-const util = require('util');
-const crypto = require('crypto');
-const http = require('http');
-const https = require('https');
-const { URL } = require('url');
-const { v4: uuidv4 } = require('uuid');
+// const util = require('util');
+const crypto = require("crypto");
+const http = require("http");
+const https = require("https");
+const { URL } = require("url");
+const { v4: uuidv4 } = require("uuid");
 
+/* eslint-disable no-multi-spaces */
 /**
  * Represents a basic URL entry.
- * @class 
+ * @class
  *
  *  The complete meta-data can also be provided to the constructor.
  *
@@ -33,9 +34,9 @@ function BasicUrlEntry(metadata, zone, aclStatus, name, uuid, url, date, expire)
         this.zone      = zone;
         this.aclStatus = aclStatus;
         this.url       = metadata.url; delete metadata.url;
-        if ('media_name'  in metadata)  { this.filename = metadata.media_name; delete metadata.media_name; }
-        else                              this.filename = 'media';
-        if ('expire_date' in metadata)  { this.expire   = new Date(parseInt(metadata.expire_date)*1000); delete metadata.expire_date; }
+        if ("media_name"  in metadata)  { this.filename = metadata.media_name; delete metadata.media_name; }
+        else                              this.filename = "media";
+        if ("expire_date" in metadata)  { this.expire   = new Date(parseInt(metadata.expire_date)*1000); delete metadata.expire_date; }
         else                              this.expire   = 0;
         this.metadata = metadata;
     }
@@ -45,19 +46,20 @@ function BasicUrlEntry(metadata, zone, aclStatus, name, uuid, url, date, expire)
         this.name      = name;
         this.uuid      = uuid;
         this.url       = url;
-        this.mimetype  = 'text/uri-list';
-        this.encoding  = 'charset=utf-8';
+        this.mimetype  = "text/uri-list";
+        this.encoding  = "charset=utf-8";
         this.date      = date;
         this.expire    = expire;
-        this.md5       = '-';
+        this.md5       = "-";
     }
-}
+};
+/* eslint-enable no-multi-spaces */
 
 /**
  */
 BasicUrlEntry.prototype.getStorageName = function() {
-    return '#' + this.url;
-}
+    return "#" + this.url;
+};
 
 /**
  * Generate the CSV line for the media.
@@ -65,12 +67,12 @@ BasicUrlEntry.prototype.getStorageName = function() {
  * @returns {string}              - The CSV line.
  */
 BasicUrlEntry.prototype.getCSVline = function() {
-    const filetype = this.name +': '+ this.mimetype +'; '+ this.encoding;
+    const filetype = this.name +": "+ this.mimetype +"; "+ this.encoding;
     const d = this.date.valueOf();
     const e = this.expire.valueOf();
-    const s = ';';
-    return '' + this.url +s+ this.uuid +s+ filetype +s+ (d?d/1000:0) +s+ (e?e/1000:0);
-}
+    const s = ";";
+    return "" + this.url +s+ this.uuid +s+ filetype +s+ (d?d/1000:0) +s+ (e?e/1000:0);
+};
 
 /**
  * Generate a unique connector ID for the media.
@@ -84,18 +86,18 @@ BasicUrlEntry.prototype.generateFileId = function() {
         zone:this.zone.name, source: this.zone.getPathFromConnector(this),
         name: this.name
     };
-}
+};
 
 BasicUrlEntry.prototype.clear = function(staged) {
-    staged.process('URL ['+this.uuid+']:'+this.url+' marked not confirmed');
-}
+    staged.process("URL ["+this.uuid+"]:"+this.url+" marked not confirmed");
+};
 BasicUrlEntry.prototype.commit = function(staged) {
     const path = this.zone.getPathFromConnector(this);
-    staged.process('URL ['+this.uuid+']:'+path+' commited');
-}
+    staged.process("URL ["+this.uuid+"]:"+path+" commited");
+};
 BasicUrlEntry.prototype.destroy = function(staged) {
-    if (staged) staged.process('URL ['+this.uuid+']:'+this.url+' destroyed');
-}
+    if (staged) staged.process("URL ["+this.uuid+"]:"+this.url+" destroyed");
+};
 
 /**
  */
@@ -105,9 +107,9 @@ BasicUrlEntry.prototype.toJson = function() {
         context: this.aclStatus.context.toJson(),
         url: this.url, mimetype:this.mimetype, encoding:this.encoding,
         name: this.name, date: this.date,
-        basefile:this.getStorageName(),
+        basefile:this.getStorageName()
     };
-}
+};
 
 /**
  * Generate the Json Schema for a *file* with the proper registering URL.
@@ -174,7 +176,7 @@ BasicUrlEntry.urlSchema = function(contextRef, metaRef) {
             "url"
         ]
     };
-}
+};
 
 /**
  * Load the media content.
@@ -186,51 +188,51 @@ BasicUrlEntry.urlSchema = function(contextRef, metaRef) {
  *                                 Returns an array with the content, then name, and the mime type.
  */
 BasicUrlEntry.prototype.getFile = function(idesc, none, done) {
-    if (!('url' in idesc)) {
-        if (none) none('loading URL media: url missing in context', 400);
+    if (!("url" in idesc)) {
+        if (none) none("loading URL media: url missing in context", 400);
         return;
     }
     const source = idesc.url;
 
     try {
         const sourceUrl = new URL(source);
-        switch(sourceUrl.protocol) {
-        case 'https:': {
+        switch (sourceUrl.protocol) {
+        case "https:": {
             https.get(sourceUrl.href, (res) => {
                 let data = "";
                 res.on("data", (chunk) => { data += chunk; });
                 res.on("end", () => {
-                    if (done) done(data, idesc.name, 'charset=binary');
+                    if (done) done(data, idesc.name, "charset=binary");
                 });
             }).on("error", (error) => {
-                console.error('Error: critical failure: could not load '+sourceUrl.href+': '+error);
-                if (none) none('loading media: file error', 500);
+                console.error("Error: critical failure: could not load "+sourceUrl.href+": "+error);
+                if (none) none("loading media: file error", 500);
                 return;
             });
             break;
         }
-        case 'http:': {
+        case "http:": {
             http.get(sourceUrl.href, (res) => {
                 let data = "";
                 res.on("data", (chunk) => { data += chunk; });
                 res.on("end", () => {
-                    if (done) done(data, idesc.name, 'charset=binary');
+                    if (done) done(data, idesc.name, "charset=binary");
                 });
             }).on("error", (error) => {
-                console.error('Error: critical failure: could not load '+sourceUrl.href+': '+error);
-                if (none) none('loading media: file error', 500);
+                console.error("Error: critical failure: could not load "+sourceUrl.href+": "+error);
+                if (none) none("loading media: file error", 500);
                 return;
             });
             break;
         }
         default:
-            if (none) none('loading URL media: protocol not supported ('+sourceUrl.protocol+')', 400);
+            if (none) none("loading URL media: protocol not supported ("+sourceUrl.protocol+")", 400);
         }
     }
-    catch(e) {
-        if (none) none('loading URL media: content access error', 500);
+    catch (e) {
+        if (none) none("loading URL media: content access error", 500);
     }
-}
+};
 
 /**
  * Check the media content.
@@ -242,7 +244,7 @@ BasicUrlEntry.prototype.getFile = function(idesc, none, done) {
  */
 BasicUrlEntry.prototype.getRealMd5 = function(none, done) {
     return this.getFile(this, none, function(data, name, charset) {
-        const hash = crypto.createHash('md5').update(data).digest('hex');
+        const hash = crypto.createHash("md5").update(data).digest("hex");
         const previousHash = this.entry.md5;
         if (hash != previousHash) {
             this.entry.md5 = hash;
@@ -250,6 +252,6 @@ BasicUrlEntry.prototype.getRealMd5 = function(none, done) {
         }
         if (done) done(hash, previousHash, this.entry.size);
     }.bind({entry:this}));
-}
+};
 
 module.exports = BasicUrlEntry;

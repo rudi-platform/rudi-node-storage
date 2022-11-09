@@ -38,7 +38,7 @@ class User(object):
         self.cookie = None
         if privkeyfile:
             if os.path.exists(privkeyfile):
-                try: self.privkeyfile = open(privkeyfile, 'r').read(); print('[%s] Key loaded'%(self.name))
+                try: self.privkeyfile = open(privkeyfile, 'r').read(); print('[%s] Key loaded: %s'%(self.name, privkeyfile))
                 except Exception as e: pass
             else: raise Exception('private key not found: '+privkeyfile)
         elif password:
@@ -56,7 +56,7 @@ class User(object):
         offset = timedelta(seconds=5)
         #time.sleep(7)
         return {
-            r'exp': (now + offset).strftime('%s'),
+            r'exp': int((now + offset).strftime('%s')),
             r'jti': str(uuid.uuid4()),
             r'sub': group,
             r'client_id': self.name
@@ -77,8 +77,6 @@ class User(object):
             encoded_jwt = 'None'
             kf = bytes(self.privkeyfile, 'latin1')
             try: encoded_jwt = jwt.encode(self.jwtData(group), kf, algorithm="RS256")
-            except Exception as e: pass
-            try: encoded_jwt = jwt.encode(self.jwtData(group), kf, algorithm="EdDSA")
             except Exception as e: raise(e)
             return { "Cookie": "rudi.media.auth=" + encoded_jwt }
         elif self.password:
@@ -86,7 +84,7 @@ class User(object):
         else: return {}
 
 class MediaClient(object):
-    def __init__(self, user, host = "localhost", port = 3202, prefix = r'', https = False, verify = True):
+    def __init__(self, user = None, host = "localhost", port = 3202, prefix = r'', https = False, verify = True):
         self.user = user
         self.https = https
         self.host = host
@@ -136,7 +134,8 @@ class MediaClient(object):
         return self.rawConn(pu.scheme == 'https', pu.hostname, pu.port, ctype, pu.path, body, headers, cut=cut)
 
     def conn(self, ctype, path, body = None, headers = None, group = None, cut = True):
-        return self.rawConn(self.https, self.host, self.port, ctype, path, body, headers, self.user.authHeader(), cut = cut)
+        ah = self.user.authHeader() if self.user else {}
+        return self.rawConn(self.https, self.host, self.port, ctype, path, body, headers, ah, cut = cut)
 
     def cresult(self, conn, dump = True, raw = False):
         """ Basic parsing of the result
@@ -270,6 +269,12 @@ def main():
     rudiadmin = User(r'rudiadmin', password = base64.b64encode(r'sysadminisgreat!'.encode('utf-8')))
     admin = User(r'admin', password = base64.b64encode(r'sysadminisgreat!'.encode('utf-8')))
 
+    mcAnonymous = None
+    if True:
+        print(r'--------------- Client anonyme (teste le /) -----------' )
+        mcAnonymous = MediaClient(None, host,port,prefix)
+        time.sleep(1)
+
     mcManager = None
     if True:
         print(r'--------------- Création du client HTTP pour utilisateur rudimanager (teste le /) -----------' )
@@ -294,6 +299,16 @@ def main():
     if mcConsole and True:
         print(r'--------------- utilisateur console récupère une donnée: fonctionne -----------' )
         mcConsole.media('8d784a62-5e20-4412-a3be-48ef85c073ec', '_OO', method = 'Check')
+        time.sleep(3)
+
+    if mcConsole and True:
+        print(r'--------------- utilisateur console récupère une donnée: fonctionne -----------' )
+        mcConsole.media('8d784a62-5e20-4412-a3be-48ef85c073ec', '_OO', method = 'Check')
+        time.sleep(3)
+
+    if mcAnonymous and True:
+        print(r'--------------- utilisateur anonyme récupère une donnée: fonctionne -----------' )
+        mcAnonymous.media('8d784a62-5e20-4412-a3be-48ef85c073ec', '_OO', method = 'Check')
         time.sleep(3)
 
     if mcConsole and True:
