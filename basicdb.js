@@ -249,7 +249,7 @@ BasicFileDB.prototype.addEntry = function(metadata, aclStatus, filecontent, none
         metadata.access_date = new Date(metadata.access_date);
     }
     if (("file_size" in metadata) && (filecontent.length != metadata.file_size)) {
-        this.errorCtx("(ignored) inconsistent provided file size: "+size+" received: "+filecontent.length, "add_media", metadata.media_id, aclStatus);
+        this.errorCtx("(ignored) inconsistent provided file size: "+metadata.file_size+" received: "+filecontent.length, "add_media", metadata.media_id, aclStatus);
     }
 
     const zone = this.zone_db[this.default_zone];
