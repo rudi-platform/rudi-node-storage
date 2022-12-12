@@ -181,7 +181,9 @@ BasicZone.prototype.commitEntry = function(aclStatus, suid, none, done) {
         delete this.staging_db[suid];
         this.db[suid] = stg.entry;
         stg.entry.commit(stg);
-        done(stg);
+        this.saveZoneCSV(none, (path) => {
+            done(stg);
+        });
     }
 };
 /* eslint-enable no-multi-spaces */
@@ -199,7 +201,9 @@ BasicZone.prototype.deleteEntry = function(aclStatus, uuid, none, done) {
         const entry = this.db[uuid];
         delete this.this.db[uuid];
         entry.destroy();
-        done(entry);
+        this.saveZoneCSV(none, (path) => {
+            done(entry);
+        });
     }
 };
 
