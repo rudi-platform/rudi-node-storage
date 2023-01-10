@@ -199,7 +199,7 @@ BasicZone.prototype.deleteEntry = function(aclStatus, uuid, none, done) {
     }
     else {
         const entry = this.db[uuid];
-        delete this.this.db[uuid];
+        delete this.db[uuid];
         entry.destroy();
         this.saveZoneCSV(none, (path) => {
             done(entry);

@@ -304,13 +304,14 @@ BasicFileDB.prototype.mdelete = function(uuid, aclStatus, none, done) {
         return;
     }
     const entry = this.db[uuid];
+    const zone = entry.zone;
     const deleteDone = function(entry) {
         delete this.service.db[entry.uuid];
         this.service.debug("delete file: name="+entry.uuid);
         this.service.logEntry(zone, "delete_media", aclStatus, entry, none, done);
     }.bind({service:this});
 
-    entry.zone.deleteEntry(aclStatus, uuid, function(err, code) {
+    zone.deleteEntry(aclStatus, uuid, function(err, code) {
         this.service.errorCtx(err, "delete_media", uuid, aclStatus);
         if (none) none(err, code);
     }.bind({service:this}), deleteDone);
