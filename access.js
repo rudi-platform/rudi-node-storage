@@ -61,7 +61,7 @@ AccessContext.prototype.process = function(name, uuid, access, accError) {
     }
     const [ message, realm ] = this.acldb.errDesc(accError);
     const code = this.errorCode(accError);
-    const sev = accError ? logger.Severity.Error : logger.Severity.Notice;
+    const sev = accError ? logger.Severity.Error : logger.Severity.Informational;
     this.acldb.log(sev, "["+this.auth.userName+"]:"+this.opType+": "+message, this.errContext(code));
     if (accError) {
         this.sessionOpen = false;
@@ -107,6 +107,7 @@ function AccessControl(cfg, slogger) {
 };
 AccessControl.prototype.error   = function(message, context = null) { if (this.syslog) this.syslog.error(message, "ac", context); };
 AccessControl.prototype.debug   = function(message, context = null) { if (this.syslog) this.syslog.debug(message, "ac", context); };
+AccessControl.prototype.notice  = function(message, context = null) { if (this.syslog) this.syslog.notice(message, "ac", context); };
 
 /**
  * Extract the authentication information from an HTTP request.
@@ -213,7 +214,7 @@ AccessControl.prototype._readBasicAccessRights = function (header) {
                 }
                 if (password != null) {
                     aclStatus = this.acldb.findUser(login, group, password);
-                    this.debug(`login: ${aclStatus.uname}`);
+                    this.notice(`login: ${aclStatus.uname}@${aclStatus.gname}`);
                 }
                 else aclStatus = this.acldb.newAclError("E05");
             }
@@ -221,7 +222,7 @@ AccessControl.prototype._readBasicAccessRights = function (header) {
         else if (authType.toLowerCase() == "bearer") {
             this.debug(`bearer: ${b64auth}`);
             aclStatus = this._jwtAccessRights("rudi.media.auth", b64auth);
-            this.debug(`token: ${aclStatus.uname}:${aclStatus.gname}`);
+            this.notice(`token: ${aclStatus.uname}:${aclStatus.gname}`);
             if (!aclStatus) aclStatus = this.acldb.newAclError("E05");
         }
         else aclStatus = this.acldb.newAclError("E05");
