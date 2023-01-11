@@ -642,7 +642,7 @@ HttpService.prototype.media = function(req, res) {
     else if (accessMode == "Check") {
         this.db.check(reqUuid, aclStatus, function(err, code = 400) {
             HttpService.prototype.sendAndClose(this.res, code, "{\"status\":\"error\", \"msg\":\""+err+"\"}");
-        }.bind({res:res})), function(hash, previousHash, size) {
+        }.bind({res:res}), function(hash, previousHash, size) {
             if (hash != previousHash && previousHash != "-") {
                 this.syslog.error("Media changed on disk for uuid "+reqUuid+" hash="+hash+" previously="+previousHash, "core");
             }
