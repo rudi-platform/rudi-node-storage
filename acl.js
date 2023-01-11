@@ -93,7 +93,7 @@ function User(acldb, name, userDesc) {
             pubkey = jwtLib.readPublicKeyFile(keyfile);
             this.acldb.debug(`Public key setup for '${this.name}' from '${keyfile}'`);
         }
-        catch (err) { this.acldb.debug(`Couldn't read public key '${keyfile}'`); }
+        catch (err) { this.acldb.warning(`Couldn't read public key '${keyfile}'`); }
         if (pubkey) this.keys.push(pubkey);
     }
 }
@@ -127,7 +127,8 @@ User.prototype.forgeDelegatedUserJwt = function(duser, dgroup, attributes, durat
                                   "xattr": xattr
                                 },
                                 duration);
-    this.acldb.debug(`Access token forged by ${this.name}: ${duser.name}:${dgroup.name} = ${token} [${JSON.stringify(xattr)}]`);
+    this.acldb.notice(`Access token forged by ${this.name}: ${duser.name}:${dgroup.name}`);
+    this.acldb.debug(`Access token forged: ${token} [${JSON.stringify(xattr)}]`);
     return token;
 };
 /* eslint-enable indent */
@@ -155,7 +156,7 @@ User.prototype.checkPassword = function (input) {
         else if (pt == "5") hash = crypto.createHash("sha256");
         else if (pt == "6") hash = crypto.createHash("sha512");
         if (hash) {
-            data = hash.update(input, "utf-8");
+            const data = hash.update(input, "utf-8");
             input = data.digest("hex");
         }
     }
@@ -351,7 +352,7 @@ AclDB.prototype.forgeJwtFor = function (sysid, name, gname = "producer", attribu
             const [ id ] = idFromStr(name, sysid);
             if (id in this.usersByID) user = this.usersByID[id];
             else                      user = this.newUser(name, [ id, "", [ gname ], "" ]);
-            this.debug(`Forge deletation for ${name}:${gname} => ${id}:${sysid}`);
+            this.debug(`Forge delegation for ${name}:${gname} => ${id}:${sysid}`);
         }
         group = user.validGroup(gname);
     }

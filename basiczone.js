@@ -32,7 +32,7 @@ ZoneContext.prototype.process = function(name, uuid, access, accError) {
     this.auth.userId = uuid;
     this.auth.access = access;
     const [ message ] = this.acldb.errDesc(accError);
-    const sev = accError ? logger.Severity.Warning : logger.Severity.Notice;
+    const sev = accError ? logger.Severity.Warning : logger.Severity.Informational;
     this.acldb.log(sev, "["+this.auth.userName+"]:"+this.opType+": "+message, this.errContext(0));
 };
 ZoneContext.prototype.toJson = function() {
