@@ -37,8 +37,10 @@ AccessContext.prototype.errorCode = function(accError) {
     if (!accError) return 200;
     let code = 200;
     switch (accError) {
-    case "E01": case "E02": case "E03":
-    case "E05": code = 405; /* */ break;
+    case "E01": case "E02":
+        code = 401; /* */ break;
+    case "E03": case "E05":
+        code = 405; /* */ break;
     case "E06": case "E07": case "E08":
         code = 401; /* */ break;
     case "E12": code = 412; /* */ break;
@@ -199,12 +201,22 @@ AccessControl.prototype._readBasicAccessRights = function (header) {
         const authorization = header["authorization"];
         const [ authType, b64auth ] = (authorization.split(" ") || "");
         if (authType.toLowerCase() == "basic") {
-            const [ login, password ] = Buffer.from(b64auth, "base64").toString().split(":");
-            if (password != null) {
-                aclStatus = this.acldb.findUser(login, "-", password);
-                this.debug(`login: ${aclStatus.uname}`);
+            const pl = Buffer.from(b64auth, "base64").toString().split(":");
+            if (pl.length < 2) aclStatus = this.acldb.newAclError("E05");
+            else {
+                let login = pl[0], group = "-";
+                const password = pl.slice(1,pl.length);
+                const lg = login.split("@")
+                if (lg.length >= 2) {
+                    login = lg.slice(0,lg.length-1);
+                    group = lg[lg.length-1];
+                }
+                if (password != null) {
+                    aclStatus = this.acldb.findUser(login, group, password);
+                    this.debug(`login: ${aclStatus.uname}`);
+                }
+                else aclStatus = this.acldb.newAclError("E05");
             }
-            else aclStatus = this.acldb.newAclError("E05");
         }
         else if (authType.toLowerCase() == "bearer") {
             this.debug(`bearer: ${b64auth}`);

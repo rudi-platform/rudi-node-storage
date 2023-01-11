@@ -194,13 +194,19 @@ function AclStatus(uname, gname, user, accError) {
     this.uname = uname;
     this.gname = gname;
     this.user = user;
+    this.accError = accError;
     if (this.user) {
         this.uname = this.user.name;
-        this.group = this.user.validGroup(gname);
-        if (this.group) this.gname = this.group.name;
+        try {
+            this.group = this.user.validGroup(gname);
+            if (this.group) this.gname = this.group.name;
+        }
+        catch (error) {
+            if (!this.accError) this.accError = "E30";
+            this.group = null;
+        }
     }
     else this.group = null;
-    this.accError = accError;
     this.context = null;
     this.access = "---";
 }

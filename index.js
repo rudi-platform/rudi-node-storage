@@ -168,8 +168,8 @@ HttpService.prototype.close = function(err, done) {
     const closeFileDB = function() {
         const closeMongoDB = function() {
             this.service.mongodb.close(this.err, this.done);
-        };
-        this.service.db.close(this.err, closeMongoDB.bind({service:service, done:this.done, err:this.err}));
+        }.bind({service:service, done:this.done, err:this.err});
+        this.service.db.close(this.err, closeMongoDB);
     };
     this.listen.close(closeFileDB.bind({service:service, done:done, err:err}));
 };
@@ -642,7 +642,7 @@ HttpService.prototype.media = function(req, res) {
     else if (accessMode == "Check") {
         this.db.check(reqUuid, aclStatus, function(err, code = 400) {
             HttpService.prototype.sendAndClose(this.res, code, "{\"status\":\"error\", \"msg\":\""+err+"\"}");
-        }, function(hash, previousHash, size) {
+        }.bind({res:res})), function(hash, previousHash, size) {
             if (hash != previousHash && previousHash != "-") {
                 this.syslog.error("Media changed on disk for uuid "+reqUuid+" hash="+hash+" previously="+previousHash, "core");
             }
@@ -810,8 +810,8 @@ SignalCleaner.prototype.interruption = function(signal) {
     const service = this.sc.service;
     this.sc.service = null;
     if (service) {
-        service.close(function(err) { console.error("Error closing session: "+err); process.exit(1); },
-                      function()    { process.exit(0); });
+        service.close(function(context, err) { console.error("Error closing session: "+err); process.exit(1); },
+                      function(context)      { process.exit(0); });
     }
     else setTimeout(function() { console.error("Warning: timeout while closing, terminated"); process.exit(0); }, 1000 * this.sc.timeout);
 };
