@@ -263,7 +263,7 @@ BasicFileDB.prototype.addEntry = function(metadata, aclStatus, filecontent, none
         if (none) none(err, code);
     }.bind({service:this});
     const addStepEntry = function(message) {
-        this.service.info("[add_media]:"+message);
+        this.service.notice("[add_media]:"+message);
     }.bind({service:this});
     const addDone = function(entry, commitId = null) {
         this.service.debug("new file: name="+entry.uuid+" size="+entry.size+" ("+filecontent.length+") hash="+entry.md5);
