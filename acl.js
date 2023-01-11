@@ -155,7 +155,7 @@ User.prototype.checkPassword = function (input) {
         else if (pt == "5") hash = crypto.createHash("sha256");
         else if (pt == "6") hash = crypto.createHash("sha512");
         if (hash) {
-            let data = hash.update(input, "utf-8");
+            const data = hash.update(input, "utf-8");
             input = data.digest("hex");
         }
     }
