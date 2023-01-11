@@ -61,7 +61,7 @@ AccessContext.prototype.process = function(name, uuid, access, accError) {
     }
     const [ message, realm ] = this.acldb.errDesc(accError);
     const code = this.errorCode(accError);
-    const sev = accError ? logger.Severity.Error : logger.Severity.Informational;
+    const sev = accError ? logger.Severity.Error : logger.Severity.Debug;
     this.acldb.log(sev, "["+this.auth.userName+"]:"+this.opType+": "+message, this.errContext(code));
     if (accError) {
         this.sessionOpen = false;
