@@ -70,14 +70,16 @@ const DEFAULT_CONF = {
         facility: 20,  // Local4
         tcpTimeout: 10000,  // Local4
         retryTimeout: 0,
-        rfc3164: false
+        rfc3164: false,
+        level: "warning"
     },
     log_local: {
         directory: "./_logs/",
         prefix: "RudiMedia-",
         console: true,
         consoleData: false,
-        logRotationSec: 8 * 60 * 60 // 8 hours.
+        logRotationSec: 8 * 60 * 60, // 8 hours.
+        level: "debug"
     }
 };
 

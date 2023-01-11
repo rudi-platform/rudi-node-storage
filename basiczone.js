@@ -63,7 +63,7 @@ function BasicZone(acldb, parent, zoneconf) {
     this.zoneAcl = acldb.newAcl({
         "core": [ "admin", "producer", "rwx", "rw-", "---" ],
         "users": {},
-        "groups": { "auth": "rwx" }
+        "groups": { "auth": "rwx", "admin": "rwx" }
     });
     this.staging_timeout = "staging_time" in zoneconf ? zoneconf.staging_time : 5;
     this.destroy_timeout = "destroy_time" in zoneconf ? zoneconf.destroy_time : 10;
@@ -199,7 +199,7 @@ BasicZone.prototype.deleteEntry = function(aclStatus, uuid, none, done) {
     }
     else {
         const entry = this.db[uuid];
-        delete this.this.db[uuid];
+        delete this.db[uuid];
         entry.destroy();
         this.saveZoneCSV(none, (path) => {
             done(entry);
