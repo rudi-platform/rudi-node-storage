@@ -360,7 +360,12 @@ HttpService.prototype.listMedias = function(req, res) {
     if (!this.ac.checkSystemAccessStatus(aclStatus, "---")) return;
 
     const mediaList = this.db.list(aclStatus);
+    this.syslog.debug("[listMedias]"+aclStatus.uname+" => "+mediaList.count+" "+mediaList.errors, "http");
     if (!mediaList) HttpService.prototype.sendAndClose(res, 404, "{\"status\":\"error\", \"msg\":\"media list not available\"}");
+    else if ((!aclStatus.uname || aclStatus.uname == "-") && (mediaList.count == mediaList.errors)) {
+        res.set("WWW-Authenticate", "Basic realm=\"Missing access rights\"");
+        HttpService.prototype.sendAndClose(res, 401, "{\"status\":\"error\", \"msg\":\"access denied\"}");
+    }
     else  {
         res.type("application/json");
         res.write(JSON.stringify(mediaList));
@@ -549,6 +554,7 @@ HttpService.prototype.deleteMedia = function(req, res) {
         this.service.db.mdelete(uuid, this.aclStatus, function(err, code = null) {
             this.service.sendAndClose(this.res, code ? code : 400, "{ \"status\": \"error\", \"msg\":\""+err+"\"}");
         }.bind({service:this.service, res:this.res}), function() {
+            this.syslog.notice("[deleteMedia]: "+uuid, "API");
             this.service.sendAndClose(this.res, 200, "{ \"status\": \"OK\" }");
         }.bind({service:this.service, res:this.res}));
     }.bind({service:this, aclStatus:aclStatus, res:res});
@@ -636,6 +642,7 @@ HttpService.prototype.media = function(req, res) {
         if (!nid) HttpService.prototype.sendAndClose(res, 404, "{\"status\":\"error\", \"msg\":\"media uuid not found\"}");
         else {
             req.params.fileid = nid;
+            this.syslog.notice("[media][direct]: "+reqUuid, "API");
             this.fileService(req, res);
         }
     }
@@ -643,6 +650,7 @@ HttpService.prototype.media = function(req, res) {
         this.db.check(reqUuid, aclStatus, function(err, code = 400) {
             HttpService.prototype.sendAndClose(this.res, code, "{\"status\":\"error\", \"msg\":\""+err+"\"}");
         }.bind({res:res}), function(hash, previousHash, size) {
+            this.syslog.notice("[media][check]: "+reqUuid, "API");
             if (hash != previousHash && previousHash != "-") {
                 this.syslog.error("Media changed on disk for uuid "+reqUuid+" hash="+hash+" previously="+previousHash, "core");
             }
@@ -654,6 +662,7 @@ HttpService.prototype.media = function(req, res) {
         const nid = this.db.get(reqUuid, aclStatus);
         if (!nid) HttpService.prototype.sendAndClose(res, 404, "{\"status\":\"error\", \"msg\":\"media uuid not found\"}");
         else  {
+            this.syslog.notice("[media][access]: "+reqUuid, "API");
             content = { url:this.server + this.httpPrefix+"storage/"+ nid };
             res.type("application/json");
             res.write(JSON.stringify(content));

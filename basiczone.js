@@ -16,12 +16,12 @@ const BasicUrlEntry = require("./basicurl.js");
  * An authorization processing unit.
  * @class
  */
-function ZoneContext(acldb, user) {
+function ZoneContext(acldb, user, ztype) {
     this.acldb = acldb;
-    this.user = user;
+    this.user = (user != null) ? user : { name: "<anonymous>", uuid: -1 };
     this.source = "zone";
-    this.opType = "zone_add";
-    this.auth = { clientApp:"media/zone", userId: user.uuid, userName: user.name, reqIP: "-", access:"---" };
+    this.opType = ztype;
+    this.auth = { clientApp:"media/zone", userId: this.user.uuid, userName: this.user.name, reqIP: "-", access:"---" };
 };
 ZoneContext.prototype.validApi = function() { return true; };
 ZoneContext.prototype.errContext = function(code = 0, cid = "") {
@@ -228,7 +228,7 @@ BasicZone.prototype.newBasicEntryFromMetadata = function(metadata, filecontent, 
         if (!("media_type" in metadata)) { none("Missing media type"); return; }
 
         let needValidation = false;
-        if (!aclStatus.user) none("Authentication required", 405);
+        if (!aclStatus.user) none("Authentication required", 401);
         const ctx = new ZoneContext(this.acldb, aclStatus.user, "zone_add");
         aclStatus.setContext(ctx);
         aclStatus.setAcl(this.zoneAcl);

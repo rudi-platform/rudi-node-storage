@@ -61,6 +61,7 @@ BasicFileDB.prototype.convertContext = function(opname, cid, aclStatus) {
 BasicFileDB.prototype.error = function(message, context = null) { this.syslog.error(message, this.logid, context); };
 BasicFileDB.prototype.warn = function(message, context = null) { this.syslog.warn(message, this.logid, context); };
 BasicFileDB.prototype.info = function(message, context = null) { this.syslog.info(message, this.logid, context); };
+BasicFileDB.prototype.notice = function(message, context = null) { this.syslog.notice(message, this.logid, context); };
 BasicFileDB.prototype.debug = function(message, context = null) { this.syslog.info(message, this.logid, context); };
 
 /**
@@ -266,7 +267,7 @@ BasicFileDB.prototype.addEntry = function(metadata, aclStatus, filecontent, none
         this.service.notice("[add_media]:"+message);
     }.bind({service:this});
     const addDone = function(entry, commitId = null) {
-        this.service.debug("new file: name="+entry.uuid+" size="+entry.size+" ("+filecontent.length+") hash="+entry.md5);
+        this.service.notice("new file: name="+entry.uuid+" size="+entry.size+" ("+filecontent.length+") hash="+entry.md5);
         let logType = "stage_media";
         if (!commitId) {
             logType = "add_media";
@@ -295,7 +296,7 @@ BasicFileDB.prototype.commit = function(zoneName, commitId, aclStatus, none, don
 
     const commitDone = function(staging) {
         const entry = staging.entry;
-        this.service.debug("commit file: name="+entry.uuid);
+        this.service.notice("commit file: name="+entry.uuid);
         this.service.db[entry.uuid] = entry;
         this.service.logEntry(zone, "commit_media", aclStatus, entry, none, done);
     }.bind({service:this});
@@ -318,7 +319,7 @@ BasicFileDB.prototype.mdelete = function(uuid, aclStatus, none, done) {
     const zone = entry.zone;
     const deleteDone = function(entry) {
         delete this.service.db[entry.uuid];
-        this.service.debug("delete file: name="+entry.uuid);
+        this.service.notice("delete file: name="+entry.uuid);
         this.service.logEntry(zone, "delete_media", aclStatus, entry, none, done);
     }.bind({service:this});
 
@@ -368,22 +369,30 @@ BasicFileDB.prototype.logEntry = function(zone, type, aclStatus, entry, none, do
 /* eslint-disable guard-for-in */
 BasicFileDB.prototype.list = function(aclStatus) {
     const mediaList = {};
+    let count = 0, total = 0, errors = 0;
     for (zoneName in this.zone_db) {
         const zone = this.zone_db[zoneName];
         try {
+            count += 1;
             const content = zone.listMedias(aclStatus);
+            this.notice("list medias: count="+Object.keys(content).length);
             this.debug("list medias: name="+JSON.safeStringify(content));
             mediaList[zoneName] = {
                 "list": content, "status": "OK"
             };
+            total += content.length;
         }
         catch (err) {
+            errors += 1;
             this.errorCtx(err.toString(), "list_media", zoneName, aclStatus);
-            mediaList["zoneName"] = {
-                "list": [], "status": err
+            mediaList[zoneName] = {
+                "list": [], "status": err.toString()
             };
         }
     }
+    mediaList["count"] = count;
+    mediaList["total"] = total;
+    mediaList["errors"] = errors;
     return mediaList;
 };
 /* eslint-enable guard-for-in */
