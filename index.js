@@ -455,7 +455,7 @@ HttpService.prototype.postFile = function(req, res) {
     const dwnld = new DownloadService(chunkSize, fileSize);
     res.write("{ \"status\": \"download\" }, ");
     req.on("readable", function() {
-        const update = function(size)  { res.write(" " + size + ","); };
+        const update = function(size)  { res.write(" {\"status\":\"upload_status\", \"size\":" + size + "},"); };
         dwnld.read(req, update);
     });
     // Build the entry, Close the request
