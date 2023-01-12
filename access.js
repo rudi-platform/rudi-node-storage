@@ -37,8 +37,10 @@ AccessContext.prototype.errorCode = function(accError) {
     if (!accError) return 200;
     let code = 200;
     switch (accError) {
-    case "E01": case "E02": case "E03":
-    case "E05": code = 405; /* */ break;
+    case "E01": case "E02":
+        code = 401; /* */ break;
+    case "E03": case "E05":
+        code = 405; /* */ break;
     case "E06": case "E07": case "E08":
         code = 401; /* */ break;
     case "E12": code = 412; /* */ break;
@@ -59,7 +61,7 @@ AccessContext.prototype.process = function(name, uuid, access, accError) {
     }
     const [ message, realm ] = this.acldb.errDesc(accError);
     const code = this.errorCode(accError);
-    const sev = accError ? logger.Severity.Error : logger.Severity.Notice;
+    const sev = accError ? logger.Severity.Error : logger.Severity.Debug;
     this.acldb.log(sev, "["+this.auth.userName+"]:"+this.opType+": "+message, this.errContext(code));
     if (accError) {
         this.sessionOpen = false;
@@ -105,6 +107,7 @@ function AccessControl(cfg, slogger) {
 };
 AccessControl.prototype.error   = function(message, context = null) { if (this.syslog) this.syslog.error(message, "ac", context); };
 AccessControl.prototype.debug   = function(message, context = null) { if (this.syslog) this.syslog.debug(message, "ac", context); };
+AccessControl.prototype.notice  = function(message, context = null) { if (this.syslog) this.syslog.notice(message, "ac", context); };
 
 /**
  * Extract the authentication information from an HTTP request.
@@ -199,17 +202,27 @@ AccessControl.prototype._readBasicAccessRights = function (header) {
         const authorization = header["authorization"];
         const [ authType, b64auth ] = (authorization.split(" ") || "");
         if (authType.toLowerCase() == "basic") {
-            const [ login, password ] = Buffer.from(b64auth, "base64").toString().split(":");
-            if (password != null) {
-                aclStatus = this.acldb.findUser(login, "-", password);
-                this.debug(`login: ${aclStatus.uname}`);
+            const pl = Buffer.from(b64auth, "base64").toString().split(":");
+            if (pl.length < 2) aclStatus = this.acldb.newAclError("E05");
+            else {
+                let login = pl[0], group = "-";
+                const password = pl.slice(1,pl.length).join(":");
+                const lg = login.split("@")
+                if (lg.length >= 2) {
+                    login = lg.slice(0,lg.length-1).join("@");
+                    group = lg[lg.length-1];
+                }
+                if (password != null) {
+                    aclStatus = this.acldb.findUser(login, group, password);
+                    this.notice(`login: ${aclStatus.uname}@${aclStatus.gname}`);
+                }
+                else aclStatus = this.acldb.newAclError("E05");
             }
-            else aclStatus = this.acldb.newAclError("E05");
         }
         else if (authType.toLowerCase() == "bearer") {
             this.debug(`bearer: ${b64auth}`);
             aclStatus = this._jwtAccessRights("rudi.media.auth", b64auth);
-            this.debug(`token: ${aclStatus.uname}:${aclStatus.gname}`);
+            this.notice(`token: ${aclStatus.uname}:${aclStatus.gname}`);
             if (!aclStatus) aclStatus = this.acldb.newAclError("E05");
         }
         else aclStatus = this.acldb.newAclError("E05");

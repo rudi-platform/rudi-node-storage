@@ -93,7 +93,7 @@ function User(acldb, name, userDesc) {
             pubkey = jwtLib.readPublicKeyFile(keyfile);
             this.acldb.debug(`Public key setup for '${this.name}' from '${keyfile}'`);
         }
-        catch (err) { this.acldb.debug(`Couldn't read public key '${keyfile}'`); }
+        catch (err) { this.acldb.warning(`Couldn't read public key '${keyfile}'`); }
         if (pubkey) this.keys.push(pubkey);
     }
 }
@@ -127,7 +127,8 @@ User.prototype.forgeDelegatedUserJwt = function(duser, dgroup, attributes, durat
                                   "xattr": xattr
                                 },
                                 duration);
-    this.acldb.debug(`Access token forged by ${this.name}: ${duser.name}:${dgroup.name} = ${token} [${JSON.stringify(xattr)}]`);
+    this.acldb.notice(`Access token forged by ${this.name}: ${duser.name}:${dgroup.name}`);
+    this.acldb.debug(`Access token forged: ${token} [${JSON.stringify(xattr)}]`);
     return token;
 };
 /* eslint-enable indent */
@@ -142,23 +143,22 @@ User.prototype.forgeDelegatedUserJwt = function(duser, dgroup, attributes, durat
 User.prototype.checkPassword = function (input) {
     let p = this.password;
     if (p == "" || p == "-") return false;
-    if (p.slice(0, 3) == "$1$" && p[p.length-1] == "$") {
+    if (p.length > 8 && p[0] == "$" && p[2] == "$" && p[p.length-1] == "$") {
+        const pt = p[1];
         p = p.slice(3, p.length-1);
-        const sha512 = crypto.createHash("md5");
-        data = sha512.update(input, "utf-8");
-        input = data.digest("hex");
-    }
-    else if (p.slice(0, 3) == "$5$" && p[p.length-1] == "$") {
-        p = p.slice(3, p.length-1);
-        const sha512 = crypto.createHash("sha256");
-        data = sha512.update(input, "utf-8");
-        input = data.digest("hex");
-    }
-    else if (p.slice(0, 3) == "$6$" && p[p.length-1] == "$") {
-        p = p.slice(3, p.length-1);
-        const sha512 = crypto.createHash("sha512");
-        data = sha512.update(input, "utf-8");
-        input = data.digest("hex");
+        if (p[8] == "$" ) {
+            const salt = p.slice(0, 8);
+            p = p.slice(9, p.length);
+            input = input + salt + input;
+        }
+        let hash = null;
+        if      (pt == "1") hash = crypto.createHash("md5");
+        else if (pt == "5") hash = crypto.createHash("sha256");
+        else if (pt == "6") hash = crypto.createHash("sha512");
+        if (hash) {
+            const data = hash.update(input, "utf-8");
+            input = data.digest("hex");
+        }
     }
     return p == input;
 };
@@ -195,13 +195,19 @@ function AclStatus(uname, gname, user, accError) {
     this.uname = uname;
     this.gname = gname;
     this.user = user;
+    this.accError = accError;
     if (this.user) {
         this.uname = this.user.name;
-        this.group = this.user.validGroup(gname);
-        if (this.group) this.gname = this.group.name;
+        try {
+            this.group = this.user.validGroup(gname);
+            if (this.group) this.gname = this.group.name;
+        }
+        catch (error) {
+            if (!this.accError) this.accError = "E30";
+            this.group = null;
+        }
     }
     else this.group = null;
-    this.accError = accError;
     this.context = null;
     this.access = "---";
 }
@@ -346,7 +352,7 @@ AclDB.prototype.forgeJwtFor = function (sysid, name, gname = "producer", attribu
             const [ id ] = idFromStr(name, sysid);
             if (id in this.usersByID) user = this.usersByID[id];
             else                      user = this.newUser(name, [ id, "", [ gname ], "" ]);
-            this.debug(`Forge deletation for ${name}:${gname} => ${id}:${sysid}`);
+            this.debug(`Forge delegation for ${name}:${gname} => ${id}:${sysid}`);
         }
         group = user.validGroup(gname);
     }

@@ -168,8 +168,8 @@ HttpService.prototype.close = function(err, done) {
     const closeFileDB = function() {
         const closeMongoDB = function() {
             this.service.mongodb.close(this.err, this.done);
-        };
-        this.service.db.close(this.err, closeMongoDB.bind({service:service, done:this.done, err:this.err}));
+        }.bind({service:service, done:this.done, err:this.err});
+        this.service.db.close(this.err, closeMongoDB);
     };
     this.listen.close(closeFileDB.bind({service:service, done:done, err:err}));
 };
@@ -360,7 +360,12 @@ HttpService.prototype.listMedias = function(req, res) {
     if (!this.ac.checkSystemAccessStatus(aclStatus, "---")) return;
 
     const mediaList = this.db.list(aclStatus);
+    this.syslog.debug("[listMedias]"+aclStatus.uname+" => "+mediaList.count+" "+mediaList.errors, "http");
     if (!mediaList) HttpService.prototype.sendAndClose(res, 404, "{\"status\":\"error\", \"msg\":\"media list not available\"}");
+    else if ((!aclStatus.uname || aclStatus.uname == "-") && (mediaList.count == mediaList.errors)) {
+        res.set("WWW-Authenticate", "Basic realm=\"Missing access rights\"");
+        HttpService.prototype.sendAndClose(res, 401, "{\"status\":\"error\", \"msg\":\"access denied\"}");
+    }
     else  {
         res.type("application/json");
         res.write(JSON.stringify(mediaList));
@@ -450,7 +455,7 @@ HttpService.prototype.postFile = function(req, res) {
     const dwnld = new DownloadService(chunkSize, fileSize);
     res.write("{ \"status\": \"download\" }, ");
     req.on("readable", function() {
-        const update = function(size)  { res.write(" " + size + ","); };
+        const update = function(size)  { res.write(" {\"status\":\"upload_status\", \"size\":" + size + "},"); };
         dwnld.read(req, update);
     });
     // Build the entry, Close the request
@@ -549,6 +554,7 @@ HttpService.prototype.deleteMedia = function(req, res) {
         this.service.db.mdelete(uuid, this.aclStatus, function(err, code = null) {
             this.service.sendAndClose(this.res, code ? code : 400, "{ \"status\": \"error\", \"msg\":\""+err+"\"}");
         }.bind({service:this.service, res:this.res}), function() {
+            this.syslog.notice("[deleteMedia]: "+uuid, "API");
             this.service.sendAndClose(this.res, 200, "{ \"status\": \"OK\" }");
         }.bind({service:this.service, res:this.res}));
     }.bind({service:this, aclStatus:aclStatus, res:res});
@@ -636,13 +642,15 @@ HttpService.prototype.media = function(req, res) {
         if (!nid) HttpService.prototype.sendAndClose(res, 404, "{\"status\":\"error\", \"msg\":\"media uuid not found\"}");
         else {
             req.params.fileid = nid;
+            this.syslog.notice("[media][direct]: "+reqUuid, "API");
             this.fileService(req, res);
         }
     }
     else if (accessMode == "Check") {
         this.db.check(reqUuid, aclStatus, function(err, code = 400) {
             HttpService.prototype.sendAndClose(this.res, code, "{\"status\":\"error\", \"msg\":\""+err+"\"}");
-        }, function(hash, previousHash, size) {
+        }.bind({res:res}), function(hash, previousHash, size) {
+            this.syslog.notice("[media][check]: "+reqUuid, "API");
             if (hash != previousHash && previousHash != "-") {
                 this.syslog.error("Media changed on disk for uuid "+reqUuid+" hash="+hash+" previously="+previousHash, "core");
             }
@@ -654,6 +662,7 @@ HttpService.prototype.media = function(req, res) {
         const nid = this.db.get(reqUuid, aclStatus);
         if (!nid) HttpService.prototype.sendAndClose(res, 404, "{\"status\":\"error\", \"msg\":\"media uuid not found\"}");
         else  {
+            this.syslog.notice("[media][access]: "+reqUuid, "API");
             content = { url:this.server + this.httpPrefix+"storage/"+ nid };
             res.type("application/json");
             res.write(JSON.stringify(content));
@@ -810,8 +819,8 @@ SignalCleaner.prototype.interruption = function(signal) {
     const service = this.sc.service;
     this.sc.service = null;
     if (service) {
-        service.close(function(err) { console.error("Error closing session: "+err); process.exit(1); },
-                      function()    { process.exit(0); });
+        service.close(function(context, err) { console.error("Error closing session: "+err); process.exit(1); },
+                      function(context)      { process.exit(0); });
     }
     else setTimeout(function() { console.error("Warning: timeout while closing, terminated"); process.exit(0); }, 1000 * this.sc.timeout);
 };

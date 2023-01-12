@@ -16,12 +16,12 @@ const BasicUrlEntry = require("./basicurl.js");
  * An authorization processing unit.
  * @class
  */
-function ZoneContext(acldb, user) {
+function ZoneContext(acldb, user, ztype) {
     this.acldb = acldb;
-    this.user = user;
+    this.user = (user != null) ? user : { name: "<anonymous>", uuid: -1 };
     this.source = "zone";
-    this.opType = "zone_add";
-    this.auth = { clientApp:"media/zone", userId: user.uuid, userName: user.name, reqIP: "-", access:"---" };
+    this.opType = ztype;
+    this.auth = { clientApp:"media/zone", userId: this.user.uuid, userName: this.user.name, reqIP: "-", access:"---" };
 };
 ZoneContext.prototype.validApi = function() { return true; };
 ZoneContext.prototype.errContext = function(code = 0, cid = "") {
@@ -32,7 +32,7 @@ ZoneContext.prototype.process = function(name, uuid, access, accError) {
     this.auth.userId = uuid;
     this.auth.access = access;
     const [ message ] = this.acldb.errDesc(accError);
-    const sev = accError ? logger.Severity.Warning : logger.Severity.Notice;
+    const sev = accError ? logger.Severity.Warning : logger.Severity.Informational;
     this.acldb.log(sev, "["+this.auth.userName+"]:"+this.opType+": "+message, this.errContext(0));
 };
 ZoneContext.prototype.toJson = function() {
@@ -63,7 +63,7 @@ function BasicZone(acldb, parent, zoneconf) {
     this.zoneAcl = acldb.newAcl({
         "core": [ "admin", "producer", "rwx", "rw-", "---" ],
         "users": {},
-        "groups": { "auth": "rwx" }
+        "groups": { "auth": "rwx", "admin": "rwx" }
     });
     this.staging_timeout = "staging_time" in zoneconf ? zoneconf.staging_time : 5;
     this.destroy_timeout = "destroy_time" in zoneconf ? zoneconf.destroy_time : 10;
@@ -199,7 +199,7 @@ BasicZone.prototype.deleteEntry = function(aclStatus, uuid, none, done) {
     }
     else {
         const entry = this.db[uuid];
-        delete this.this.db[uuid];
+        delete this.db[uuid];
         entry.destroy();
         this.saveZoneCSV(none, (path) => {
             done(entry);
@@ -228,7 +228,7 @@ BasicZone.prototype.newBasicEntryFromMetadata = function(metadata, filecontent, 
         if (!("media_type" in metadata)) { none("Missing media type"); return; }
 
         let needValidation = false;
-        if (!aclStatus.user) none("Authentication required", 405);
+        if (!aclStatus.user) none("Authentication required", 401);
         const ctx = new ZoneContext(this.acldb, aclStatus.user, "zone_add");
         aclStatus.setContext(ctx);
         aclStatus.setAcl(this.zoneAcl);

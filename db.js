@@ -207,7 +207,7 @@ MongoService.prototype.addEvent = async function(opdesc, err, done, update) {
  * @param {function}   errcb    - the error callback
  */
 MongoService.prototype.close = function(errcb, done) {
-    if (!this.db) { if (errcb) errcb(this.service, "DB not initialized"); return; }
+    if (!this.db) { if (errcb) errcb(this, "DB not initialized"); return; }
     this.mongodb.close();
     if (done) done(this);
 };
