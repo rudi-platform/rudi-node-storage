@@ -93,7 +93,7 @@ function User(acldb, name, userDesc) {
             pubkey = jwtLib.readPublicKeyFile(keyfile);
             this.acldb.debug(`Public key setup for '${this.name}' from '${keyfile}'`);
         }
-        catch (err) { this.acldb.warning(`Couldn't read public key '${keyfile}'`); }
+        catch (err) { this.acldb.warn(`Couldn't read public key '${keyfile}'`); }
         if (pubkey) this.keys.push(pubkey);
     }
 }
