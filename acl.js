@@ -6,14 +6,10 @@
  */
 
 
-// const sshpk = require('sshpk');
-// const util = require('util');
-// const logger = require('@aqmo.org/rudi_logger');
 require("./cycle.js"); // For Json Unparsing
 const crypto = require("crypto");
 const uuid = require("uuid");
-const jwtLib = require("@aqmo.org/jwt_lib");
-// const fs = require("fs");
+const jwtLib = require("@aqmo.org/jwt-lib");
 
 const G_ADMIN_UID = 4;
 const G_USER_START_UID = 1000;

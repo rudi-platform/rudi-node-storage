@@ -7,9 +7,8 @@
  */
 /* eslint-disable no-multi-spaces */
 const util = require("util");
-// const uuid = require('uuid');
 const logger = require("@aqmo.org/rudi_logger");
-const jwtLib = require("@aqmo.org/jwt_lib");
+const jwtLib = require("@aqmo.org/jwt-lib");
 const AclDB = require("./acl.js");
 
 /**
