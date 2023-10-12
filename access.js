@@ -206,10 +206,10 @@ AccessControl.prototype._readBasicAccessRights = function (header) {
             if (pl.length < 2) aclStatus = this.acldb.newAclError("E05");
             else {
                 let login = pl[0], group = "-";
-                const password = pl.slice(1,pl.length).join(":");
-                const lg = login.split("@")
+                const password = pl.slice(1, pl.length).join(":");
+                const lg = login.split("@");
                 if (lg.length >= 2) {
-                    login = lg.slice(0,lg.length-1).join("@");
+                    login = lg.slice(0, lg.length-1).join("@");
                     group = lg[lg.length-1];
                 }
                 if (password != null) {

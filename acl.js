@@ -152,9 +152,11 @@ User.prototype.checkPassword = function (input) {
             input = input + salt + input;
         }
         let hash = null;
+        /* eslint-disable no-multi-spaces */
         if      (pt == "1") hash = crypto.createHash("md5");
         else if (pt == "5") hash = crypto.createHash("sha256");
         else if (pt == "6") hash = crypto.createHash("sha512");
+        /* eslint-enable no-multi-spaces */
         if (hash) {
             const data = hash.update(input, "utf-8");
             input = data.digest("hex");
