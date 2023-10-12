@@ -6,7 +6,6 @@
  * @author: Laurent Morin
  * @version: 1.0.0
  */
-// const util = require('util');
 
 /**
  * Represents a generic Json schema together with some usefull functions.

@@ -6,14 +6,10 @@
  */
 
 
-// const sshpk = require('sshpk');
-// const util = require('util');
-// const logger = require('@aqmo.org/rudi_logger');
 require("./cycle.js"); // For Json Unparsing
 const crypto = require("crypto");
 const uuid = require("uuid");
-const jwtLib = require("@aqmo.org/jwt_lib");
-// const fs = require("fs");
+const jwtLib = require("@aqmo.org/jwt-lib");
 
 const G_ADMIN_UID = 4;
 const G_USER_START_UID = 1000;
@@ -152,9 +148,11 @@ User.prototype.checkPassword = function (input) {
             input = input + salt + input;
         }
         let hash = null;
+        /* eslint-disable no-multi-spaces */
         if      (pt == "1") hash = crypto.createHash("md5");
         else if (pt == "5") hash = crypto.createHash("sha256");
         else if (pt == "6") hash = crypto.createHash("sha512");
+        /* eslint-enable no-multi-spaces */
         if (hash) {
             const data = hash.update(input, "utf-8");
             input = data.digest("hex");

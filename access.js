@@ -7,9 +7,8 @@
  */
 /* eslint-disable no-multi-spaces */
 const util = require("util");
-// const uuid = require('uuid');
 const logger = require("@aqmo.org/rudi_logger");
-const jwtLib = require("@aqmo.org/jwt_lib");
+const jwtLib = require("@aqmo.org/jwt-lib");
 const AclDB = require("./acl.js");
 
 /**
@@ -206,10 +205,10 @@ AccessControl.prototype._readBasicAccessRights = function (header) {
             if (pl.length < 2) aclStatus = this.acldb.newAclError("E05");
             else {
                 let login = pl[0], group = "-";
-                const password = pl.slice(1,pl.length).join(":");
-                const lg = login.split("@")
+                const password = pl.slice(1, pl.length).join(":");
+                const lg = login.split("@");
                 if (lg.length >= 2) {
-                    login = lg.slice(0,lg.length-1).join("@");
+                    login = lg.slice(0, lg.length-1).join("@");
                     group = lg[lg.length-1];
                 }
                 if (password != null) {
