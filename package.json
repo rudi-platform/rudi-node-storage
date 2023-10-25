@@ -14,19 +14,18 @@
         "weblogger.js"
     ],
     "dependencies": {
-        "@aqmo.org/jwt-lib": "^1.1.10",
+        "@aqmo.org/jwt-lib": "^1.1.11",
         "@aqmo.org/rudi_logger": "^1.1.5",
         "express": "^4.18.2",
         "ini": "^4.1.1",
         "magic-bytes.js": "^1.5.0",
         "md5": "^2.3.0",
         "minimist": "^1.2.8",
-        "mongodb": "^6.1.0",
-        "sshpk": "^1.17.0",
+        "mongodb": "^6.2.0",
         "uuid": "^9.0.1"
     },
     "devDependencies": {
-        "eslint": "^8.51.0",
+        "eslint": "^8.52.0",
         "nodemon": "^3.0.1"
     },
     "couldHaveDependencies": {
