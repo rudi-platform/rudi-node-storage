@@ -11,9 +11,7 @@ const fs = require("fs");
 const ini = require("ini");
 const argv = require("minimist")(process.argv.slice(2));
 const zlib = require("zlib");
-// const util = require("util");
 
-// var WebLogger = require('./weblogger.js');
 const logger = require("@aqmo.org/rudi_logger");
 const AccessControl = require("./access.js");
 const BasicFileEntry = require("./basicfile.js");
@@ -116,6 +114,7 @@ function HttpService(configuration) {
 
     // this.httpServer.use(function(req, res) { this.syslog.info('unserved access: '+JSON.stringify(req.url), 'core'); res.status(404).end();}.bind({'syslog':this.syslog}));
     this.listen = this.httpServer.listen(this.port, this.netInterface);
+    this.syslog.info(`RUDI Media server listening on ${this.netInterface}${this.port?':'+this.port:''}`)
 };
 
 /**

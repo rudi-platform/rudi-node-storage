@@ -32,7 +32,7 @@
         "unix-dgram": "^2.0.4"
     },
     "scripts": {
-        "start": "nodejs index.js",
+        "start": "nodemon index.js",
         "debug": "nodemon index.js -p 3201 -l './mylog'",
         "debug_ini": "nodemon index.js --ini local.ini",
         "docker": "./node_modules/.bin/nodemon index.js -p ${L_PORT} -l ${L_LOGNAME}",
