@@ -253,8 +253,8 @@ BasicFileDB.prototype.addEntry = function(metadata, aclStatus, filecontent, none
         this.errorCtx("(ignored) inconsistent provided file size: "+metadata.file_size+" received: "+filecontent.length, "add_media", metadata.media_id, aclStatus);
     }
     if (Object.keys(this.zone_db).length <= 0) {
-        this.errorCtx("DB not ready", "add_media", metadata.media_id, aclStatus);
-        if (none) none(`DB not ready for adding media ${metadata.media_id}`, 400);
+        this.errorCtx("DB not ready for adding", "add_media", metadata.media_id, aclStatus);
+        if (none) none(`DB not ready for adding`, 400);
         return;
     }
 
@@ -282,8 +282,8 @@ BasicFileDB.prototype.addEntry = function(metadata, aclStatus, filecontent, none
 
 BasicFileDB.prototype.commit = function(zoneName, commitId, aclStatus, none, done) {
     if (Object.keys(this.zone_db).length <= 0) {
-        this.errorCtx("DB not ready", "commit_media", zoneName, aclStatus);
-        if (none) none(`DB not ready for committing media ${commitId}`, 400);
+        this.errorCtx("DB not ready for committing", "commit_media", zoneName, aclStatus);
+        if (none) none(`DB not ready for committing`, 400);
         return;
     }
 
