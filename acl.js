@@ -124,7 +124,7 @@ User.prototype.forgeDelegatedUserJwt = function(duser, dgroup, attributes, durat
                                 },
                                 duration);
     this.acldb.notice(`Access token forged by ${this.name}: ${duser.name}:${dgroup.name}`);
-    this.acldb.debug(`Access token forged: ${token} [${JSON.stringify(xattr)}]`);
+    // this.acldb.debug(`Access token forged: ${token} [${JSON.stringify(xattr)}]`);
     return token;
 };
 /* eslint-enable indent */
@@ -375,7 +375,7 @@ AclDB.prototype.findIdsFromJwt = function (value) {
             jwt = jwtLib.tokenStringToJwtObject(value);
         }
         catch (e) { return this.newAclError("E21"); }
-        this.debug(`Decoded JWT: ${JSON.safeStringify(jwt)}`);
+        this.debug(`Decoded JWT payload: ${JSON.safeStringify(jwt.payload)}`);
 
         const jwtPayload = jwt.payload;
         const gname = jwtPayload.sub || "-";
@@ -397,7 +397,7 @@ AclDB.prototype.findIdsFromJwt = function (value) {
         for (const pubkey of user.keys) {
             try {
                 validated = jwtLib.verifyToken(pubkey, jwtStr);
-                this.debug(`pubKey validated the JWT: ${pubkey}`);
+                // this.debug(`pubKey validated the JWT: ${pubkey}`);
                 break;
             }
             catch (err) {

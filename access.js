@@ -219,7 +219,7 @@ AccessControl.prototype._readBasicAccessRights = function (header) {
             }
         }
         else if (authType.toLowerCase() == "bearer") {
-            this.debug(`bearer: ${b64auth}`);
+            // this.debug(`bearer: ${b64auth}`);
             aclStatus = this._jwtAccessRights("rudi.media.auth", b64auth);
             this.notice(`token: ${aclStatus.uname}:${aclStatus.gname}`);
             if (!aclStatus) aclStatus = this.acldb.newAclError("E05");
