@@ -19,246 +19,196 @@ const mongodb = require("mongodb")
  * @param {string}      mediaSchema  - the name of the media schema
  * @param {string}      eventSchema  - the name of the event schema
  */
-function MongoService(config, schemaSet, mediaSchema, urlSchema, eventSchema) {
-    this.disabled = config.disabled !== undefined && config.disabled == true
-    this.mongoClient = mongodb.MongoClient
-    this.schemaSet = schemaSet
-    this.mediaSchema = mediaSchema
-    this.urlSchema = urlSchema
-    this.eventSchema = eventSchema
-    this.mongoServerURL = config.db_url || "mongodb://localhost:27017/"
-    this.dbname = config.db_name || "rudi_media"
-    this.mongoOptions = config.db_options || {}
-    this.mediaCollName = "media"
-    this.urlCollName = "url"
-    this.eventCollName = "media_events"
-    this.mongodb = null
-    this.db = null
-    this.mediaColl = null
-    this.urlColl = null
-    this.eventColl = null
-    this.currentError = null
-}
+class MongoService {
+    constructor(config, schemaSet, mediaSchema, urlSchema, eventSchema) {
+        this.disabled = config.disabled !== undefined && config.disabled == true
+        this.mongoClient = mongodb.MongoClient
+        this.schemaSet = schemaSet
+        this.mediaSchema = mediaSchema
+        this.urlSchema = urlSchema
+        this.eventSchema = eventSchema
+        this.mongoServerURL = config.db_url || "mongodb://localhost:27017/"
+        this.dbname = config.db_name || "rudi_media"
+        this.mongoOptions = config.db_options || {}
+        this.mediaCollName = "media"
+        this.urlCollName = "url"
+        this.eventCollName = "media_events"
+        this.mongodb = null
+        this.db = null
+        this.mediaColl = null
+        this.urlColl = null
+        this.eventColl = null
+        this.currentError = null
 
-/* eslint-disable no-multi-spaces, indent */
-/**
- * Open the Mongo DB using the class level parameters
- * A first collection is create for medias, and a second one for events.
- *
- * Has race conditions (#RC). In case njs starts to get (//) one day.
- *
- * @param {function}   errcb     - the error callback
- * @param {function}   done      - the success callback
- */
-MongoService.prototype.open = function (errcb, done) {
-    try {
+        // console.debug('T [MongoService] mongoServerURL:', this.mongoServerURL)
+    }
+    /* eslint-disable no-multi-spaces, indent */
+    /**
+     * Open the Mongo DB using the class level parameters
+     * A first collection is create for medias, and a second one for events.
+     *
+     * Has race conditions (#RC). In case njs starts to get (//) one day.
+     *
+     * @param {function}   errcb     - the error callback
+     * @param {function}   done      - the success callback
+     */
+    async open() {
         if (typeof this.mongoOptions == "string") {
             const so = this.mongoOptions
             this.mongoOptions = {}
             this.mongoOptions = JSON.parse(so)
         }
-    } catch (err) {
-        errcb(this, err)
-    }
-    if (this.disabled) errcb(this, "Connexion disabled")
 
-    this.mongoClient.connect(
-        this.mongoServerURL,
-        this.mongoOptions,
-        function (err, db) {
-            if (err) {
-                this.service.currentError = err
-                if (errcb) errcb(this.service, err)
-                return
-            }
-            const errFct = function (reason) {
-                if (!this.cb) return
-                this.service.currentError = reason
-                this.cb(this.service, reason) // #RC
-                this.cb = null
-            }.bind({ service: this, cb: errcb })
-            const doneFct = function () {
-                if (!this.cb) return
-                this.cb(this.service) // #RC
-                this.cb = null
-            }.bind({ service: this, cb: done })
-
-            this.service.mongodb = db
-            this.service.db = db.db(this.service.dbname)
-            this.service.db.listCollections().toArray(
-                async function (err, colList) {
-                    if (err) {
-                        errFct(err)
-                        return
-                    }
-                    let hasMedia = false,
-                        hasUrl = false,
-                        hasEvents = false
-                    for (c of colList) {
-                        hasMedia |= c.name == this.service.mediaCollName
-                        hasUrl |= c.name == this.service.urlCollName
-                        hasEvents |= c.name == this.service.eventCollName
-                    }
-                    try {
-                        if (hasMedia) {
-                            this.service.mediaColl = this.service.db.collection(this.service.mediaCollName)
-                            await this.service.mediaColl.drop()
-                        }
-                        if (hasUrl) {
-                            this.service.urlColl = this.service.db.collection(this.service.urlCollName)
-                            await this.service.urlColl.drop()
-                        }
-                        if (hasEvents) {
-                            this.service.eventColl = this.service.db.collection(this.service.eventCollName)
-                            await this.service.eventColl.drop()
-                        }
-                    } catch (err) {
-                        errFct(err)
-                    }
-
-                    // Command CollMod returns nothing according to the doc....
-                    // console.log(this.service.schemaSet.toBson(this.service.mediaSchema));
-                    // this.service.mediaColl = this.service.db.collection(this.service.mediaCollName);
-                    this.service.db.createCollection(
-                        this.service.mediaCollName,
-                        function (err, col) {
-                            if (err) {
-                                errFct(err)
-                                return
-                            }
-                            this.service.mediaColl = col
-                            this.service.mediaColl.createIndex({ uuid: 1 })
-                            this.service.mediaColl.createIndex({ zone: 1, uuid: 1 })
-                            this.service.db.command({ collMod: this.service.mediaCollName, validator: { $jsonSchema: this.service.schemaSet.toBson(this.service.mediaSchema) }, validationLevel: "strict", validationAction: "error" }).then(doneFct, errFct)
-                        }.bind({ service: this.service })
-                    )
-
-                    this.service.db.createCollection(
-                        this.service.urlCollName,
-                        function (err, col) {
-                            if (err) {
-                                errFct(err)
-                                return
-                            }
-                            this.service.urlColl = col
-                            this.service.urlColl.createIndex({ uuid: 1 })
-                            this.service.urlColl.createIndex({ zone: 1, uuid: 1 })
-                            this.service.db.command({ collMod: this.service.urlCollName, validator: { $jsonSchema: this.service.schemaSet.toBson(this.service.urlSchema) }, validationLevel: "strict", validationAction: "error" }).then(doneFct, errFct)
-                        }.bind({ service: this.service })
-                    )
-
-                    // this.service.eventColl = this.service.db.collection(this.service.eventCollName);
-                    this.service.db.createCollection(
-                        this.service.eventCollName,
-                        function (err, col) {
-                            if (err) {
-                                errFct(err)
-                                return
-                            }
-                            this.service.eventColl = col
-                            this.service.eventColl.createIndex({ uuid: 1 })
-                            this.service.eventColl.createIndex({ uuid: 1, date: 1 })
-                            this.service.db.command({ collMod: this.service.eventCollName, validator: { $jsonSchema: this.service.schemaSet.toBson(this.service.eventSchema) }, validationLevel: "strict", validationAction: "error" }).then(doneFct, errFct)
-                        }.bind({ service: this.service })
-                    )
-                }.bind({ service: this.service })
-            )
-        }.bind({ service: this })
-    )
-}
-/**
- * Add a new media
- * The media must be an already initialized @BasicFileEntry object.
- *
- * @param {BasicFileEntry}   media   - a fileEntry object.
- * @param {function}         err     - the error callback
- * @param {function}         done    - the success callback
- */
-MongoService.prototype.addMedia = async function (media, err, done) {
-    if (!this.mediaColl || !this.eventColl) {
-        err("Collections not initialized")
-        return
-    }
-    const errFct = function (reason) {
-        if (err) err("Media insertion error: " + reason, this.service)
-    }.bind({ service: this })
-    const doneFct = function () {
-        if (done) done(this.service)
-    }.bind({ service: this })
-
-    if (!("uuid" in media) || !("zone" in media)) {
-        errFct("Malformed media descriptor")
-        return
-    }
-
-    try {
-        if ("url" in media) {
-            const emedia = await this.urlColl.findOne({ uuid: media.uuid })
-            // if (!emedia) console.log('URL add '+util.inspect(media));
-            if (!emedia) this.urlColl.insertOne(media).then(doneFct, errFct)
-            else this.urlColl.updateOne({ uuid: media.uuid }, { $set: media }).then(doneFct, errFct)
-        } else {
-            const emedia = await this.mediaColl.findOne({ uuid: media.uuid })
-            // if (!emedia) console.log('MEDIA add '+util.inspect(media));
-            if (!emedia) this.mediaColl.insertOne(media).then(doneFct, errFct)
-            else this.mediaColl.updateOne({ uuid: media.uuid }, { $set: media }).then(doneFct, errFct)
+        if (this.disabled) {
+            console.debug("T [MongoService.open] Connexion disabled")
+            throw new Error("Connexion disabled")
         }
-    } catch (err) {
-        errFct(err)
+
+        try {
+            this.mongodb = await this.mongoClient.connect(this.mongoServerURL, this.mongoOptions)
+            console.debug("T [MongoService.mongoClient.connect] DB connected:", this.mongodb.s?.url)
+
+            this.db = this.mongodb.db(this.dbname)
+
+            const colList = await this.db.listCollections().toArray()
+
+            let hasMedia = false, hasUrl = false, hasEvents = false
+            for (const c of colList) {
+                hasMedia |= c.name == this.mediaCollName
+                hasUrl |= c.name == this.urlCollName
+                hasEvents |= c.name == this.eventCollName
+            }
+            if (hasMedia) {
+                this.mediaColl = this.db.collection(this.mediaCollName)
+                await this.mediaColl.drop()
+            }
+            if (hasUrl) {
+                this.urlColl = this.db.collection(this.urlCollName)
+                await this.urlColl.drop()
+            }
+            if (hasEvents) {
+                this.eventColl = this.db.collection(this.eventCollName)
+                await this.eventColl.drop()
+            }
+
+            // Command CollMod returns nothing according to the doc....
+            // console.log(this.schemaSet.toBson(this.mediaSchema));
+            // this.mediaColl = this.db.collection(this.mediaCollName);
+            this.mediaColl = await this.initCollection(this.mediaCollName, this.mediaSchema)
+            this.urlColl   = await this.initCollection(this.urlCollName, this.urlSchema)
+            this.eventColl = await this.initCollection(this.eventCollName, this.eventSchema)
+            
+        } catch (err) {
+            console.error("E [MongoService.mongoClient.connect] DB connection failed:", err)
+            this.currentError = err
+            throw err
+        }
+    }
+
+    async initCollection(collName, colSchema){
+        const coll = await this.db.createCollection(collName)
+        await coll.createIndex({ uuid: 1 })
+        await coll.createIndex({ zone: 1, uuid: 1 })
+        await this.db.command({ 
+            collMod: collName, 
+            validator: { $jsonSchema: this.schemaSet.toBson(colSchema) },
+            validationLevel: "strict", validationAction: "error" })
+    }
+
+    /**
+     * Add a new media
+     * The media must be an already initialized @BasicFileEntry object.
+     *
+     * @param {BasicFileEntry}   media   - a fileEntry object.
+     * @param {function}         err     - the error callback
+     * @param {function}         done    - the success callback
+     */
+    async addMedia(media, err, done = () => { }) {
+        if (!this.mediaColl || !this.eventColl) {
+            err("Collections not initialized")
+            return
+        }
+        const errFct = (reason) => {
+            if (err) err("Media insertion error: " + reason, this)
+            else console.error("E [addMedia]", reason)
+        }
+        if (!("uuid" in media) || !("zone" in media)) {
+            errFct("Malformed media descriptor")
+            return
+        }
+        try {
+            if ("url" in media) {
+                const emedia = await this.urlColl.findOne({ uuid: media.uuid })
+                // if (!emedia) console.log('URL add '+util.inspect(media));
+                if (!emedia) done(await this.urlColl.insertOne(media))
+                else done(await this.urlColl.updateOne({ uuid: media.uuid }, { $set: media }))
+            } else {
+                const emedia = await this.mediaColl.findOne({ uuid: media.uuid })
+                // if (!emedia) console.log('MEDIA add '+util.inspect(media));
+                if (!emedia) done(await this.mediaColl.insertOne(media))
+                else done(await this.mediaColl.updateOne({ uuid: media.uuid }, { $set: media }))
+            }
+        } catch (err) {
+            errFct(err)
+        }
+    }
+    /**
+     * Add a new event
+     * The event must reference an object.
+     *
+     * @param {BasicFileEntry}   opdesc  - an operation description.
+     * @param {function}         err     - the error callback
+     * @param {function}         done    - the success callback
+     * @param {function}         update  - update fields, by defaulf off
+     */
+    async addEvent(opdesc, err, done, update) {
+        if (!this.mediaColl || !this.eventColl) {
+            err("Collections not initialized")
+            return
+        }
+        const errFct = (reason) => {
+            if (err) err("Media event error: " + reason, this)
+        }
+        const doneFct = () => {
+            if (done) done(this)
+        }
+
+        if (!("uuid" in opdesc) || !("zone" in opdesc)) {
+            errFct("Malformed operation descriptor")
+            return
+        }
+
+        // const emedia = false;
+        try {
+            if (!(update === undefined)) {
+                const emedia = await this.eventColl.findOne({ uuid: opdesc.uuid })
+                if (!emedia) doneFct(await this.eventColl.insertOne(opdesc))
+                else doneFct(await this.eventColl.updateOne({ uuid: opdesc.uuid }, { $set: opdesc }))
+            } else {
+                doneFct(await this.eventColl.insertOne(opdesc))
+            }
+        } catch (err) {
+            errFct(err)
+        }
+    }
+    /* eslint-enable no-multi-spaces, indent */
+    /**
+     * Close the DB interface
+     *
+     * @param {function}   errcb    - the error callback
+     */
+    close(errcb, done) {
+        if (!this.db) {
+            if (errcb) errcb(this, "DB not initialized")
+            return
+        }
+        this.mongodb.close()
+        if (done) done(this)
     }
 }
 
-/**
- * Add a new event
- * The event must reference an object.
- *
- * @param {BasicFileEntry}   opdesc  - an operation description.
- * @param {function}         err     - the error callback
- * @param {function}         done    - the success callback
- * @param {function}         update  - update fields, by defaulf off
- */
-MongoService.prototype.addEvent = async function (opdesc, err, done, update) {
-    if (!this.mediaColl || !this.eventColl) {
-        err("Collections not initialized")
-        return
-    }
-    const errFct = function (reason) {
-        if (err) err("Media event error: " + reason, this.service)
-    }.bind({ service: this })
-    const doneFct = function () {
-        if (done) done(this.service)
-    }.bind({ service: this })
 
-    if (!("uuid" in opdesc) || !("zone" in opdesc)) {
-        errFct("Malformed operation descriptor")
-        return
-    }
 
-    // const emedia = false;
-    if (!(update === undefined)) {
-        this.eventColl.findOne({ uuid: opdesc.uuid }, function (err, emedia) {
-            if (err) {
-                errFct(err)
-            } else if (!emedia) this.eventColl.insertOne(opdesc).then(doneFct, errFct)
-            else this.eventColl.updateOne({ uuid: opdesc.uuid }, { $set: opdesc }).then(doneFct, errFct)
-        })
-        // if (!emedia) console.log('MEDIA update '+emedia);
-    } else this.eventColl.insertOne(opdesc).then(doneFct, errFct)
-}
-/* eslint-enable no-multi-spaces, indent */
 
-/**
- * Close the DB interface
- *
- * @param {function}   errcb    - the error callback
- */
-MongoService.prototype.close = function (errcb, done) {
-    if (!this.db) {
-        if (errcb) errcb(this, "DB not initialized")
-        return
-    }
-    this.mongodb.close()
-    if (done) done(this)
-}
 
 module.exports = MongoService
