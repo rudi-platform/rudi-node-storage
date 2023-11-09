@@ -80,7 +80,7 @@ class BasicZone {
             fs.mkdirSync(this.dirname, { recursive: true });
         }
         catch (err) {
-            if (none) { none(`[${this.name}]: could not create storage dir`); }
+            if (none) { none(`[${this.name}]: could not create storage dir ${this.dirname}`); }
             return;
         }
         // For the time being, the operator is static.
