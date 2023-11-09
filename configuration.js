@@ -8,7 +8,7 @@
  * @property {object} database - Configuration of mongo database logging system events
  * @property {object} logging  - Configuration of system logger
  */
-const DEFAULT_CONF = {
+export const DEFAULT_CONF = {
     server: {
         listening_address: "0.0.0.0",
         listening_port: 8080,
@@ -82,4 +82,3 @@ const DEFAULT_CONF = {
     }
 };
 
-module.exports = DEFAULT_CONF;

@@ -5,21 +5,23 @@
  * @author: Laurent Morin
  * @version: 1.0.0
  */
-const express = require("express");
-const process = require("process");
-const fs = require("fs");
-const ini = require("ini");
-const argv = require("minimist")(process.argv.slice(2));
-const zlib = require("zlib");
 
-const logger = require("@aqmo.org/rudi_logger");
-const AccessControl = require("./access.js");
-const BasicFileEntry = require("./basicfile.js");
-const BasicUrlEntry = require("./basicurl.js");
-const BasicFileDB = require("./basicdb.js");
-const Mongodb = require("./db.js");
-const SchemaSet = require("./schema.js");
-const DEFAULT_CONF = require("./configuration.js");
+import express from 'express'
+import { readFileSync } from 'fs'
+import { parse } from 'ini'
+import { gzip } from 'zlib'
+
+import minimist from 'minimist'
+const _argv = minimist(process.argv.slice(2))
+
+import { RudiLogger } from '@aqmo.org/rudi_logger'
+import AccessControl from './access.js'
+import { BasicFileDB } from './basicdb.js'
+import { BasicFileEntry } from './basicfile.js'
+import { BasicUrlEntry } from './basicurl.js'
+import { DEFAULT_CONF } from './configuration.js'
+import { MongoService } from './db.js'
+import { SchemaSet } from './schema.js'
 
 /* eslint-disable no-multi-spaces */
 /**
@@ -34,89 +36,100 @@ const DEFAULT_CONF = require("./configuration.js");
  */
 class HttpService {
     constructor(configuration) {
-        this.port = configuration.server.listening_port;
-        this.netInterface = configuration.server.listening_address;
-        this.server = configuration.server.server_url;
-        this.httpPrefix = configuration.server.server_prefix;
-        this.revision = configuration.logging.revision;
+        this.port = configuration.server.listening_port
+        this.netInterface = configuration.server.listening_address
+        this.server = configuration.server.server_url
+        this.httpPrefix = configuration.server.server_prefix
+        this.revision = configuration.logging.revision
 
-        if (!this.httpPrefix || this.httpPrefix == "" || this.httpPrefix[0] != "/") {
-            console.log("Error: the http prefix cannot be null and shall start with '/'");
-            process.exit(-1);
+        if (!this.httpPrefix || this.httpPrefix == '' || !this.httpPrefix?.endsWith('/')) {
+            console.log("Error: the http prefix cannot be null and shall start with '/'")
+            process.exit(-1)
         }
 
-        this.httpServer = express();
+        this.httpServer = express()
 
-        const schemaURL = this.server + this.httpPrefix + "schema";
-        const schemaBase = configuration.schemas.schema_basename;
-        // console.log("Base URL: "+schemaURL+" schema base: "+schemaBase);
-        const contextRef = schemaBase + configuration.schemas.schema_context;
-        const metaRef = schemaBase + configuration.schemas.schema_meta;
-        const eventRef = schemaBase + configuration.schemas.schema_event;
-        const fileRef = schemaBase + configuration.schemas.schema_file;
-        const urlRef = schemaBase + configuration.schemas.schema_url;
-        this.schemaSet = new SchemaSet(schemaURL);
-        this.schemaSet.addSchema(contextRef, HttpService.contextSchema());
-        this.schemaSet.addSchema(metaRef, HttpService.metaSchema());
-        this.schemaSet.addSchema(eventRef, BasicFileDB.eventSchema(contextRef));
-        this.schemaSet.addSchema(fileRef, BasicFileEntry.fileSchema(contextRef, metaRef));
-        this.schemaSet.addSchema(urlRef, BasicUrlEntry.urlSchema(contextRef, metaRef));
+        const schemaURL = this.server + this.httpPrefix + 'schema'
+        const schemaBase = configuration.schemas.schema_basename
+        const contextRef = schemaBase + configuration.schemas.schema_context
+        const metaRef = schemaBase + configuration.schemas.schema_meta
+        const eventRef = schemaBase + configuration.schemas.schema_event
+        const fileRef = schemaBase + configuration.schemas.schema_file
+        const urlRef = schemaBase + configuration.schemas.schema_url
 
-        // this.wl = new WebLogger(configuration.logging.app_name, configuration.logging.log_dir, null);
-        this.syslog = new logger.RudiLogger(configuration.logging.app_name, this.revision, configuration);
-        this.logweb = this.syslog.getWebInterface();
-        this.ac = new AccessControl(configuration.auth, this.syslog);
-        if (this.logweb) this.logweb.setWebAccessControlInterface(this.ac);
+        this.schemaSet = new SchemaSet(schemaURL)
+        this.schemaSet.addSchema(contextRef, HttpService.contextSchema())
+        this.schemaSet.addSchema(metaRef, HttpService.metaSchema())
+        this.schemaSet.addSchema(eventRef, BasicFileDB.eventSchema(contextRef))
+        this.schemaSet.addSchema(fileRef, BasicFileEntry.fileSchema(contextRef, metaRef))
+        this.schemaSet.addSchema(urlRef, BasicUrlEntry.urlSchema(contextRef, metaRef))
+
+        this.syslog = new RudiLogger(configuration.logging.app_name, this.revision, configuration)
+        this.logweb = this.syslog.getWebInterface()
+        this.ac = new AccessControl(configuration.auth, this.syslog)
+        if (this.logweb) this.logweb.setWebAccessControlInterface(this.ac)
         // this.wl.setWebAccessControlInterface(this.ac);
         // eslint-disable-next-line new-cap
-        this.icon = Buffer.from("AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACe7OkFqNqYQ6jZlKWo2ZTjpdiR+5bQgvuc04Pj5PWgovv/qED4/6cEAAAAAAAAAAAAAAAAAAAAAAAAAACb7/wSm+/7h6Hlyeyo2pb/qNmU/6XYkv+W0IL/ndOD/+n4of/5/6fq+P+ng/j/pxAAAAAAAAAAAAAAAACa7/sQm+/7oZvv+/2b7/j/ouTG/6jalv+m2JH/ltCC/53Tg//p+KH/+f+n//j/p/34/6eb+P+mDgAAAACf7voBm+/7e5vv+/yb7/v/m+/8/5vu+P+i5MX/pdiT/5bQgv+d04P/6fih//n/p//4/6f/+P+n+/j9p3UAAAAAnPD7MZvw++Cb7/v/m+/7/5vv+/+b8Pz/nO/4/5/iwv+V0IT/ndOD/+n4of/5/6f/+P+n//j7qP/35qvc9tStLJPl+YWV5/n+lef5/5Xn+f+V5/n/lef5/5bo+viY7PbSj9mq053Tg/jp96H/+f+n//j8p//35av/9tat/fbWrX1+yfPEfsnz/37J8/9+yfP/fsr0/37K9PqAy/SHkOj/FITcuhWk14eN6vii+/n9qP/35av/9tat//bWrf/21q28fMfz33zH8/98x/P/fMfz/3zF8/+AqOvYgpDmGgAAAAAAAAAA4/efHfb7p9z35qv/9tat//bWrf/21q3/9tat2HzH8958x/P/fMfz/3zG8/+BoOr/iXTf2Z173hwAAAAAAAAAAPnuqh/346vd9tet//bWrf/21q3/9tat//bWrdh8x/PCfMfz/3zH8/+Boer/h3Lf/5R43/vJpOOP5a3TGuWTrhvzya2S9M6t/PTOrf/0zq3/9M6t//TOrf/00K26fMfzgnzH8/6Bour/iHPf/4du3v+Ved//zqjk+dup2Nnfg7La4oit+uKKrf/iiq3/4oqt/+KKrf/iiq3944+te3zK8y6Boerdh3Tf/4hu3v+Hbt7/lXnf/86o5P/TqeP/0YnI/917rv/eeq3/3nqt/956rf/eeq3/3nqt2t55rSoAAAAAiHDedohu3vuIb97/h27e/5V53//OqOT/0qrj/8SS3v/Phcf/3Xyu/957rf/ee63/3nut+t57rXAAAAAAAAAAAIdu3g2Ib96aiG/e/Idu3v+Ved//zqjk/9Kq4//Ekt//wo7d/9CFxv/dfK7/3nut/N57rZXee60MAAAAAAAAAAAAAAAAiG7eD4hv3n+Hbt7nlXnf/86o5P/SqeP/xJLf/8KP3v/Dj93/0YXF5d57rXvfeqwOAAAAAAAAAADT0c4F09HOBeHjyASwotIGjHXdQJp/357PquPd0qrj+MST3/jCkN7dw5LencSV3D7Tr8cG0N/VBNPRzgXT0c4F+B8AAOAHAADAAwAAwAMAAIABAAAAAQAAAYAAAAPAAAADwAAAAYAAAAABAACAAQAAwAMAAMADAADwDwAA+B8AAA==", "base64");
+        this.icon = Buffer.from(
+            'AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACe7OkFqNqYQ6jZlKWo2ZTjpdiR+5bQgvuc04Pj5PWgovv/qED4/6cEAAAAAAAAAAAAAAAAAAAAAAAAAACb7/wSm+/7h6Hlyeyo2pb/qNmU/6XYkv+W0IL/ndOD/+n4of/5/6fq+P+ng/j/pxAAAAAAAAAAAAAAAACa7/sQm+/7oZvv+/2b7/j/ouTG/6jalv+m2JH/ltCC/53Tg//p+KH/+f+n//j/p/34/6eb+P+mDgAAAACf7voBm+/7e5vv+/yb7/v/m+/8/5vu+P+i5MX/pdiT/5bQgv+d04P/6fih//n/p//4/6f/+P+n+/j9p3UAAAAAnPD7MZvw++Cb7/v/m+/7/5vv+/+b8Pz/nO/4/5/iwv+V0IT/ndOD/+n4of/5/6f/+P+n//j7qP/35qvc9tStLJPl+YWV5/n+lef5/5Xn+f+V5/n/lef5/5bo+viY7PbSj9mq053Tg/jp96H/+f+n//j8p//35av/9tat/fbWrX1+yfPEfsnz/37J8/9+yfP/fsr0/37K9PqAy/SHkOj/FITcuhWk14eN6vii+/n9qP/35av/9tat//bWrf/21q28fMfz33zH8/98x/P/fMfz/3zF8/+AqOvYgpDmGgAAAAAAAAAA4/efHfb7p9z35qv/9tat//bWrf/21q3/9tat2HzH8958x/P/fMfz/3zG8/+BoOr/iXTf2Z173hwAAAAAAAAAAPnuqh/346vd9tet//bWrf/21q3/9tat//bWrdh8x/PCfMfz/3zH8/+Boer/h3Lf/5R43/vJpOOP5a3TGuWTrhvzya2S9M6t/PTOrf/0zq3/9M6t//TOrf/00K26fMfzgnzH8/6Bour/iHPf/4du3v+Ved//zqjk+dup2Nnfg7La4oit+uKKrf/iiq3/4oqt/+KKrf/iiq3944+te3zK8y6Boerdh3Tf/4hu3v+Hbt7/lXnf/86o5P/TqeP/0YnI/917rv/eeq3/3nqt/956rf/eeq3/3nqt2t55rSoAAAAAiHDedohu3vuIb97/h27e/5V53//OqOT/0qrj/8SS3v/Phcf/3Xyu/957rf/ee63/3nut+t57rXAAAAAAAAAAAIdu3g2Ib96aiG/e/Idu3v+Ved//zqjk/9Kq4//Ekt//wo7d/9CFxv/dfK7/3nut/N57rZXee60MAAAAAAAAAAAAAAAAiG7eD4hv3n+Hbt7nlXnf/86o5P/SqeP/xJLf/8KP3v/Dj93/0YXF5d57rXvfeqwOAAAAAAAAAADT0c4F09HOBeHjyASwotIGjHXdQJp/357PquPd0qrj+MST3/jCkN7dw5LencSV3D7Tr8cG0N/VBNPRzgXT0c4F+B8AAOAHAADAAwAAwAMAAIABAAAAAQAAAYAAAAPAAAADwAAAAYAAAAABAACAAQAAwAMAAMADAADwDwAA+B8AAA==',
+            'base64'
+        )
 
-        this.syslog.warn("Media file system: " + configuration.storage.media_dir, "core");
-        this.mongodb = new Mongodb(configuration.database, this.schemaSet, fileRef, urlRef, eventRef);
-        this.db = new BasicFileDB(configuration.storage.media_dir, this.ac.acldb, this.syslog, this.mongodb, configuration.storage.acc_timeout);
+        this.syslog.warn('Media file system: ' + configuration.storage.media_dir, 'core')
+        this.mongodb = new MongoService(configuration.database, this.schemaSet, fileRef, urlRef, eventRef, this.syslog)
+        this.db = new BasicFileDB(
+            configuration.storage.media_dir,
+            this.ac.acldb,
+            this.syslog,
+            this.mongodb,
+            configuration.storage.acc_timeout
+        )
+        this.init(configuration)
+            .then(() => this.syslog.debug('Initialization complete'))
+            .catch((err) => this.syslog.error(`An error happened during initialization: ${JSON.stringify(err)}`))
+    }
 
+    async init(configuration) {
         try {
-            this.mongodb.open();
+            await this.mongodb.open()
+            this.syslog.info('DB initialized', 'core')
+            this.db.init(configuration.storage.zones, true)
         } catch (err) {
-            this.syslog.error("DB initialization failed: " + err, "core");
-            this.db.init(configuration.storage.zones, false);
+            this.syslog.error('DB initialization failed: ' + err, 'core')
+            this.db.init(configuration.storage.zones, false)
         }
-        this.syslog.info("DB initialized", "core");
-        this.db.init(configuration.storage.zones, true);
 
-        const service = this;
-        this.httpServer.get(this.httpPrefix + "favicon.ico", function (req, res) { service.favicon(req, res); });
-        this.httpServer.get(this.httpPrefix + "revision", function (req, res) { service.getRevision(req, res); });
-        this.httpServer.get(this.httpPrefix + "", function (req, res) { service.root(req, res); });
+        this.httpServer.get(this.httpPrefix + 'favicon.ico', (req, res) => this.favicon(req, res))
+        this.httpServer.get(this.httpPrefix + 'revision', (req, res) => this.getRevision(req, res))
+        this.httpServer.get(this.httpPrefix + '', (req, res) => this.root(req, res))
         if (this.logweb) {
-            this.httpServer.get(this.httpPrefix + "logs", function (req, res) { service.logweb.logContent(req, res); });
-            this.httpServer.get(this.httpPrefix + "logs/:name", function (req, res) { service.logweb.logFile(req, res); });
+            this.httpServer.get(this.httpPrefix + 'logs', (req, res) => this.logweb.logContent(req, res))
+            this.httpServer.get(this.httpPrefix + 'logs/:name', (req, res) => this.logweb.logFile(req, res))
         }
-        this.httpServer.post(this.httpPrefix + "jwt/forge", function (req, res) { service.forgeUserToken(req, res); });
-        this.httpServer.get(this.httpPrefix + "storage/:fileid", function (req, res) { service.fileService(req, res); });
-        this.httpServer.post(this.httpPrefix + "post", function (req, res) { service.postFile(req, res); });
-        this.httpServer.post(this.httpPrefix + "commit/", function (req, res) { service.commitMedia(req, res); });
-        this.httpServer.post(this.httpPrefix + "delete/:uuid", function (req, res) { service.deleteMedia(req, res); });
-        this.httpServer.get(this.httpPrefix + "list/", function (req, res) { service.listMedias(req, res); });
-        this.httpServer.get(this.httpPrefix + "schema/:name", function (req, res) { service.schemas(req, res); });
-        this.httpServer.get(this.httpPrefix + "check/:uuid", function (req, res) { service.checkFile(req, res); });
-        this.httpServer.get(this.httpPrefix + "download/:uuid", function (req, res) { service.direct(req, res); });
-        this.httpServer.get(this.httpPrefix + "zdownload/:uuid", function (req, res) { service.compress(req, res); });
-        this.httpServer.get(this.httpPrefix + ":uuid", function (req, res) { service.media(req, res); });
-        this.httpServer.options(this.httpPrefix + "jwt/forge", function (req, res) { service.optionCors(req, res); });
-        this.httpServer.options(this.httpPrefix + "storage/:fileid", function (req, res) { service.optionCors(req, res); });
-        this.httpServer.options(this.httpPrefix + "post", function (req, res) { service.optionCors(req, res); });
-        this.httpServer.options(this.httpPrefix + "commit/", function (req, res) { service.optionCors(req, res); });
-        this.httpServer.options(this.httpPrefix + "delete/", function (req, res) { service.optionCors(req, res); });
-        this.httpServer.options(this.httpPrefix + "list/", function (req, res) { service.optionCors(req, res); });
-        this.httpServer.options(this.httpPrefix + "check/:uuid", function (req, res) { service.optionCors(req, res); });
-        this.httpServer.options(this.httpPrefix + "download/:uuid", function (req, res) { service.optionCors(req, res); });
-        this.httpServer.options(this.httpPrefix + "zdownload/:uuid", function (req, res) { service.optionCors(req, res); });
-        this.httpServer.options(this.httpPrefix + ":uuid", function (req, res) { service.optionCors(req, res); });
+        this.httpServer.post(this.httpPrefix + 'jwt/forge', (req, res) => this.forgeUserToken(req, res))
+        this.httpServer.get(this.httpPrefix + 'storage/:fileid', (req, res) => this.fileService(req, res))
+        this.httpServer.post(this.httpPrefix + 'post', (req, res) => this.postFile(req, res))
+        this.httpServer.post(this.httpPrefix + 'commit/', (req, res) => this.commitMedia(req, res))
+        this.httpServer.post(this.httpPrefix + 'delete/:uuid', (req, res) => this.deleteMedia(req, res))
+        this.httpServer.get(this.httpPrefix + 'list/', (req, res) => this.listMedias(req, res))
+        this.httpServer.get(this.httpPrefix + 'schema/:name', (req, res) => this.schemas(req, res))
+        this.httpServer.get(this.httpPrefix + 'check/:uuid', (req, res) => this.checkFile(req, res))
+        this.httpServer.get(this.httpPrefix + 'download/:uuid', (req, res) => this.direct(req, res))
+        this.httpServer.get(this.httpPrefix + 'zdownload/:uuid', (req, res) => this.compress(req, res))
+        this.httpServer.get(this.httpPrefix + ':uuid', (req, res) => this.media(req, res))
+        this.httpServer.options(this.httpPrefix + 'jwt/forge', (req, res) => this.optionCors(req, res))
+        this.httpServer.options(this.httpPrefix + 'storage/:fileid', (req, res) => this.optionCors(req, res))
+        this.httpServer.options(this.httpPrefix + 'post', (req, res) => this.optionCors(req, res))
+        this.httpServer.options(this.httpPrefix + 'commit/', (req, res) => this.optionCors(req, res))
+        this.httpServer.options(this.httpPrefix + 'delete/', (req, res) => this.optionCors(req, res))
+        this.httpServer.options(this.httpPrefix + 'list/', (req, res) => this.optionCors(req, res))
+        this.httpServer.options(this.httpPrefix + 'check/:uuid', (req, res) => this.optionCors(req, res))
+        this.httpServer.options(this.httpPrefix + 'download/:uuid', (req, res) => this.optionCors(req, res))
+        this.httpServer.options(this.httpPrefix + 'zdownload/:uuid', (req, res) => this.optionCors(req, res))
+        this.httpServer.options(this.httpPrefix + ':uuid', (req, res) => this.optionCors(req, res))
 
-        // this.httpServer.use(function(req, res) { this.syslog.info('unserved access: '+JSON.stringify(req.url), 'core'); res.status(404).end();}.bind({'syslog':this.syslog}));
-        this.listen = this.httpServer.listen(this.port, this.netInterface);
-        this.syslog.info(`RUDI Media server listening on ${this.netInterface}${this.port ? ':' + this.port : ''}`);
+        this.listen = this.httpServer.listen(this.port, this.netInterface)
+        this.syslog.info(`RUDI Media server listening on ${this.netInterface}${this.port ? ':' + this.port : ''}`)
     }
     /**
      * Generate a Json Schema for a *context* with the proper registering URL.
@@ -125,34 +138,34 @@ class HttpService {
      */
     static contextSchema() {
         return {
-            "title": "The RUDI media DB context Schema",
-            "description": "The descriptor of context associated to a RUDI media DB access.",
-            "type": "object",
-            "properties": {
-                "source": {
-                    "description": "The request source",
-                    "type": "string"
+            title: 'The RUDI media DB context Schema',
+            description: 'The descriptor of context associated to a RUDI media DB access.',
+            type: 'object',
+            properties: {
+                source: {
+                    description: 'The request source',
+                    type: 'string',
                 },
-                "ip": {
-                    "description": "The IP address of the request client",
-                    "type": "string",
-                    "format": "ipv4"
+                ip: {
+                    description: 'The IP address of the request client',
+                    type: 'string',
+                    format: 'ipv4',
                 },
-                "user": {
-                    "description": "The user id used for the request",
-                    "type": "string"
+                user: {
+                    description: 'The user id used for the request',
+                    type: 'string',
                 },
-                "access": {
-                    "description": "The access mode used for the request",
-                    "type": "string"
+                access: {
+                    description: 'The access mode used for the request',
+                    type: 'string',
                 },
-                "filename": {
-                    "description": "The CSV source file",
-                    "type": "string"
-                }
+                filename: {
+                    description: 'The CSV source file',
+                    type: 'string',
+                },
             },
-            "required": ["source"]
-        };
+            required: ['source'],
+        }
     }
     /**
      * Generate a Json Schema for a *metadata* with the proper registering URL.
@@ -161,56 +174,53 @@ class HttpService {
      */
     static metaSchema() {
         return {
-            "title": "The RUDI media DB metadata Schema",
-            "description": "The descriptor shall use the RUDI standard scheme.",
-            "type": "object",
-            "properties": {
-                "media_type": {
-                    "description": "The media type, currently only FILE, STREAM in  the future",
-                    "type": "string",
-                    "enum": ["FILE", "STREAM", "INDIRECT"]
+            title: 'The RUDI media DB metadata Schema',
+            description: 'The descriptor shall use the RUDI standard scheme.',
+            type: 'object',
+            properties: {
+                media_type: {
+                    description: 'The media type, currently only FILE, STREAM in  the future',
+                    type: 'string',
+                    enum: ['FILE', 'STREAM', 'INDIRECT'],
                 },
-                "media_name": {
-                    "description": "The media name, typically used for the filename",
-                    "type": "string"
+                media_name: {
+                    description: 'The media name, typically used for the filename',
+                    type: 'string',
                 },
-                "media_id": {
-                    "description": "The media UUID as set in the RUDI API",
-                    "type": "string"
+                media_id: {
+                    description: 'The media UUID as set in the RUDI API',
+                    type: 'string',
                 },
-                "lastmodification_date": {
-                    "description": "The media last modification date",
-                    "type": "string"
-                }
+                lastmodification_date: {
+                    description: 'The media last modification date',
+                    type: 'string',
+                },
             },
-            "required": ["media_id", "media_type", "media_name"]
-        };
+            required: ['media_id', 'media_type', 'media_name'],
+        }
     }
     /**
      * Flush and stop the database, and close the server.
      *
      */
-    close(err, done) {
-        const closeFileDB = function () {
-            const closeMongoDB = function () {
-                this.service.mongodb.close(this.err, this.done);
-            }.bind({ service: service, done: this.done, err: this.err });
-            this.service.db.close(this.err, closeMongoDB);
-        };
-        this.listen.close(closeFileDB.bind({ service: service, done: done, err: err }));
-    }
+    close = (err, done) =>
+        this.listen.close((err) => {
+            this.db.close(err)
+            this.mongodb.close(err, done)
+        })
+
     /**
      * Serves a favicon. For fun because I like it (CC Licence).
      * @param {object} req - the HTTP request
      * @param {object} res - the HTTP response.
      */
     favicon(req, res) {
-        res.statusCode = 200;
-        res.setHeader("Content-Length", this.favicon.length);
-        res.setHeader("Content-Type", "image/x-icon");
-        res.setHeader("Cache-Control", "public, max-age=2592000"); // expiration: after a month
-        res.setHeader("Expires", new Date(Date.now() + 2592000000).toUTCString());
-        res.end(this.icon);
+        res.statusCode = 200
+        res.setHeader('Content-Length', (req, res) => this.favicon.length(req, res))
+        res.setHeader('Content-Type', 'image/x-icon')
+        res.setHeader('Cache-Control', 'public, max-age=2592000') // expiration: after a month
+        res.setHeader('Expires', new Date(Date.now() + 2592000000).toUTCString())
+        res.end(this.icon)
     }
     /**
      * Serves the value of the current application revision.
@@ -220,9 +230,9 @@ class HttpService {
      * @param {object} res - the HTTP response.
      */
     getRevision(req, res) {
-        res.statusCode = 200;
-        res.type("text/plain");
-        res.end(this.revision);
+        res.statusCode = 200
+        res.type('text/plain')
+        res.end(this.revision)
     }
     /**
      * Serves the default page.
@@ -230,19 +240,23 @@ class HttpService {
      * @param {object} res - the HTTP response.
      */
     root(req, res) {
-        const aclStatus = this.ac.getAccessStatus(req, res);
-        if (!this.ac.checkSystemAccessStatus(aclStatus, "---")) return;
-        if ("file_metadata" in req.headers) {
-            return this.media(req, res);
+        const aclStatus = this.ac.getAccessStatus(req, res)
+        if (!this.ac.checkSystemAccessStatus(aclStatus, '---')) return
+        if ('file_metadata' in req.headers) {
+            return this.media(req, res)
         }
-        res.send("<!DOCTYPE html>\
-<html lang=\"en\">\
-  <head><meta charset=\"utf-8\"><title>Rudi media access driver</title></head>\
+        res.send(
+            '<!DOCTYPE html>\
+<html lang="en">\
+  <head><meta charset="utf-8"><title>Rudi media access driver</title></head>\
   <body>\
     <H1>Rudi media access driver, access restricted</H1>\
-    <H2><a href=\"" + this.httpPrefix + "logs/\" >Log file list (requires authorization)</a></H2>\
+    <H2><a href="' +
+                this.httpPrefix +
+                'logs/" >Log file list (requires authorization)</a></H2>\
   </body>\
-</html>");
+</html>'
+        )
     }
     /**
      * Serves a post of a new media.
@@ -252,14 +266,17 @@ class HttpService {
      * @param {object} res - the HTTP response.
      */
     schemas(req, res) {
-        const name = req.params.name || "none";
-        const mimetype = "application/json";
-        const content = this.schemaSet.toJSON(name);
-        if (!content) { res.status(404).write("Schema not found"); res.end(); return; }
-        // console.log('REF:'+JSON.stringify(content));
-        res.type(mimetype);
-        res.write(content);
-        res.status(200).end();
+        const name = req.params.name || 'none'
+        const mimetype = 'application/json'
+        const content = this.schemaSet.toJSON(name)
+        if (!content) {
+            res.status(404).write('Schema not found')
+            res.end()
+            return
+        }
+        res.type(mimetype)
+        res.write(content)
+        res.status(200).end()
     }
     /**
      * Create a request context.
@@ -268,9 +285,8 @@ class HttpService {
      * @param {object} req - the HTTP request
      */
     generateContext(req, aclStatus) {
-        const srcip = req.headers["x-forwarded-for"] || req.connection.remoteAddress;
-        // console.log('from:'+ip);
-        return { source: "API", ip: srcip, access: aclStatus.access, user: aclStatus.uname };
+        const srcip = req.headers['x-forwarded-for'] || req.connection.remoteAddress
+        return { source: 'API', ip: srcip, access: aclStatus.access, user: aclStatus.uname }
     }
     /**
      * Serves an OPTION for CORS enable entries.
@@ -278,15 +294,16 @@ class HttpService {
      * @param {object} req - the HTTP request
      * @param {object} res - the HTTP response.
      */
-    optionCors(req, res) {
-        // console.log('OPTION: '+util.inspect(req.headers));
-        const baseHeaderList = "Content-Type, Authorization, Content-Length, X-Requested-With, file_metadata, Media-Access-Method, media_cookie";
-        const extendedHeaderList = "Cache-Control, Pragma, Sec-GPC";
-        res.header({
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-            "Access-Control-Allow-Headers": `${baseHeaderList}, ${extendedHeaderList}`
-        }).status(200).end();
+    optionCors = (req, res) => {
+        const baseHeaderList =
+            'Content-Type, Authorization, Content-Length, X-Requested-With, file_metadata, Media-Access-Method, media_cookie'
+        const extendedHeaderList = 'Cache-Control, Pragma, Sec-GPC'
+        const headersOpts = {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+            'Access-Control-Allow-Headers': `${baseHeaderList}, ${extendedHeaderList}`,
+        }
+        res.header(headersOpts).status(200).end()
     }
     /**
      * Close a communication with a Json message and a status code.
@@ -296,64 +313,62 @@ class HttpService {
      * @param {object} msg - Json message.
      * @param {number} code - the HTML code.
      */
-    sendAndClose(res, code, msg) {
-        res.header("Access-Control-Allow-Origin", "*");
-        res.status(code).type("application/json");
-        res.write(msg);
-        res.end();
+    sendAndClose = (res, code, msg) => {
+        res.header('Access-Control-Allow-Origin', '*')
+        res.status(code).type('application/json')
+        res.write(typeof msg == 'string' ? msg : JSON.stringify(msg))
+        res.end()
     }
-    listMedias(req, res) {
-        this.syslog.debug("[listMedias]" + req.originalUrl, "http");
-        const aclStatus = this.ac.getAccessStatus(req, res);
-        if (!this.ac.checkSystemAccessStatus(aclStatus, "---")) return;
+    listMedias = (req, res) => {
+        this.syslog.debug(`[listMedias]${req.originalUrl}`, 'http')
+        const aclStatus = this.ac.getAccessStatus(req, res)
+        if (!this.ac.checkSystemAccessStatus(aclStatus, '---')) return
 
-        const mediaList = this.db.list(aclStatus);
-        this.syslog.debug("[listMedias]" + aclStatus.uname + " => " + mediaList.count + " " + mediaList.errors, "http");
-        if (!mediaList) HttpService.prototype.sendAndClose(res, 404, "{\"status\":\"error\", \"msg\":\"media list not available\"}");
-        else if ((!aclStatus.uname || aclStatus.uname == "-") && (mediaList.count == mediaList.errors)) {
-            res.set("WWW-Authenticate", "Basic realm=\"Missing access rights\"");
-            HttpService.prototype.sendAndClose(res, 401, "{\"status\":\"error\", \"msg\":\"access denied\"}");
-        }
-        else {
-            res.type("application/json");
-            res.write(JSON.stringify(mediaList));
-            res.status(200).end();
+        const mediaList = this.db.list(aclStatus)
+        this.syslog.debug(`[listMedias] ${aclStatus.uname} => ${mediaList.count} ${mediaList.errors}`, 'http')
+        if (!mediaList) this.sendAndClose(res, 404, { status: 'error', msg: 'media list not available' })
+        else if ((!aclStatus.uname || aclStatus.uname == '-') && mediaList.count == mediaList.errors) {
+            res.set('WWW-Authenticate', 'Basic realm="Missing access rights"')
+            this.sendAndClose(res, 401, { status: 'error', msg: 'access denied' })
+        } else {
+            this.sendAndClose(res, 200, mediaList)
         }
     }
-    forgeUserToken(req, res) {
-        this.syslog.debug("[forgeUserToken]" + req.originalUrl, "http");
-        const aclStatus = this.ac.getAccessStatus(req, res);
-        if (!this.ac.checkSystemAccessStatus(aclStatus, "--x")) return;
+    forgeUserToken = (req, res) => {
+        console.log('forgeUserToken', 0)
+        this.syslog.debug(`[forgeUserToken] ${req.originalUrl}`, 'http')
+        console.log('forgeUserToken', 1)
+        const aclStatus = this.ac.getAccessStatus(req, res)
+        if (!this.ac.checkSystemAccessStatus(aclStatus, '--x')) return
 
-        if ((!("content-type" in req.headers)) || (req.headers["content-type"] != "application/json")) {
-            this.sendAndClose(res, 400, "{\"status\":\"error\", \"msg\":\"application/json Content-Type expected\"}");
-            return;
-        }
+        if (!('content-type' in req.headers) || req.headers['content-type'] != 'application/json')
+            return this.sendAndClose(res, 400, { status: 'error', msg: 'application/json Content-Type expected' })
 
         // Get the config
-        const body = [];
-        req.on("data", (chunk) => { body.push(chunk); });
-        req.on("end", function () {
-            let userDesc = Buffer.concat(body).toString();
-            try { userDesc = JSON.parse(userDesc); }
-            catch (err) {
-                this.service.sendAndClose(res, 400, "{\"status\":\"error\", \"msg\":\"malformed application/json\"}"); return;
+        const body = []
+        req.on('data', (chunk) => body.push(chunk))
+        req.on('end', () => {
+            let userDesc = Buffer.concat(body).toString()
+            try {
+                userDesc = JSON.parse(userDesc)
+            } catch (err) {
+                return this.sendAndClose(res, 400, { status: 'error', msg: 'malformed application/json' })
             }
-            if (!("user_id" in userDesc)) {
-                this.service.sendAndClose(res, 400, "{\"status\":\"error\", \"msg\":\"missing user_id\"}"); return;
-            }
-            if (!("user_name" in userDesc)) {
-                this.service.sendAndClose(res, 400, "{\"status\":\"error\", \"msg\":\"missing user_name\"}"); return;
-            }
-            if (!("group_name" in userDesc)) userDesc.group_name = null;
-            const jwt = this.service.ac.forgeJwt(this.aclStatus, userDesc.user_id, userDesc.user_name, userDesc.group_name);
-            if (!jwt) return;
+            if (!('user_id' in userDesc))
+                return this.sendAndClose(res, 400, { status: 'error', msg: 'missing user_id' })
+
+            if (!('user_name' in userDesc))
+                return this.sendAndClose(res, 400, { status: 'error', msg: 'missing user_name' })
+
+            if (!('group_name' in userDesc)) userDesc.group_name = null
+            const jwt = this.ac.forgeJwt(aclStatus, userDesc.user_id, userDesc.user_name, userDesc.group_name)
+            if (!jwt) return
             else {
-                this.service.syslog.info("forged token for " + userDesc.user_name + ":" + (userDesc.group_name ? userDesc.group_name : "-"), "core");
-                res.setHeader("cookie", "rudi.media.auth=" + jwt);
-                res.status(200).send({ status: "OK", token: jwt });
-            };
-        }.bind({ service: this, aclStatus: aclStatus }));
+                this.syslog.info(`forged token for ${userDesc.user_name}:${userDesc.group_name || '-'}`, 'core')
+                res.setHeader('cookie', 'rudi.media.auth=' + jwt)
+                res.status(200).send({ status: 'OK', token: jwt })
+            }
+        })
     }
     /**
      * Serves a post of a new media.
@@ -363,66 +378,64 @@ class HttpService {
      * @param {object} res - the HTTP response.
      */
     postFile(req, res) {
-        this.syslog.debug("[postFile]" + req.originalUrl, "http");
-        const aclStatus = this.ac.getAccessStatus(req, res, "API");
-        if (!this.ac.checkSystemAccessStatus(aclStatus, "-w-")) return;
-        res.header("Access-Control-Allow-Origin", "*");
-        res.type("application/json");
-        res.write("[");
+        this.syslog.debug('[postFile]' + req.originalUrl, 'http')
+        const aclStatus = this.ac.getAccessStatus(req, res, 'API')
+        if (!this.ac.checkSystemAccessStatus(aclStatus, '-w-')) return
 
-        if (!("file_metadata" in req.headers)) {
-            const content = "{ \"status\": \"error\", \"msg\":\"no meta-data provided\" } ]";
-            res.write(content);
-            res.status(400).end();
-            return;
-        }
-        let metadata = req.headers.file_metadata;
-        try { metadata = JSON.parse(metadata); }
-        catch (err) {
-            const content = "{ \"status\": \"error\", \"msg\":\"malformed metadata\" } ]";
-            this.syslog.error("malformed metadata: " + metadata, "core");
-            res.write(content);
-            res.status(400).end();
-            return;
+        if (!('file_metadata' in req.headers))
+            return this.sendAndClose(res, 400, { status: 'error', msg: 'no meta-data provided' })
+
+        let metadata = req.headers.file_metadata
+        try {
+            metadata = JSON.parse(metadata)
+        } catch (err) {
+            this.syslog.error('malformed metadata: ' + JSON.stringify(metadata), 'core')
+            return this.sendAndClose(res, 400, { status: 'error', msg: 'malformed metadata' })
         }
 
         // Bufferize file data
-        const chunkSize = 65536 * 4;
-        const fileSize = metadata.file_size || parseInt(req.headers["content-length"]) || chunkSize;
+        const chunkSize = 65536 * 4
+        const fileSize = metadata.file_size || parseInt(req.headers['content-length']) || chunkSize
         if (fileSize > 500e6) {
-            const content = "{ \"status\": \"error\", \"msg\":\"file too large, use a different upload method\" } ]";
-            this.syslog.error("file too large, use a different upload method: " + JSON.stringify(metadata));
-            res.write(content);
-            res.status(400).end();
-            return;
+            this.syslog.error('file too large, use a different upload method: ' + JSON.stringify(metadata))
+            return this.sendAndClose(res, 400, {
+                status: 'error',
+                msg: 'file too large, use a different upload method',
+            })
         }
 
+        res.header('Access-Control-Allow-Origin', '*')
+        res.type('application/json')
+        res.write('[ ')
+
         // Bufferize file data
-        const dwnld = new DownloadService(chunkSize, fileSize);
-        res.write("{ \"status\": \"download\" }, ");
-        req.on("readable", function () {
-            const update = function (size) { res.write(" {\"status\":\"upload_status\", \"size\":" + size + "},"); };
-            dwnld.read(req, update);
-        });
+        const dwnld = new DownloadService(chunkSize, fileSize)
+        res.write('{ "status": "download" }, ')
+        const update = (size) => res.write(`{"status":"upload_status", "size":${size}}, `)
+        req.on('readable', () => dwnld.read(req, update))
+
         // Build the entry, Close the request
-        req.on("end", () => {
-            const data = dwnld.finish();
-            this.syslog.debug("content: " + data.length, "core");
-            this.db.addEntry(metadata, aclStatus, data,
+        req.on('end', () => {
+            const data = dwnld.finish()
+            this.syslog.debug(`content: ${data.length}`, 'core')
+            this.db.addEntry(
+                metadata,
+                aclStatus,
+                data,
                 (err, code = 400) => {
-                    const content = `{ "status": "error", "msg":"${err}" } ]`;
-                    res.write(content);
-                    res.status(code).end();
+                    res.write(`{"status": "error", "msg":"${err}"} ]`)
+                    res.status(code).end()
                 },
                 (zone, commitUrl) => {
-                    let content = "";
-                    if (commitUrl) content += `{ "status": "commit_ready" , "zone_name": "${zone}", "commit_uuid": "${commitUrl}" }, `;
-                    content += '{ "status": "OK" } ]';
-                    res.write(content);
-                    res.status(200).end();
+                    let content = ''
+                    if (commitUrl)
+                        content += `{ "status": "commit_ready" , "zone_name": "${zone}", "commit_uuid": "${commitUrl}" }, `
+                    content += '{ "status": "OK" } ]'
+                    res.write(content)
+                    res.status(200).end()
                 }
-            );
-        });
+            )
+        })
     }
     /**
      * Serves a post of a new media.
@@ -432,119 +445,119 @@ class HttpService {
      * @param {object} res - the HTTP response.
      */
     commitMedia(req, res) {
-        this.syslog.debug("[commitMedia]" + req.originalUrl, "http");
-        const aclStatus = this.ac.getAccessStatus(req, res, "API");
-        if (!this.ac.checkSystemAccessStatus(aclStatus, "--x")) return;
-        res.header("Access-Control-Allow-Origin", "*");
+        this.syslog.debug('[commitMedia]' + req.originalUrl, 'http')
+        const aclStatus = this.ac.getAccessStatus(req, res, 'API')
+        if (!this.ac.checkSystemAccessStatus(aclStatus, '--x')) return
 
-        const processCommit = function (zoneName, commitUuid) {
-            this.service.db.commit(zoneName, commitUuid, this.aclStatus, function (err, code = null) {
-                this.service.sendAndClose(this.res, code ? code : 400, "{ \"status\": \"error\", \"msg\":\"" + err + "\"}");
-            }.bind({ service: this.service, res: this.res }), function () {
-                this.service.sendAndClose(this.res, 200, "{ \"status\": \"OK\" }");
-            }.bind({ service: this.service, res: this.res }));
-        }.bind({ service: this, aclStatus: aclStatus, res: res });
-        const processJson = function (metadata) {
-            try { metadata = JSON.parse(metadata); }
-            catch (err) {
-                this.service.syslog.error("malformed commit message: " + metadata, "core");
-                this.service.sendAndClose(this.res, 400, "{\"status\":\"error\", \"msg\":\"malformed metadata\"}");
-                return;
+        const processCommit = (zoneName, commitUuid) => {
+            this.db.commit(
+                zoneName,
+                commitUuid,
+                aclStatus,
+                (err, code = null) => this.sendAndClose(res, code || 400, { status: 'error', msg: '${err}' }),
+                () => this.sendAndClose(res, 200, { status: 'OK' })
+            )
+        }
+        const processJson = (metadata) => {
+            try {
+                metadata = JSON.parse(metadata)
+            } catch (err) {
+                this.syslog.error('malformed commit message: ' + metadata, 'core')
+                this.sendAndClose(res, 400, { status: 'error', msg: 'malformed metadata' })
+                return
             }
 
             if (!metadata.commit_uuid) {
-                this.service.syslog.error("commit_uuid missing in metadata: " + JSON.stringify(metadata));
-                this.service.sendAndClose(this.res, 400, "{ \"status\": \"error\", \"msg\":\"commit_uuid missing in metadata\"}");
-                return;
+                this.syslog.error('commit_uuid missing in metadata: ' + JSON.stringify(metadata))
+                this.sendAndClose(res, 400, { status: 'error', msg: 'commit_uuid missing in metadata' })
+                return
             }
             if (!metadata.zone_name) {
-                this.service.syslog.error("zone_name missing in metadata: " + JSON.stringify(metadata));
-                this.service.sendAndClose(this.res, 400, "{ \"status\": \"error\", \"msg\":\"zone_name missing in metadata\"}");
-                return;
+                this.syslog.error('zone_name missing in metadata: ' + JSON.stringify(metadata))
+                this.sendAndClose(res, 400, { status: 'error', msg: 'zone_name missing in metadata' })
+                return
             }
-            processCommit(metadata.zone_name, metadata.commit_uuid);
-        }.bind({ service: this, res: res });
-
-        let commitUuid = "-";
-        let zoneName = "-";
-        if ("zone_name" in req.query && "commit_uuid" in req.query) {
-            zoneName = req.query.zone_name;
-            commitUuid = req.query.commit_uuid;
-            processCommit(zoneName, commitUuid);
+            processCommit(metadata.zone_name, metadata.commit_uuid)
         }
-        else {
-            let metadata = req.body;
-            if ("media_commit" in req.headers) {
-                metadata = req.headers.media_commit;
-                processJson(metadata);
-            }
-            else {
+
+        let commitUuid = '-'
+        let zoneName = '-'
+        if ('zone_name' in req.query && 'commit_uuid' in req.query) {
+            zoneName = req.query.zone_name
+            commitUuid = req.query.commit_uuid
+            processCommit(zoneName, commitUuid)
+        } else {
+            let metadata = req.body
+            if ('media_commit' in req.headers) {
+                metadata = req.headers.media_commit
+                processJson(metadata)
+            } else {
                 // Bufferize file data
-                const size = parseInt(req.headers["content-length"]) || 4096;
-                const dwnld = new DownloadService(4096, size);
-                req.on("readable", function () { dwnld.read(req); });
+                const size = parseInt(req.headers['content-length']) || 4096
+                const dwnld = new DownloadService(4096, size)
+                req.on('readable', () => dwnld.read(req))
                 // Build the entry, Close the request
-                req.on("end", function () {
-                    metadata = dwnld.finish().toString("utf-8");
-                    processJson(metadata);
-                });
+                req.on('end', () => {
+                    metadata = dwnld.finish().toString('utf-8')
+                    processJson(metadata)
+                })
             }
         }
     }
     deleteMedia(req, res) {
-        this.syslog.debug("[deleteMedia]" + req.originalUrl, "http");
-        const aclStatus = this.ac.getAccessStatus(req, res, "API");
-        if (!this.ac.checkSystemAccessStatus(aclStatus, "-wx")) return;
-        res.header("Access-Control-Allow-Origin", "*");
+        this.syslog.debug('[deleteMedia] ' + req.originalUrl, 'http')
+        const aclStatus = this.ac.getAccessStatus(req, res, 'API')
+        if (!this.ac.checkSystemAccessStatus(aclStatus, '-wx')) return
 
-        const processDelete = function (uuid) {
-            this.service.db.mdelete(uuid, this.aclStatus, function (err, code = null) {
-                this.service.sendAndClose(this.res, code ? code : 400, "{ \"status\": \"error\", \"msg\":\"" + err + "\"}");
-            }.bind({ service: this.service, res: this.res }), function () {
-                this.syslog.notice("[deleteMedia]: " + uuid, "API");
-                this.service.sendAndClose(this.res, 200, "{ \"status\": \"OK\" }");
-            }.bind({ service: this.service, res: this.res }));
-        }.bind({ service: this, aclStatus: aclStatus, res: res });
-        const processJson = function (metadata) {
-            try { metadata = JSON.parse(metadata); }
-            catch (err) {
-                this.service.syslog.error("malformed delete message: " + metadata, "core");
-                this.service.sendAndClose(this.res, 400, "{\"status\":\"error\", \"msg\":\"malformed metadata\"}");
-                return;
+        const processDelete = (uuid) => {
+            this.db.mdelete(
+                uuid,
+                aclStatus,
+                (err, code = null) => this.sendAndClose(res, code || 400, { status: 'error', msg: `${err}` }),
+                () => {
+                    this.syslog.notice('[deleteMedia] ' + uuid, 'API')
+                    this.sendAndClose(res, 200, { status: 'OK' })
+                }
+            )
+        }
+        const processJson = (metadata) => {
+            try {
+                metadata = JSON.parse(metadata)
+            } catch (err) {
+                this.syslog.error('malformed delete message: ' + JSON.stringify(metadata), 'core')
+                this.sendAndClose(res, 400, { status: 'error', msg: 'malformed metadata' })
+                return
             }
             if (!metadata.uuid) {
-                this.service.syslog.error("uuid missing in metadata: " + JSON.stringify(metadata));
-                this.service.sendAndClose(this.res, 400, "{ \"status\": \"error\", \"msg\":\"uuid missing in metadata\"}");
-                return;
+                this.syslog.error('uuid missing in metadata: ' + JSON.stringify(metadata))
+                this.sendAndClose(res, 400, { status: 'error', msg: 'uuid missing in metadata' })
+                return
             }
-            processDelete(metadata.uuid);
-        }.bind({ service: this, res: res });
+            processDelete(metadata.uuid)
+        }
 
-        let uuid = "-";
-        if ("uuid" in req.params) {
-            uuid = req.params.uuid;
-            processDelete(uuid);
-        }
-        else if ("zone_name" in req.query && "commit_uuid" in req.query) {
-            uuid = req.query.commit_uuid;
-            processDelete(uuid);
-        }
-        else {
-            let metadata = req.body;
-            if ("media_delete" in req.headers) {
-                metadata = req.headers.media_delete;
-                processJson(metadata);
-            }
-            else {
+        let uuid = '-'
+        if ('uuid' in req.params) {
+            uuid = req.params.uuid
+            processDelete(uuid)
+        } else if ('zone_name' in req.query && 'commit_uuid' in req.query) {
+            uuid = req.query.commit_uuid
+            processDelete(uuid)
+        } else {
+            let metadata = req.body
+            if ('media_delete' in req.headers) {
+                metadata = req.headers.media_delete
+                processJson(metadata)
+            } else {
                 // Bufferize file data
-                const size = parseInt(req.headers["content-length"]) || 4096;
-                const dwnld = new DownloadService(4096, size);
-                req.on("readable", function () { dwnld.read(req); });
+                const size = parseInt(req.headers['content-length']) || 4096
+                const dwnld = new DownloadService(4096, size)
+                req.on('readable', () => dwnld.read(req))
                 // Build the entry, Close the request
-                req.on("end", function () {
-                    metadata = dwnld.finish().toString("utf-8");
-                    processJson(metadata);
-                });
+                req.on('end', () => {
+                    metadata = dwnld.finish().toString('utf-8')
+                    processJson(metadata)
+                })
             }
         }
     }
@@ -554,65 +567,71 @@ class HttpService {
      * @param {object} res - the HTTP response.
      */
     media(req, res) {
-        this.syslog.debug("[media]" + req.originalUrl, "http");
-        const aclStatus = this.ac.getAccessStatus(req, res);
-        if (!this.ac.checkSystemAccessStatus(aclStatus, "---")) return;
+        this.syslog.debug('[media]' + req.originalUrl, 'http')
+        const aclStatus = this.ac.getAccessStatus(req, res)
+        if (!this.ac.checkSystemAccessStatus(aclStatus, '---')) return
 
-        let reqUuid = "-";
-        if ("uuid" in req.params) reqUuid = req.params.uuid;
+        let reqUuid = '-'
+        if ('uuid' in req.params) reqUuid = req.params.uuid
         else {
-            if (!("file_metadata" in req.headers)) {
-                this.sendAndClose(res, 400, "{\"status\":\"error\", \"msg\":\"no meta-data provided\"}");
-                return;
+            if (!('file_metadata' in req.headers)) {
+                this.sendAndClose(res, 400, { status: 'error', msg: 'no meta-data provided' })
+                return
             }
-            let metadata = req.headers.file_metadata;
-            try { metadata = JSON.parse(metadata); }
-            catch (err) {
-                this.syslog.error("malformed metadata: " + metadata, "core");
-                this.sendAndClose(res, 400, "{\"status\":\"error\", \"msg\":\"malformed metadata\"}");
-                return;
+            let metadata = req.headers.file_metadata
+            try {
+                metadata = JSON.parse(metadata)
+            } catch (err) {
+                this.syslog.error(`malformed metadata: ${JSON.stringify(metadata)}`, 'core')
+                this.sendAndClose(res, 400, { status: 'error', msg: 'malformed metadata' })
+                return
             }
 
             if (!metadata.media_id) {
-                this.syslog.error("uuid missing in metadata: " + JSON.stringify(metadata));
-                this.sendAndClose(res, 400, "{ \"status\": \"error\", \"msg\":\"uuid missing in metadata\"}");
-                return;
+                this.syslog.error(`uuid missing in metadata: ${JSON.stringify(metadata)}`)
+                this.sendAndClose(res, 400, { status: 'error', msg: 'uuid missing in metadata' })
+                return
             }
-            reqUuid = metadata.media_id;
+            reqUuid = metadata.media_id
         }
 
-        // console.log('OPTION: '+util.inspect(req.headers));
-        const accessMode = req.headers["media-access-method"];
-        if (accessMode == "Direct") {
-            const nid = this.db.get(reqUuid, aclStatus);
-            if (!nid) HttpService.prototype.sendAndClose(res, 404, "{\"status\":\"error\", \"msg\":\"media uuid not found\"}");
+        const accessMode = req.headers['media-access-method']
+        if (accessMode == 'Direct') {
+            const nid = this.db.get(reqUuid, aclStatus)
+            if (!nid) this.sendAndClose(res, 404, { status: 'error', msg: 'media uuid not found' })
             else {
-                req.params.fileid = nid;
-                this.syslog.notice("[media][direct]: " + reqUuid, "API");
-                this.fileService(req, res);
+                req.params.fileid = nid
+                this.syslog.notice('[media][direct]: ' + reqUuid, 'API')
+                this.fileService(req, res)
             }
-        }
-        else if (accessMode == "Check") {
-            this.db.check(reqUuid, aclStatus, function (err, code = 400) {
-                HttpService.prototype.sendAndClose(this.res, code, "{\"status\":\"error\", \"msg\":\"" + err + "\"}");
-            }.bind({ res: res }), function (hash, previousHash, size) {
-                this.syslog.notice("[media][check]: " + reqUuid, "API");
-                if (hash != previousHash && previousHash != "-") {
-                    this.syslog.error("Media changed on disk for uuid " + reqUuid + " hash=" + hash + " previously=" + previousHash, "core");
+        } else if (accessMode == 'Check') {
+            this.db.check(
+                reqUuid,
+                aclStatus,
+                (err, code = 400) => this.sendAndClose(res, code, { status: 'error', msg: `${err}` }),
+                (hash, previousHash, size) => {
+                    this.syslog.notice(`[media][check]: ${reqUuid}`, 'API')
+                    if (hash != previousHash && previousHash != '-') {
+                        this.syslog.error(
+                            `Media changed on disk for uuid ${reqUuid} hash=${hash} previously=${previousHash}`,
+                            'core'
+                        )
+                    }
+                    this.syslog.info(`full read of media: ${reqUuid}`, 'core')
+                    this.sendAndClose(res, 200, {
+                        status: 'OK',
+                        md5: hash,
+                        previous_md5: previousHash,
+                        size: size,
+                    })
                 }
-                this.syslog.info("full read of media: " + reqUuid, "core");
-                HttpService.prototype.sendAndClose(this.res, 200, "{\"status\":\"OK\", \"md5\":\"" + hash + "\", \"previous_md5\":\"" + previousHash + "\", \"size\":\"" + size + "\"}");
-            }.bind({ res: res, syslog: this.syslog }));
-        }
-        else {
-            const nid = this.db.get(reqUuid, aclStatus);
-            if (!nid) HttpService.prototype.sendAndClose(res, 404, "{\"status\":\"error\", \"msg\":\"media uuid not found\"}");
+            )
+        } else {
+            const nid = this.db.get(reqUuid, aclStatus)
+            if (!nid) this.sendAndClose(res, 404, { status: 'error', msg: 'media uuid not found' })
             else {
-                this.syslog.notice("[media][access]: " + reqUuid, "API");
-                content = { url: this.server + this.httpPrefix + "storage/" + nid };
-                res.type("application/json");
-                res.write(JSON.stringify(content));
-                res.status(200).end();
+                this.syslog.notice(`[media][access]: ${reqUuid}`, 'API')
+                res.status(200).json({ url: `${this.server + this.httpPrefix}storage/${nid}` })
             }
         }
     }
@@ -622,8 +641,8 @@ class HttpService {
      * @param {object} res - the HTTP response.
      */
     direct(req, res) {
-        req.headers["media-access-method"] = "Direct";
-        this.media(req, res);
+        req.headers['media-access-method'] = 'Direct'
+        this.media(req, res)
     }
     /**
      * Serves a direct access through the media connector.
@@ -631,9 +650,9 @@ class HttpService {
      * @param {object} res - the HTTP response.
      */
     compress(req, res) {
-        req.headers["media-access-method"] = "Direct";
-        req.headers["media-access-compression"] = "true";
-        this.media(req, res);
+        req.headers['media-access-method'] = 'Direct'
+        req.headers['media-access-compression'] = 'true'
+        this.media(req, res)
     }
     /**
      * Serves a check of an existing media.
@@ -642,8 +661,8 @@ class HttpService {
      * @param {object} res - the HTTP response.
      */
     checkFile(req, res) {
-        req.headers["media-access-method"] = "Check";
-        this.media(req, res);
+        req.headers['media-access-method'] = 'Check'
+        this.media(req, res)
     }
     /**
      * Serves the access to the media content from a connector.
@@ -651,101 +670,86 @@ class HttpService {
      * @param {object} res - the HTTP response.
      */
     fileService(req, res) {
-        this.syslog.debug("[fileService]" + req.originalUrl, "http");
-        const aclStatus = this.ac.getAccessStatus(req, res);
-        if (!this.ac.checkSystemAccessStatus(aclStatus, "---")) return;
+        this.syslog.debug('[fileService]' + req.originalUrl, 'http')
+        const aclStatus = this.ac.getAccessStatus(req, res)
+        if (!this.ac.checkSystemAccessStatus(aclStatus, '---')) return
 
-        const fileid = req.params.fileid;
+        const fileid = req.params.fileid
 
-        this.db.find(fileid, aclStatus, function (err, code) {
-            HttpService.prototype.sendAndClose(res, 404, "{\"status\":\"error\", \"msg\":\"could not get media content\"}");
-        }, function (data, name, mimetype) {
-            this.syslog.info("full read with connector: " + fileid, "core");
-            const compressionMode = req.headers["media-access-compression"];
-            const content = data;
-            res.header("Access-Control-Allow-Origin", "*");
-            res.setHeader("Content-Disposition", "attachment; filename=\"" + name + "\"");
-            if (compressionMode && compressionMode.toLowerCase() == "true") {
-                zlib.gzip(data, function (err, buffer) {
-                    if (err) { res.type("application/octet-stream"); res.write(content); }
-                    else {
-                        res.setHeader("Content-Disposition", "attachment; filename=\"" + name + ".gz\"");
-                        res.type("application/gzip");
-                        res.write(buffer);
-                    }
-                    res.status(200).end();
-                });
+        this.db.find(
+            fileid,
+            aclStatus,
+            (err, code) => this.sendAndClose(res, 404, '{"status":"error", "msg":"could not get media content"}'),
+            (data, name, mimetype) => {
+                this.syslog.info(`full read with connector: ${fileid}`, 'core')
+                const compressionMode = req.headers['media-access-compression']
+                const content = data
+                res.header('Access-Control-Allow-Origin', '*')
+                res.setHeader('Content-Disposition', `attachment; filename="${name}"`)
+                if (compressionMode && compressionMode.toLowerCase() == 'true') {
+                    gzip(data, (err, buffer) => {
+                        if (err) {
+                            res.type('application/octet-stream')
+                            res.write(content)
+                        } else {
+                            res.setHeader('Content-Disposition', `attachment; filename="${name}.gz"`)
+                            res.type('application/gzip')
+                            res.write(buffer)
+                        }
+                        res.status(200).end()
+                    })
+                } else {
+                    res.type(mimetype)
+                    res.write(content)
+                    res.status(200).end()
+                }
             }
-            else {
-                res.type(mimetype);
-                res.write(content);
-                res.status(200).end();
-            }
-        }.bind({ syslog: this.syslog }));
+        )
     }
-};
+}
 
 /**
  * An utility class operating a fast buffering management.
  * @class DownloadService
  */
-function DownloadService(chunkSize, fileSize) {
-    this.chunkSize = chunkSize;
-    this.bufferSize = fileSize;
-    this.filecontent = Buffer.allocUnsafe(this.bufferSize);
-    this.startts = new Date().valueOf();
-    this.updateTime = 500;
-    this.realcontentsize = 0;
-};
-DownloadService.prototype.read = function(req, update = null) {
-    let chunk;
-    while (null !== (chunk = req.read())) {
-        const nsize = this.realcontentsize + chunk.length;
-        if (nsize > this.bufferSize) {
-            if (this.bufferSize > (2 * this.chunkSize)) this.chunkSize *= 2;
-            this.bufferSize += this.chunkSize + chunk.length;
-            const newfilecontent = Buffer.allocUnsafe(this.bufferSize);
-            this.filecontent.copy(newfilecontent);
-            this.filecontent = newfilecontent;
-        }
-        chunk.copy(this.filecontent, this.realcontentsize);
-        this.realcontentsize += chunk.length;
-        if (update) {
-            const currentts = new Date().valueOf();
-            if ((currentts - this.startts) > this.updateTime) {
-                update(this.realcontentsize);
-                this.startts = new Date().valueOf();
+class DownloadService {
+    constructor(chunkSize, fileSize) {
+        this.chunkSize = chunkSize
+        this.bufferSize = fileSize
+        this.filecontent = Buffer.allocUnsafe(this.bufferSize)
+        this.startts = new Date().valueOf()
+        this.updateTime = 500
+        this.realcontentsize = 0
+    }
+    read(req, update = null) {
+        let chunk
+        while (null !== (chunk = req.read())) {
+            const nsize = this.realcontentsize + chunk.length
+            if (nsize > this.bufferSize) {
+                if (this.bufferSize > 2 * this.chunkSize) this.chunkSize *= 2
+                this.bufferSize += this.chunkSize + chunk.length
+                const newfilecontent = Buffer.allocUnsafe(this.bufferSize)
+                this.filecontent.copy(newfilecontent)
+                this.filecontent = newfilecontent
+            }
+            chunk.copy(this.filecontent, this.realcontentsize)
+            this.realcontentsize += chunk.length
+            if (update) {
+                const currentts = new Date().valueOf()
+                if (currentts - this.startts > this.updateTime) {
+                    update(this.realcontentsize)
+                    this.startts = new Date().valueOf()
+                }
             }
         }
     }
-};
-DownloadService.prototype.finish = function() {
-    this.buffer_length = this.filecontent.length;
-    this.data = this.filecontent.slice(0, this.realcontentsize);
-    this.filecontent = null;
-    return this.data;
-};
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    finish() {
+        this.buffer_length = this.filecontent.length
+        this.data = this.filecontent.subarray(0, this.realcontentsize)
+        this.filecontent = null
+        return this.data
+    }
+}
 
 /**
  * Recursive function updating a base structure with a given structure
@@ -754,22 +758,22 @@ DownloadService.prototype.finish = function() {
  * @param {object} updated - the source of updated data
  */
 function updateProperty(base, updated) {
-    const newo = {};
-    for (e in base) {
-        if (e in updated) {
-            if ((typeof updated[e]) == "object")   newo[e] = updateProperty(base[e], updated[e]);
-            else if ((typeof base[e]) == "number") newo[e] = parseInt(updated[e]);
+    const newo = {}
+    for (const elt in base) {
+        if (elt in updated) {
+            if (typeof updated[elt] == 'object') newo[elt] = updateProperty(base[elt], updated[elt])
+            else if (typeof base[elt] == 'number') newo[elt] = parseInt(updated[elt])
             else {
-                try { newo[e] = JSON.parse(updated[e]); }
-                catch (err) {
-                    newo[e] = updated[e];
+                try {
+                    newo[elt] = JSON.parse(updated[elt])
+                } catch (err) {
+                    newo[elt] = updated[elt]
                 }
             }
-        }
-        else newo[e] = base[e];
+        } else newo[elt] = base[elt]
     }
-    return newo;
-};
+    return newo
+}
 
 /**
  * Fetch ini-file & parse command line arguments
@@ -778,33 +782,29 @@ function updateProperty(base, updated) {
  * @param {object} confFilename - the defaut init file
  */
 function fetchAndParseArguments(confDefault, confFilename) {
-    if (argv["ini"]) {
-        confFilename = argv["ini"];
-    }
+    if (_argv['ini']) confFilename = _argv['ini']
 
-    let configuration = confDefault;
+    let configuration = confDefault
     try {
-        const configfile = ini.parse(fs.readFileSync(confFilename, "utf-8"));
-        configuration = updateProperty(confDefault, configfile);
+        const configfile = parse(readFileSync(confFilename, 'utf-8'))
+        configuration = updateProperty(confDefault, configfile)
+    } catch (err) {
+        console.error('warning: configuration file ignored: ' + err)
     }
-    catch (err) { console.error("warning: configuration file ignored: "+err); }
 
-    if (argv["p"]) {
-        const np = parseInt(argv["p"], 10);
-        if (np != NaN) configuration.server.port = np;
+    if (_argv['p']) {
+        const np = parseInt(_argv['p'], 10)
+        if (!isNaN(np)) configuration.server.port = np
     }
-    if (argv["revision"]) {
-        configuration.logging.revision = argv["revision"].slice(0, 40);
-    }
-    // console.log('RES: '+JSON.stringify(configuration,false,4));
+    if (_argv['revision']) configuration.logging.revision = _argv['revision'].slice(0, 40)
 
     // Error mgmt.
-    if (configuration.server.port < 80 ) {
-        console.log("Incorrect port provided: "+configuration.server.port);
-        process.exit(-1);
+    if (configuration.server.port < 80) {
+        console.log('Incorrect port provided: ' + configuration.server.port)
+        process.exit(-1)
     }
-    return configuration;
-};
+    return configuration
+}
 
 /* eslint-disable indent */
 /**
@@ -814,28 +814,41 @@ function fetchAndParseArguments(confDefault, confFilename) {
  * @param {object}  timeout - The closing sequence timeout.
  * @param {object}  service - The service to close.
  */
-function SignalCleaner(timeout, service) {
-    this.service = service;
-    this.timeout = timeout;
-    process.on("SIGINT",  this.interruption.bind({sc:this}));
-    process.on("SIGTERM", this.interruption.bind({sc:this}));
-};
-SignalCleaner.prototype.interruption = function(signal) {
-    const service = this.sc.service;
-    this.sc.service = null;
-    if (service) {
-        service.close(function(context, err) { console.error("Error closing session: "+err); process.exit(1); },
-                      function(context)      { process.exit(0); });
+class SignalCleaner {
+    constructor(timeout, service) {
+        this.service = service
+        this.timeout = timeout
     }
-    else setTimeout(function() { console.error("Warning: timeout while closing, terminated"); process.exit(0); }, 1000 * this.sc.timeout);
-};
+    interruption(signal) {
+        const service = this.service
+        this.service = null
+        if (service) {
+            service.close(
+                (context, err) => {
+                    console.error('Error closing session: ' + err)
+                    process.exit(1)
+                },
+                (context) => exit(0)
+            )
+        } else
+            setTimeout(() => {
+                console.error('Warning: timeout while closing, terminated')
+                process.exit(0)
+            }, 1000 * this.timeout)
+    }
+    arm() {
+        process.on('SIGINT', (req, res) => this.interruption(req, res))
+        process.on('SIGTERM', (req, res) => this.interruption(req, res))
+    }
+}
 
 /*
  * Main application function, loads configuration and launch service.
  */
-const run = function() {
-    const configuration = fetchAndParseArguments(DEFAULT_CONF, "./rudi_media_custom.ini");
-    service = new HttpService(configuration);
-    sc = new SignalCleaner(configuration.server.close_timeout, service);
-};
-run();
+const run = () => {
+    const configuration = fetchAndParseArguments(DEFAULT_CONF, './rudi_media_custom.ini')
+    const service = new HttpService(configuration)
+    const sc = new SignalCleaner(configuration.server.close_timeout, service)
+    sc.arm()
+}
+run()

@@ -13,6 +13,7 @@
         "schema.js",
         "weblogger.js"
     ],
+    "type": "module",
     "dependencies": {
         "@aqmo.org/jwt-lib": "^1.1.11",
         "@aqmo.org/rudi_logger": "^1.1.5",

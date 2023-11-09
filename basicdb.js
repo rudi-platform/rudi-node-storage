@@ -4,11 +4,8 @@
  * @author: Laurent Morin
  * @version: 1.0.0
  */
-// const fs = require('fs');
-// const util = require('util');
-// const crypto = require('crypto');
-require("./cycle.js"); // For Json Unparsing
-const BasicZone = require("./basiczone.js");
+import { BasicZone } from './basiczone.js';
+import './cycle.js'; // For Json Unparsing
 
 /**
  * Represents a basic media DB.
@@ -22,20 +19,20 @@ const BasicZone = require("./basiczone.js");
  * @param {object} logger   - The logging interface
  * @param {object} mongodb  - The mongo database interface
  */
-class BasicFileDB {
+export class BasicFileDB {
     constructor(mediaDir, acldb, logger, mongodb, timeout) {
-        this.mediaDir = mediaDir;
-        this.acldb = acldb;
-        this.syslog = logger;
-        this.logid = "db";
-        this.connectorTimeout = timeout;
-        this.mongodb = mongodb;
+        this.mediaDir = mediaDir
+        this.acldb = acldb
+        this.syslog = logger
+        this.logid = 'db'
+        this.connectorTimeout = timeout
+        this.mongodb = mongodb
 
-        this.zone_db = {};
-        this.storageId = {};
-        this.db = {};
+        this.zone_db = {}
+        this.storageId = {}
+        this.db = {}
 
-        this.default_zone = "zone1";
+        this.default_zone = 'zone1'
     }
     /**
      * Generate a Json Schema for an *event* with the proper registering URL.
@@ -45,37 +42,45 @@ class BasicFileDB {
      */
     static eventSchema(contextRef) {
         return {
-            "title": "The RUDI media DB event Schema",
-            "description": "The descriptor of an event associated to a RUDI media DB access.",
-            "type": "object",
-            "properties": {
-                "operation": {
-                    "description": "The operation done",
-                    "type": "string",
-                    "enum": ["add_media", "stage_media", "commit_media", "check_entry", "new_conn", "del_conn", "acc_conn"]
+            title: 'The RUDI media DB event Schema',
+            description: 'The descriptor of an event associated to a RUDI media DB access.',
+            type: 'object',
+            properties: {
+                operation: {
+                    description: 'The operation done',
+                    type: 'string',
+                    enum: [
+                        'add_media',
+                        'stage_media',
+                        'commit_media',
+                        'check_entry',
+                        'new_conn',
+                        'del_conn',
+                        'acc_conn',
+                    ],
                 },
-                "uuid": {
-                    "description": "The open storage access uuid",
-                    "type": "string",
-                    "format": "uuid"
+                uuid: {
+                    description: 'The open storage access uuid',
+                    type: 'string',
+                    format: 'uuid',
                 },
-                "ref": {
-                    "description": "The media-id",
-                    "type": "string",
-                    "format": "uuid"
+                ref: {
+                    description: 'The media-id',
+                    type: 'string',
+                    format: 'uuid',
                 },
-                "zone": {
-                    "description": "The storage zone",
-                    "type": "string"
+                zone: {
+                    description: 'The storage zone',
+                    type: 'string',
                 },
-                "value": {
-                    "description": "The object manipulated by the operation",
-                    "type": "object"
+                value: {
+                    description: 'The object manipulated by the operation',
+                    type: 'object',
                 },
-                "context": { "description": "The creaction context", "$ref": contextRef }
+                context: { description: 'The creaction context', $ref: contextRef },
             },
-            "required": ["operation", "uuid", "ref"]
-        };
+            required: ['operation', 'uuid', 'ref'],
+        }
     }
     /* eslint-disable no-multi-spaces */
     /**
@@ -84,12 +89,12 @@ class BasicFileDB {
      * @param {object}    data - The error message.
      */
     convertContext(opname, cid, aclStatus) {
-        const context = aclStatus && aclStatus.context;
-        const auth = context && context.auth ? Object.assign({}, context.auth) : { userId: -1, userName: "-", reqIP: "-", access: "---" };
-        const source = (context && context.source !== undefined) ? opname + ":" + context.source : opname;
-        const id = (cid !== undefined) ? cid : "-";
-        auth.clientApp = "media/db";
-        return { auth: auth, operation: { opType: source, statusCode: 200, id: id } };
+        const context = aclStatus?.context
+        const auth = context?.auth ? { ...context.auth } : { userId: -1, userName: '-', reqIP: '-', access: '---' }
+        const source = context?.source !== undefined ? `${opname}:${context.source}` : opname
+        const id = cid !== undefined ? cid : '-'
+        auth.clientApp = 'media/db'
+        return { auth: auth, operation: { opType: source, statusCode: 200, id: id } }
     }
     /* eslint-enable no-multi-spaces */
     /**
@@ -97,20 +102,21 @@ class BasicFileDB {
      *
      * @param {string}    message - The error message.
      */
-    error(message, context = null) { this.syslog.error(message, this.logid, context); }
-    warn(message, context = null) { this.syslog.warn(message, this.logid, context); }
-    info(message, context = null) { this.syslog.info(message, this.logid, context); }
-    notice(message, context = null) { this.syslog.notice(message, this.logid, context); }
-    debug(message, context = null) { this.syslog.info(message, this.logid, context); }
+    error = (message, context = null) => this.syslog.error(message, this.logid, context)
+    warn = (message, context = null) => this.syslog.warn(message, this.logid, context)
+    info = (message, context = null) => this.syslog.info(message, this.logid, context)
+    notice = (message, context = null) => this.syslog.notice(message, this.logid, context)
+    debug = (message, context = null) => this.syslog.debug(message, this.logid, context)
+
     /**
      * Interface the error logger with contexts.
      *
      * @param {string}    message - The error message.
      * @param {string}    context - The context.
      */
-    errorCtx(message, name, cid, aclStatus) {
-        this.syslog.error(message, this.logid, this.convertContext(name, cid, aclStatus), undefined);
-    }
+    errorCtx = (message, name, cid, aclStatus) =>
+        this.syslog.error(message, this.logid, this.convertContext(name, cid, aclStatus))
+
     /* eslint-disable no-multi-spaces */
     /**
      * Interface the data info logger in order to describe data sets.
@@ -118,23 +124,26 @@ class BasicFileDB {
      * @param {object}    data - The error message.
      */
     logReq(aclStatus, data) {
-        let header = "do=" + data.operation + " zone=" + data.zone + " uuid=" + data.uuid;
-        if (data.uuid != data.ref) header += " ref=" + data.ref;
-        let extra = "";
-        let context = undefined;
-        if (data.operation === "add_media" || data.operation === "stage_media" ||
-            data.operation === "commit_media" || data.operation === "list_media" || data.operation === "delete_media") {
-            if ("url" in data.value) extra = " url=" + data.value.url;
-            else extra = " file=" + data.value.filename;
-            context = this.convertContext(data.operation, data.uuid, aclStatus);
+        let header = `do=${data.operation} zone=${data.zone} uuid=${data.uuid}`
+        if (data.uuid != data.ref) header += ` ref=${data.ref}`
+        let extra = ''
+        let context
+        if (
+            data.operation === 'add_media' ||
+            data.operation === 'stage_media' ||
+            data.operation === 'commit_media' ||
+            data.operation === 'list_media' ||
+            data.operation === 'delete_media'
+        ) {
+            if ('url' in data.value) extra = ` url=${data.value.url}`
+            else extra = ` file=${data.value.filename}`
+            context = this.convertContext(data.operation, data.uuid, aclStatus)
+        } else if (data.operation === 'check_entry' || data.operation === 'new_conn' || data.operation === 'del_conn') {
+            context = this.convertContext(data.operation, data.uuid, aclStatus)
+        } else if (data.operation === 'acc_conn') {
+            context = this.convertContext(data.operation, data.uuid, aclStatus)
         }
-        else if (data.operation === "check_entry" || data.operation === "new_conn" || data.operation === "del_conn") {
-            context = this.convertContext(data.operation, data.uuid, aclStatus);
-        }
-        else if (data.operation === "acc_conn") {
-            context = this.convertContext(data.operation, data.uuid, aclStatus);
-        }
-        this.syslog.info(header + extra, this.logid, context, data.operation, data);
+        this.syslog.info(header + extra, this.logid, context, data.operation, data)
     }
     /* eslint-enable no-multi-spaces */
     /* eslint-disable guard-for-in */
@@ -146,35 +155,36 @@ class BasicFileDB {
      * @param {function=} done        - An callback with the entry when done.
      */
     init(zones, withmongo, none, done) {
-        console.debug('T [BasicFileDB.init]');
-        if (!withmongo) this.mongodb = null;
+        // console.debug('T [BasicFileDB.init]')
+        if (!withmongo) this.mongodb = null
 
-        let defzone = null;
-        if (typeof zones == "string") zones = [zones];
-        for (let zoneDesc of zones) {
-            if (typeof zoneDesc == "string") zoneDesc = { name: zoneDesc };
-            const nzone = new BasicZone(this.acldb, this.mediaDir, zoneDesc);
-            this.warn(`[${nzone.name}]: csv=${nzone.csv} dir=${nzone.dirname}`);
-            this.zone_db[nzone.name] = nzone;
-            if (!defzone) defzone = nzone.name;
+        let defzone = null
+        if (typeof zones == 'string') zones = [zones]
+        for (const zoneDesc of zones) {
+            const zoneDescObj = typeof zoneDesc == 'string' ? { name: zoneDesc } : zoneDesc
+            const nzone = new BasicZone(this.acldb, this.mediaDir, zoneDescObj)
+            this.debug(`[${nzone.name}]: csv=${nzone.csv} dir=${nzone.dirname}`)
+            this.zone_db[nzone.name] = nzone
+            if (!defzone) defzone = nzone.name
         }
-        if (defzone) this.default_zone = defzone;
+        if (defzone) this.default_zone = defzone
         else {
-            const zoneConf = { name: this.default_zone, csv: this.default_csvFile };
-            this.zone_db[this.default_zone] = new BasicZone(this.acldb, this.mediaDir, zoneConf);
+            const zoneConf = { name: this.default_zone, csv: this.default_csvFile }
+            this.zone_db[this.default_zone] = new BasicZone(this.acldb, this.mediaDir, zoneConf)
         }
 
         // Initialize all zones.
-        const entrycb = (aclStatus, zone, entry) => this.recordEntry(aclStatus, zone, entry);
+        const entrycb = (aclStatus, zone, entry) => this.recordEntry(aclStatus, zone, entry)
 
-        const pl = [];
+        const pl = []
         for (const zi in this.zone_db) {
             const zone_i = this.zone_db[zi]
-            console.debug('T [BasicFileDB.init]', zone_i.name);
             pl.push(new Promise((resolve, reject) => zone_i.init(entrycb, reject, resolve)))
         }
 
-        Promise.all(pl).then(null, (err) => { throw new Error("Could not open Zone: " + err); });
+        Promise.all(pl).then(null, (err) => {
+            throw new Error('Could not open Zone: ' + err)
+        })
     }
     /**
      * Close the file database, and flush all pending events.
@@ -183,40 +193,46 @@ class BasicFileDB {
      * @param {function=} done        - An callback with the entry when done.
      */
     close(none, done) {
-        const errFct = function (err) {
-            this.service.error("Could not close DB: " + err);
-            if (none) none("Could not close file database: " + err);
-        }.bind({ service: this });
-
-        const closeAllZones = function (none, done) {
-            const pl = [];
-            for (zi in this.zone_db) {
-                const zone = this.zone_db[zi];
-                pl.push(new Promise(function (resolve, reject) {
-                    this.service.warn("Close zone " + this.zone.name);
-                    this.zone.close(reject, resolve);
-                }.bind({ service: this.service, zone: zone })));
-            }
-            Promise.all(pl).then(function () {
-                this.service.warn("All zone closed");
-                if (this.done) this.done();
-            }.bind({ service: this.service, done: this.done }), function (err) {
-                this.service.error("Could not close all zones: " + err);
-                if (this.none) this.none("Could not close all zones: " + err);
-            }.bind({ service: this.service, none: this.none }));
-        }.bind({ zone_db: this.zone_db, service: this, none: none, done: done });
-
-        const sId = Object.keys(this.storageId);
-        if (sId.length > 0) {
-            const pl = [];
-            for (fileid of sId) {
-                pl.push(new Promise(function (resolve, reject) {
-                    this.service.deleleteFileId(this.fileid, { source: "interruption" }, reject, resolve);
-                }.bind({ service: this, fileid: fileid })));
-            }
-            Promise.all(pl).then(closeAllZones, errFct);
+        const errFct = (err) => {
+            this.error('Could not close DB: ' + err)
+            if (none) none('Could not close file database: ' + err)
         }
-        else closeAllZones(none, done);
+
+        const closeAllZones = (none, done) => {
+            const pl = []
+            for (const zi in this.zone_db) {
+                const zone = this.zone_db[zi]
+                pl.push(
+                    new Promise((resolve, reject) => {
+                        this.warn('Close zone ' + zone.name)
+                        zone.close(reject, resolve)
+                    })
+                )
+            }
+            return Promise.all(pl).then(
+                () => {
+                    this.warn('All zone closed')
+                    if (done) done()
+                },
+                (err) => {
+                    this.error('Could not close all zones: ' + err)
+                    if (none) none('Could not close all zones: ' + err)
+                }
+            )
+        }
+
+        const sId = Object.keys(this.storageId)
+        if (sId.length > 0) {
+            const pl = []
+            for (const fileid of sId) {
+                pl.push(
+                    new Promise((resolve, reject) =>
+                        this.deleleteFileId(fileid, { source: 'interruption' }, reject, resolve)
+                    )
+                )
+            }
+            Promise.all(pl).then(closeAllZones, errFct)
+        } else closeAllZones(none, done)
     }
     /* eslint-enable guard-for-in */
     /**
@@ -231,31 +247,36 @@ class BasicFileDB {
      */
     recordEntry(aclStatus, zone, entry, none, done) {
         try {
-            const opdesc = { 
-                operation: "add_media", 
-                uuid: entry.uuid, 
-                ref: entry.uuid, 
-                zone: zone.name, 
-                context: aclStatus.context.toJson(), 
-                value: entry.toJson() 
-            };
-            const doneFct = (entry) => {
-                this.db[entry.uuid] = entry;
-                this.logReq(aclStatus, opdesc);
-                if (done) done(opdesc);
-            };
-            const errFct = (err) => {
-                this.warn("Could not update DB (init add): " + err + "; with " + JSON.safeStringify(opdesc));
-                doneFct(entry); // We stand at a warning level for Mongo up to now.
-            };
-            if (this.mongodb) {
-                this.mongodb.addMedia(entry.toJson(), errFct, () => this.mongodb.addEvent(opdesc, errFct, () => doneFct(entry)));
+            const opdesc = {
+                operation: 'add_media',
+                uuid: entry.uuid,
+                ref: entry.uuid,
+                zone: zone.name,
+                context: aclStatus.context.toJson(),
+                value: entry.toJson(),
             }
-            else doneFct(entry);
-        }
-        catch (err) {
-            this.errorCtx("Invalid media entry: " + err + " entry: " + entry.toJson(), "add_media", "-", aclStatus);
-            if (none) none(err);
+            const doneFct = (entry) => {
+                this.db[entry.uuid] = entry
+                this.logReq(aclStatus, opdesc)
+                if (done) done(opdesc)
+            }
+            const errFct = (err, desc = opdesc) => {
+                this.warn(`Could not update DB (init add): ${err}; with ${JSON.safeStringify(desc)}`)
+                doneFct(entry) // We stand at a warning level for Mongo up to now.
+            }
+            if (this.mongodb)
+                this.mongodb.addMedia(entry.toJson(), errFct, () =>
+                    this.mongodb.addEvent(opdesc, errFct, () => doneFct(entry))
+                )
+            else doneFct(entry)
+        } catch (err) {
+            this.errorCtx(
+                `Invalid media entry: ${err} entry: ${JSON.stringify(entry.toJson())}`,
+                'add_media',
+                '-',
+                aclStatus
+            )
+            if (none) none(err)
         }
     }
     /**
@@ -268,95 +289,118 @@ class BasicFileDB {
      */
     addEntry(metadata, aclStatus, filecontent, none, done) {
         // console.debug('T [BasicFileDB.addEntry]')
-        if (!("media_type" in metadata)) {
-            this.errorCtx("(ignored) Missing media type: " + JSON.safeStringify(metadata), "add_media", "-", aclStatus);
-            metadata.media_type = "FILE";
+        if (!('media_type' in metadata)) {
+            this.errorCtx('(ignored) Missing media type: ' + JSON.safeStringify(metadata), 'add_media', '-', aclStatus)
+            metadata.media_type = 'FILE'
         }
-        if (!("media_id" in metadata)) {
-            this.errorCtx("Missing media UUID: " + JSON.safeStringify(metadata), "add_media", "-", aclStatus);
-            if (none) none("Missing media UUID", 400);
-            return;
+        if (!('media_id' in metadata)) {
+            this.errorCtx('Missing media UUID: ' + JSON.safeStringify(metadata), 'add_media', '-', aclStatus)
+            if (none) none('Missing media UUID', 400)
+            return
         }
-        if (!("access_date" in metadata)) 
-            metadata.access_date = new Date();
+        if (!('access_date' in metadata)) metadata.access_date = new Date()
         else {
-            metadata.access_date = parseInt(metadata.access_date) * 1000;
-            metadata.access_date = new Date(metadata.access_date);
+            metadata.access_date = parseInt(metadata.access_date) * 1000
+            metadata.access_date = new Date(metadata.access_date)
         }
-        if (("file_size" in metadata) && (filecontent.length != metadata.file_size)) {
-            this.errorCtx("(ignored) inconsistent provided file size: " + metadata.file_size + " received: " + filecontent.length, "add_media", metadata.media_id, aclStatus);
-        }
+        if ('file_size' in metadata && filecontent.length != metadata.file_size)
+            this.errorCtx(
+                '(ignored) inconsistent provided file size: ' + metadata.file_size + ' received: ' + filecontent.length,
+                'add_media',
+                metadata.media_id,
+                aclStatus
+            )
+
         if (Object.keys(this.zone_db).length == 0) {
-            this.errorCtx("DB not ready for adding", "add_media", metadata.media_id, aclStatus);
-            if (none) none(`DB not ready for adding`, 400);
-            return;
+            this.errorCtx('DB not ready for adding', 'add_media', metadata.media_id, aclStatus)
+            if (none) none(`DB not ready for adding`, 400)
+            return
         }
-        const zone = this.zone_db[this.default_zone];
+        const zone = this.zone_db[this.default_zone]
         const errFct = (err, code) => {
-            this.errorCtx("could not add entry: " + err, "add_media", metadata.media_id, aclStatus);
-            if (none) none(err, code);
-        };
-        const addStepEntry = (message) => this.notice("[add_media]:" + message);
+            this.errorCtx('could not add entry: ' + err, 'add_media', metadata.media_id, aclStatus)
+            if (none) none(err, code)
+        }
+        const addStepEntry = (message) => this.notice('[add_media]:' + message)
 
         const addDone = (entry, commitId = null) => {
-            this.notice("new file: name=" + entry.uuid + " size=" + entry.size + " (" + filecontent.length + ") hash=" + entry.md5);
-            let logType = "stage_media";
+            this.notice(
+                'new file: name=' +
+                    entry.uuid +
+                    ' size=' +
+                    entry.size +
+                    ' (' +
+                    filecontent.length +
+                    ') hash=' +
+                    entry.md5
+            )
+            let logType = 'stage_media'
             if (!commitId) {
-                logType = "add_media";
-                this.db[entry.uuid] = entry;
+                logType = 'add_media'
+                this.db[entry.uuid] = entry
             }
-            const zname = zone.name;
-            this.logEntry(zone, logType, aclStatus, entry, none, 
-                () => { if (done) done(zname, commitId); }
-            );
-        };
-        zone.newBasicEntryFromMetadata(metadata, filecontent, aclStatus, errFct, addStepEntry, addDone);
+            const zname = zone.name
+            this.logEntry(zone, logType, aclStatus, entry, none, () => {
+                if (done) done(zname, commitId)
+            })
+        }
+        zone.newBasicEntryFromMetadata(metadata, filecontent, aclStatus, errFct, addStepEntry, addDone)
     }
     commit(zoneName, commitId, aclStatus, none, done) {
         if (Object.keys(this.zone_db).length <= 0) {
-            this.errorCtx("DB not ready for committing", "commit_media", zoneName, aclStatus);
-            if (none) none(`DB not ready for committing`, 400);
-            return;
+            this.errorCtx('DB not ready for committing', 'commit_media', zoneName, aclStatus)
+            if (none) none(`DB not ready for committing`, 400)
+            return
         }
 
         if (!(zoneName in this.zone_db)) {
-            this.errorCtx("Zone " + zoneName + " not found", "commit_media", zoneName, aclStatus);
-            if (none) none("Zone " + zoneName + " not found", 404);
-            return;
+            this.errorCtx('Zone ' + zoneName + ' not found', 'commit_media', zoneName, aclStatus)
+            if (none) none('Zone ' + zoneName + ' not found', 404)
+            return
         }
-        const zone = this.zone_db[zoneName];
+        const zone = this.zone_db[zoneName]
 
         const commitDone = (staging) => {
-            const entry = staging.entry;
-            this.notice("commit file: name=" + entry.uuid);
-            this.db[entry.uuid] = entry;
-            this.logEntry(zone, "commit_media", aclStatus, entry, none, done);
-        };
+            const entry = staging.entry
+            this.notice('commit file: name=' + entry.uuid)
+            this.db[entry.uuid] = entry
+            this.logEntry(zone, 'commit_media', aclStatus, entry, none, done)
+        }
 
-        zone.commitEntry(aclStatus, commitId, function (err, code) {
-            this.errorCtx(err, "commit_media", zoneName, aclStatus);
-            if (none) none(err, code);
-        }.bind({ service: this }), commitDone);
+        zone.commitEntry(
+            aclStatus,
+            commitId,
+            (err, code) => {
+                this.errorCtx(err, 'commit_media', zoneName, aclStatus)
+                if (none) none(err, code)
+            },
+            commitDone
+        )
     }
     mdelete(uuid, aclStatus, none, done) {
         if (!(uuid in this.db)) {
-            const errstr = "media " + uuid + " not found";
-            this.errorCtx(errstr, "delete_media", uuid, aclStatus);
-            if (none) none(errstr, 404);
-            return;
+            const errstr = 'media ' + uuid + ' not found'
+            this.errorCtx(errstr, 'delete_media', uuid, aclStatus)
+            if (none) none(errstr, 404)
+            return
         }
-        const entry = this.db[uuid];
-        const zone = entry.zone;
-        const deleteDone = function (entry) {
-            delete this.service.db[entry.uuid];
-            this.service.notice("delete file: name=" + entry.uuid);
-            this.service.logEntry(zone, "delete_media", aclStatus, entry, none, done);
-        }.bind({ service: this });
+        const entry = this.db[uuid]
+        const zone = entry.zone
+        const deleteDone = (entry) => {
+            delete this.db[entry.uuid]
+            this.notice('delete file: name=' + entry.uuid)
+            this.logEntry(zone, 'delete_media', aclStatus, entry, none, done)
+        }
 
-        zone.deleteEntry(aclStatus, uuid, function (err, code) {
-            this.service.errorCtx(err, "delete_media", uuid, aclStatus);
-            if (none) none(err, code);
-        }.bind({ service: this }), deleteDone);
+        zone.deleteEntry(
+            aclStatus,
+            uuid,
+            (err, code) => {
+                this.errorCtx(err, 'delete_media', uuid, aclStatus)
+                if (none) none(err, code)
+            },
+            deleteDone
+        )
     }
     /**
      * Low level append a new basic media entry.
@@ -370,58 +414,64 @@ class BasicFileDB {
      */
     logEntry(zone, type, aclStatus, entry, none, done) {
         try {
-            const context = aclStatus.context;
-            const opdesc = { operation: type, uuid: entry.uuid, ref: entry.uuid, zone: zone.name, context: context.toJson(), value: entry.toJson() };
-            const doneFct = function (entry) {
-                this.service.logReq(aclStatus, opdesc);
-                if (done) done();
-            }.bind({ service: this });
-            const errFct = function (err) {
-                this.service.warn("Could not update DB (add): " + err + " with " + JSON.safeStringify(opdesc));
-                doneFct(entry); // We stand at a warning level for Mongo up to now.
-            }.bind({ service: this });
-            if (this.mongodb) {
-                this.mongodb.addMedia(entry.toJson(), errFct, function (mongodb) {
-                    this.mongodb.addEvent(opdesc, errFct, function (mongodb) {
-                        doneFct(entry);
-                    });
-                }.bind({ service: this, mongodb: this.mongodb }));
+            const context = aclStatus.context
+            const opdesc = {
+                operation: type,
+                uuid: entry.uuid,
+                ref: entry.uuid,
+                zone: zone.name,
+                context: context.toJson(),
+                value: entry.toJson(),
             }
-            else doneFct(entry);
-        }
-        catch (err) {
-            this.errorCtx("Invalid media entry: " + err + " entry: " + entry.getCSVline(), "add_media", "-", aclStatus);
-            if (none) none(err);
+            const doneFct = (entry) => {
+                this.logReq(aclStatus, opdesc)
+                if (done) done()
+            }
+            const errFct = (err) => {
+                this.warn('Could not update DB (add): ' + err + ' with ' + JSON.safeStringify(opdesc))
+                doneFct(entry) // We stand at a warning level for Mongo up to now.
+            }
+            if (this.mongodb)
+                this.mongodb.addMedia(entry.toJson(), errFct, (mongodb) =>
+                    this.mongodb.addEvent(opdesc, errFct, (mongodb) => doneFct(entry))
+                )
+            else doneFct(entry)
+        } catch (err) {
+            this.errorCtx('Invalid media entry: ' + err + ' entry: ' + entry.getCSVline(), 'add_media', '-', aclStatus)
+            if (none) none(err)
         }
     }
     /* eslint-disable guard-for-in */
     list(aclStatus) {
-        const mediaList = {};
-        let count = 0, total = 0, errors = 0;
-        for (zoneName in this.zone_db) {
-            const zone = this.zone_db[zoneName];
+        const mediaList = {}
+        let count = 0,
+            total = 0,
+            errors = 0
+        for (const zoneName in this.zone_db) {
+            const zone = this.zone_db[zoneName]
             try {
-                count += 1;
-                const content = zone.listMedias(aclStatus);
-                this.notice("list medias: count=" + Object.keys(content).length);
-                this.debug("list medias: name=" + JSON.safeStringify(content));
+                count += 1
+                const content = zone.listMedias(aclStatus)
+                this.notice('list medias: count=' + Object.keys(content).length)
+                this.debug('list medias: name=' + JSON.safeStringify(content))
                 mediaList[zoneName] = {
-                    "list": content, "status": "OK"
-                };
-                total += content.length;
-            }
-            catch (err) {
-                errors += 1;
-                this.errorCtx(err.toString(), "list_media", zoneName, aclStatus);
+                    list: content,
+                    status: 'OK',
+                }
+                total += content.length
+            } catch (err) {
+                errors += 1
+                this.errorCtx(err.toString(), 'list_media', zoneName, aclStatus)
                 mediaList[zoneName] = {
-                    "list": [], "status": err.toString()
-                };
+                    list: [],
+                    status: err.toString(),
+                }
             }
         }
-        mediaList["count"] = count;
-        mediaList["total"] = total;
-        mediaList["errors"] = errors;
-        return mediaList;
+        mediaList['count'] = count
+        mediaList['total'] = total
+        mediaList['errors'] = errors
+        return mediaList
     }
     /* eslint-enable guard-for-in */
     /**
@@ -432,35 +482,36 @@ class BasicFileDB {
      * @returns {string}         - A unique connector ID.
      */
     get(uuid, aclStatus) {
-        if (!(uuid in this.db)) return null;
-        const media = nid = this.db[uuid];
+        if (!(uuid in this.db)) return null
+        const media = this.db[uuid]
         try {
-            const niddesc = media.generateFileId();
-            let connectorTimeout = this.connectorTimeout;
-            if ("timeout" in niddesc) {
-                connectorTimeout = niddesc["timeout"];
+            const niddesc = media.generateFileId()
+            let connectorTimeout = this.connectorTimeout
+            if ('timeout' in niddesc) {
+                connectorTimeout = niddesc['timeout']
             }
-            this.storageId[niddesc.fileid] = niddesc;
-            const opdesc = { operation: "new_conn", uuid: niddesc.fileid, ref: uuid, zone: niddesc.zone, context: aclStatus.context.toJson() };
-            this.logReq(aclStatus, opdesc);
-
-            const errFct = function (err) {
-                this.service.error("Could not update DB (new): " + err + " with " + JSON.safeStringify(this.desc));
-            }.bind({ service: this, desc: opdesc });
-            if (this.mongodb) {
-                this.mongodb.addEvent(opdesc, errFct, function (mongodb) { });
+            this.storageId[niddesc.fileid] = niddesc
+            const opdesc = {
+                operation: 'new_conn',
+                uuid: niddesc.fileid,
+                ref: uuid,
+                zone: niddesc.zone,
+                context: aclStatus.context.toJson(),
             }
+            this.logReq(aclStatus, opdesc)
 
-            setTimeout(function () {
-                this.bfdb.deleleteFileId(this.fileid, aclStatus, errFct, function (mongodb) { });
-            }.bind({ bfdb: this, fileid: niddesc.fileid }), connectorTimeout * 1000);
-            return niddesc.fileid;
-        }
-        catch (err) {
-            const e = "Could not process media with " + uuid + " " + aclStatus.context;
-            this.error(e + ": " + err);
-            if (none) none(e);
-            return null;
+            const errFct = (err, desc = opdesc) =>
+                this.error(`Could not update DB (new): ${err} with ${JSON.safeStringify(desc)}`)
+
+            if (this.mongodb) this.mongodb.addEvent(opdesc, errFct, (mongodb) => {})
+
+            setTimeout(() => this.deleleteFileId(niddesc.fileid, aclStatus, errFct, () => {}), connectorTimeout * 1000)
+            return niddesc.fileid
+        } catch (err) {
+            const e = `Could not process media with ${uuid} ${aclStatus.context}`
+            this.error(`${e}: ${err}`)
+            if (none) none(e)
+            return null
         }
     }
     /**
@@ -471,12 +522,19 @@ class BasicFileDB {
      */
     deleleteFileId(fileid, aclStatus, none, done) {
         if (fileid in this.storageId) {
-            const niddesc = this.storageId[fileid];
-            delete this.storageId[fileid];
-            const opdesc = { operation: "del_conn", uuid: niddesc.fileid, ref: niddesc.ref, zone: niddesc.zone, context: aclStatus.context.toJson(), value: niddesc };
-            this.logReq(aclStatus, opdesc);
+            const niddesc = this.storageId[fileid]
+            delete this.storageId[fileid]
+            const opdesc = {
+                operation: 'del_conn',
+                uuid: niddesc.fileid,
+                ref: niddesc.ref,
+                zone: niddesc.zone,
+                context: aclStatus.context.toJson(),
+                value: niddesc,
+            }
+            this.logReq(aclStatus, opdesc)
             if (this.mongodb) {
-                this.mongodb.addEvent(opdesc, none.bind({ service: this, desc: opdesc }), done);
+                this.mongodb.addEvent(opdesc, (err) => none(err, opdesc), done)
             }
         }
     }
@@ -490,31 +548,39 @@ class BasicFileDB {
      */
     find(fileid, aclStatus, none, done) {
         if (!(fileid in this.storageId)) {
-            const errmsg = "media connector id \"" + fileid + "\" not found";
-            this.errorCtx(errmsg, "get_media", fileid, aclStatus);
-            if (none) none(errmsg, 404);
-            return;
+            const errmsg = 'media connector id "' + fileid + '" not found'
+            this.errorCtx(errmsg, 'get_media', fileid, aclStatus)
+            if (none) none(errmsg, 404)
+            return
         }
-        const now = new Date();
-        const iddesc = this.storageId[fileid];
-        const accessEntry = { date: now, client: aclStatus.context.toJson() };
-        const opdesc = { operation: "acc_conn", uuid: iddesc.fileid, ref: iddesc.ref, zone: iddesc.zone, context: accessEntry };
-        this.logReq(aclStatus, opdesc);
-        const errFct = function (err) {
-            this.service.error("Could not update DB (get): " + err + " with " + JSON.safeStringify(opdesc));
-        }.bind({ service: this });
-        if (this.mongodb) {
-            this.mongodb.addEvent(opdesc, errFct, function (mongodb) { });
+        const now = new Date()
+        const iddesc = this.storageId[fileid]
+        const accessEntry = { date: now, client: aclStatus.context.toJson() }
+        const opdesc = {
+            operation: 'acc_conn',
+            uuid: iddesc.fileid,
+            ref: iddesc.ref,
+            zone: iddesc.zone,
+            context: accessEntry,
         }
-        iddesc.count += 1;
-        iddesc.access.push(accessEntry);
+        this.logReq(aclStatus, opdesc)
+        const errFct = (err) => this.error(`Could not update DB (get): ${err} with ${JSON.safeStringify(opdesc)}`)
+
+        if (this.mongodb) this.mongodb.addEvent(opdesc, errFct, () => {})
+
+        iddesc.count += 1
+        iddesc.access.push(accessEntry)
 
         // Load the data asynchronously
-        const media = this.db[iddesc.ref];
-        media.getFile(iddesc, function (err, code) {
-            this.service.errorCtx("could not load file: " + err, "get_media", fileid, aclStatus);
-            if (none) none(err, code);
-        }.bind({ service: this }), done);
+        const media = this.db[iddesc.ref]
+        media.getFile(
+            iddesc,
+            (err, code) => {
+                this.errorCtx(`could not load file: ${err}`, 'get_media', fileid, aclStatus)
+                if (none) none(err, code)
+            },
+            done
+        )
     }
     /**
      * Require check the real content of a media, and returns its updated MD5 value.
@@ -523,42 +589,30 @@ class BasicFileDB {
      * @return {string}         - The MD5 value.
      */
     check(uuid, aclStatus, none, done) {
-        if (!(uuid in this.db)) return none("media uuid not found", 404);
-        const media = this.db[uuid];
+        if (!(uuid in this.db)) return none('media uuid not found', 404)
+        const media = this.db[uuid]
         try {
-            const opdesc = { operation: "check_entry", uuid: "-", ref: media.uuid, zone: media.zone.name, context: aclStatus.context.toJson() };
-            this.logReq(aclStatus, opdesc);
-            media.getRealMd5(none, done);
-
-            const errFct = function (err) {
-                this.service.error("Could not update DB (check): " + err + " with " + JSON.safeStringify(opdesc));
-            }.bind({ service: this });
-            if (this.mongodb) {
-                this.mongodb.addEvent(opdesc, errFct, function (mongodb) { });
+            const opdesc = {
+                operation: 'check_entry',
+                uuid: '-',
+                ref: media.uuid,
+                zone: media.zone.name,
+                context: aclStatus.context.toJson(),
             }
-            return media.md5;
-        }
-        catch (err) {
-            const e = "Could not process media: with " + uuid + " " + aclStatus.context;
-            this.error(e + ": " + err);
-            if (none) none(e, 500);
-            return null;
+            this.logReq(aclStatus, opdesc)
+            media.getRealMd5(none, done)
+
+            const errFct = (err) => this.error(`Could not update DB (check): ${err} with ${JSON.safeStringify(opdesc)}`)
+
+            if (this.mongodb) this.mongodb.addEvent(opdesc, errFct, () => {})
+
+            return media.md5
+        } catch (err) {
+            const e = `Could not process media: with ${uuid} ${aclStatus.context}`
+            this.error(`${e}: ${err}`)
+            if (none) none(e, 500)
+            return null
         }
     }
-};
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-module.exports = BasicFileDB;
