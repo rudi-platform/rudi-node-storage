@@ -157,6 +157,7 @@ export class BasicFileDB {
 
         let defzone = null
         if (typeof zones == 'string') zones = [zones]
+        // console.debug('T zones',zones)
         for (const zoneDesc of zones) {
             const zoneDescObj = typeof zoneDesc == 'string' ? { name: zoneDesc } : zoneDesc
             const nzone = new BasicZone(this.acldb, this.mediaDir, zoneDescObj)

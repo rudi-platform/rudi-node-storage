@@ -8,7 +8,7 @@
 
 import express from 'express'
 import { readFileSync } from 'fs'
-import { parse as parseIni } from 'ini'
+import { parse as iniParse } from 'ini'
 import { gzip } from 'zlib'
 
 import minimist from 'minimist'
@@ -793,6 +793,33 @@ function updateProperty(base, updated) {
     return newo
 }
 
+function parseIniMultiligne(iniFileContent) {
+    const multilineContent = iniParse(iniFileContent)
+    let content = {}
+    let accumulatedKey
+    let accumulatedVal
+    for (const section of Object.keys(multilineContent)) {
+        const sectionParams = multilineContent[section]
+        content[section] = {}
+        for (const param of Object.keys(sectionParams)) {
+            const val = sectionParams[param]
+            if (val == '[') {
+                accumulatedKey = param
+                accumulatedVal = val
+            } else if (!accumulatedVal) {
+                content[section][param] = val
+            } else {
+                accumulatedVal += param
+                if (param == ']') {
+                    content[section][accumulatedKey] = accumulatedVal
+                    accumulatedVal = null
+                }
+            }
+        }
+    }
+    // console.debug('T content.storage.zones:', content.storage.zones)
+    return content
+}
 /**
  * Fetch ini-file & parse command line arguments
  *
@@ -806,11 +833,10 @@ function fetchAndParseArguments(confDefault, defaultConfFilename) {
     let configuration = confDefault
     try {
         const iniFileContent = readFileSync(confFilename, 'utf-8')
-        console.debug('iniFileContent:', iniFileContent)
-        const config = parseIni(iniFileContent)
-        console.debug('config:', config)
+        const config = parseIniMultiligne(iniFileContent)
+        // console.debug('config:', config)
         configuration = updateProperty(confDefault, config)
-        console.debug('configuration:', configuration)
+        // console.debug('configuration:', configuration)
     } catch (err) {
         console.error('warning: configuration file ignored: ' + err)
     }
