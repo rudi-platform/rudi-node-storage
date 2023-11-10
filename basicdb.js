@@ -4,8 +4,8 @@
  * @author: Laurent Morin
  * @version: 1.0.0
  */
-import { BasicZone } from './basiczone.js'
-import './cycle.js' // For Json Unparsing
+import { BasicZone } from './basiczone.js';
+import './cycle.js'; // For Json Unparsing
 
 /**
  * Represents a basic media DB.
@@ -180,7 +180,8 @@ export class BasicFileDB {
         }
 
         Promise.all(pl).then(null, (err) => {
-            throw new Error('Could not open Zone: ' + err)
+            console.error('Could not open Zone:', err)
+            this.syslog.error(`Could not open Zone: ${err}`)
         })
     }
     /**

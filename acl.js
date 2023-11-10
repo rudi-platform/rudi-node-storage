@@ -12,10 +12,10 @@ import {
     readPublicKeyFile,
     tokenStringToJwtObject,
     verifyToken,
-} from '@aqmo.org/jwt-lib'
-import { createHash } from 'crypto'
-import { version as _version, parse, v4, v5, validate } from 'uuid'
-import './cycle.js' // For Json Unparsing
+} from '@aqmo.org/jwt-lib';
+import { createHash } from 'crypto';
+import { version as getVersion, parse, v4, v5, validate } from 'uuid';
+import './cycle.js'; // For Json Unparsing
 
 const G_ADMIN_UID = 4
 const G_USER_START_UID = 1000
@@ -36,7 +36,7 @@ function idFromStr(name, idstr) {
     }
     if (idt == 'string') {
         if (!validate(idstr)) throw Error(`Invalid uuid for ${name}`)
-        const version = _version(idstr)
+        const version = getVersion(idstr)
         const idbytes = parse(idstr)
         uid = idstr
         if (version == 4) {
@@ -55,7 +55,7 @@ function idFromStr(name, idstr) {
 /**
  * @class
  */
-class Group {
+export class Group {
     constructor(name, goupId) {
         this.name = name
         ;[this.id, this.uuid] = idFromStr(name, goupId)
@@ -65,7 +65,7 @@ class Group {
 /**
  * @class
  */
-class User {
+export class User {
     constructor(acldb, name, userDesc) {
         this.name = name
         this.acldb = acldb
