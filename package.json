@@ -34,7 +34,7 @@
     },
     "scripts": {
         "start": "nodemon index.js",
-        "debug": "nodemon index.js -p 3201 -l './mylog'",
+        "debug": "nodemon index.js -p 3201 -l './mylog' --revision 'devO' --ini ./rudi_media_custom.ini",
         "debug_ini": "nodemon index.js --ini local.ini",
         "docker": "./node_modules/.bin/nodemon index.js -p ${L_PORT} -l ${L_LOGNAME}",
         "test": "echo \"Error: no test specified\" && exit 1",

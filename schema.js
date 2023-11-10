@@ -106,11 +106,15 @@ export class SchemaSet {
      * @returns {string}           - The final schema.
      */
     toJSON(name) {
-        if (!(name in this.schemaList)) return null
-        const base = { $schema: 'http://json-schema.org/draft-07/schema', $id: this.baseURL + '/' + name }
-        // var newo = Object.assign({}, this.schemaList[name]); // wrong: shallow copy
+        if (name == 'all') {
+            const schemas = {}
+            Object.keys(this.schemaList).forEach((name) => (schemas[name] = this.toJSON(name)))
+            return schemas
+        }
+        if (!(name in this.schemaList)) return
+        const base = { $schema: 'http://json-schema.org/draft-07/schema', $id: `${this.baseURL}/${name}` }
         const newo = JSON.parse(JSON.stringify(this.schemaList[name])) // TODO: Need better
-        return Object.assign({}, base, this.replaceToJson(newo))
+        return { ...base, ...this.replaceToJson(newo) }
     }
     /**
      * Convert into a Bson format.
@@ -119,7 +123,7 @@ export class SchemaSet {
      * @returns {string}           - The schema using the Bson format, mongo compatible.
      */
     toBson(name) {
-        if (!(name in this.schemaList)) return null
+        if (!(name in this.schemaList)) return
         const newo = JSON.parse(JSON.stringify(this.schemaList[name])) // TODO: Need better
         return this.replaceToBson(newo)
     }
@@ -138,29 +142,25 @@ export class SchemaSet {
             const d = schema[e]
             if (typeof d == 'object') schema[e] = this.replaceToBson(d)
         }
-        if ('type' in schema) {
-            const etype = schema['type']
-            if (etype == 'string') {
-                if ('format' in schema) {
-                    const ftype = schema['format']
-                    if (ftype == 'date-time') {
-                        delete schema['type']
-                        schema['bsonType'] = 'date'
+        if (schema?.type) {
+            if (schema.type == 'string') {
+                if (schema.format) {
+                    if (schema.format == 'date-time') {
+                        delete schema.type
+                        schema.bsonType = 'date'
                     }
                 }
+            } else if (schema.type == 'integer') {
+                delete schema.type
+                schema.bsonType = 'int'
             }
-            if (etype == 'integer') {
-                delete schema['type']
-                schema['bsonType'] = 'int'
-            }
         }
-        if ('$ref' in schema) {
-            delete schema['$ref']
-            schema['type'] = 'object'
+        if (schema?.$ref) {
+            delete schema.$ref
+            schema.type = 'object'
         }
-        if ('format' in schema) {
-            delete schema['format']
-        }
+        if (schema.format) delete schema.format
+
         return schema
     }
     /**
@@ -174,10 +174,10 @@ export class SchemaSet {
             const d = schema[e]
             if (typeof d == 'object') schema[e] = this.replaceToJson(d)
         }
-        if ('$ref' in schema) {
-            const refile = schema['$ref']
+        if (schema.$ref) {
+            const refile = schema.$ref
             if (refile in this.schemaList) {
-                schema['$ref'] = this.baseURL + '/' + refile
+                schema.$ref = `${this.baseURL}/${refile}`
             }
         }
         return schema

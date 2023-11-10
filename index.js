@@ -8,14 +8,14 @@
 
 import express from 'express'
 import { readFileSync } from 'fs'
-import { parse } from 'ini'
+import { parse as parseIni } from 'ini'
 import { gzip } from 'zlib'
 
 import minimist from 'minimist'
 const _argv = minimist(process.argv.slice(2))
 
 import { RudiLogger } from '@aqmo.org/rudi_logger'
-import AccessControl from './access.js'
+import { AccessControl } from './access.js'
 import { BasicFileDB } from './basicdb.js'
 import { BasicFileEntry } from './basicfile.js'
 import { BasicUrlEntry } from './basicurl.js'
@@ -42,20 +42,30 @@ class HttpService {
         this.httpPrefix = configuration.server.server_prefix
         this.revision = configuration.logging.revision
 
-        if (!this.httpPrefix || this.httpPrefix == '' || !this.httpPrefix?.endsWith('/')) {
-            console.log("Error: the http prefix cannot be null and shall start with '/'")
-            process.exit(-1)
+        if (!this.httpPrefix || this.httpPrefix == '') this.httpPrefix = '/'
+        else if (!this.httpPrefix.startsWith('/')) {
+            this.httpPrefix = `/${this.httpPrefix}`
         }
+        this.initHttpService(configuration)
+            .then(() => this.syslog.debug('Initialization complete'))
+            .catch((err) => {
+                console.error(err)
+                this.syslog.error(`An error happened during initialization: ${JSON.stringify(err)}`)
+            })
+    }
 
+    async initHttpService(configuration) {
         this.httpServer = express()
 
-        const schemaURL = this.server + this.httpPrefix + 'schema'
-        const schemaBase = configuration.schemas.schema_basename
-        const contextRef = schemaBase + configuration.schemas.schema_context
-        const metaRef = schemaBase + configuration.schemas.schema_meta
-        const eventRef = schemaBase + configuration.schemas.schema_event
-        const fileRef = schemaBase + configuration.schemas.schema_file
-        const urlRef = schemaBase + configuration.schemas.schema_url
+        const schemaURL = `${this.server}${this.httpPrefix}schema`
+        const schemaBase = `${configuration.schemas.schema_basename}`
+        const contextRef = `${schemaBase}${configuration.schemas.schema_context}`
+        const metaRef = `${schemaBase}${configuration.schemas.schema_meta}`
+        const eventRef = `${schemaBase}${configuration.schemas.schema_event}`
+        const fileRef = `${schemaBase}${configuration.schemas.schema_file}`
+        const urlRef = `${schemaBase}${configuration.schemas.schema_url}`
+
+        this.syslog = new RudiLogger(configuration.logging.app_name, this.revision, configuration)
 
         this.schemaSet = new SchemaSet(schemaURL)
         this.schemaSet.addSchema(contextRef, HttpService.contextSchema())
@@ -64,7 +74,6 @@ class HttpService {
         this.schemaSet.addSchema(fileRef, BasicFileEntry.fileSchema(contextRef, metaRef))
         this.schemaSet.addSchema(urlRef, BasicUrlEntry.urlSchema(contextRef, metaRef))
 
-        this.syslog = new RudiLogger(configuration.logging.app_name, this.revision, configuration)
         this.logweb = this.syslog.getWebInterface()
         this.ac = new AccessControl(configuration.auth, this.syslog)
         if (this.logweb) this.logweb.setWebAccessControlInterface(this.ac)
@@ -75,7 +84,8 @@ class HttpService {
             'base64'
         )
 
-        this.syslog.warn('Media file system: ' + configuration.storage.media_dir, 'core')
+        this.syslog.warn(`Media file system: ${configuration.storage.media_dir}`, 'core')
+
         this.mongodb = new MongoService(configuration.database, this.schemaSet, fileRef, urlRef, eventRef, this.syslog)
         this.db = new BasicFileDB(
             configuration.storage.media_dir,
@@ -84,12 +94,6 @@ class HttpService {
             this.mongodb,
             configuration.storage.acc_timeout
         )
-        this.init(configuration)
-            .then(() => this.syslog.debug('Initialization complete'))
-            .catch((err) => this.syslog.error(`An error happened during initialization: ${JSON.stringify(err)}`))
-    }
-
-    async init(configuration) {
         try {
             await this.mongodb.open()
             this.syslog.info('DB initialized', 'core')
@@ -99,34 +103,53 @@ class HttpService {
             this.db.init(configuration.storage.zones, false)
         }
 
-        this.httpServer.get(this.httpPrefix + 'favicon.ico', (req, res) => this.favicon(req, res))
-        this.httpServer.get(this.httpPrefix + 'revision', (req, res) => this.getRevision(req, res))
-        this.httpServer.get(this.httpPrefix + '', (req, res) => this.root(req, res))
+        this.declareRoutes()
+    }
+    errorHandler(err, req, res, next) {
+        const errTime = new Date().getTime()
+        console.error(`[${errTime}]`, err)
+        res.status(500).json({ error: `An error was thrown, please contact the Admin (code ${errTime})` })
+    }
+    declareRoutes() {
+        const router = express.Router()
+        this.syslog.info(`This server prefix is: ${this.httpPrefix}`)
+        this.httpServer.use(this.httpPrefix, router)
+        this.httpServer.use(this.errorHandler)
+
+        router.get('/fail', () => {
+            throw new Error('Nevermind this error')
+        })
+        router.get('', (req, res) => this.root(req, res))
+        router.get('/favicon.ico', (req, res) => this.favicon(req, res))
+        router.get('/revision', (req, res) => this.getRevision(req, res))
         if (this.logweb) {
-            this.httpServer.get(this.httpPrefix + 'logs', (req, res) => this.logweb.logContent(req, res))
-            this.httpServer.get(this.httpPrefix + 'logs/:name', (req, res) => this.logweb.logFile(req, res))
+            router.get('/logs', (req, res) => this.logweb.logContent(req, res))
+            router.get('/logs/:name', (req, res) => this.logweb.logFile(req, res))
         }
-        this.httpServer.post(this.httpPrefix + 'jwt/forge', (req, res) => this.forgeUserToken(req, res))
-        this.httpServer.get(this.httpPrefix + 'storage/:fileid', (req, res) => this.fileService(req, res))
-        this.httpServer.post(this.httpPrefix + 'post', (req, res) => this.postFile(req, res))
-        this.httpServer.post(this.httpPrefix + 'commit/', (req, res) => this.commitMedia(req, res))
-        this.httpServer.post(this.httpPrefix + 'delete/:uuid', (req, res) => this.deleteMedia(req, res))
-        this.httpServer.get(this.httpPrefix + 'list/', (req, res) => this.listMedias(req, res))
-        this.httpServer.get(this.httpPrefix + 'schema/:name', (req, res) => this.schemas(req, res))
-        this.httpServer.get(this.httpPrefix + 'check/:uuid', (req, res) => this.checkFile(req, res))
-        this.httpServer.get(this.httpPrefix + 'download/:uuid', (req, res) => this.direct(req, res))
-        this.httpServer.get(this.httpPrefix + 'zdownload/:uuid', (req, res) => this.compress(req, res))
-        this.httpServer.get(this.httpPrefix + ':uuid', (req, res) => this.media(req, res))
-        this.httpServer.options(this.httpPrefix + 'jwt/forge', (req, res) => this.optionCors(req, res))
-        this.httpServer.options(this.httpPrefix + 'storage/:fileid', (req, res) => this.optionCors(req, res))
-        this.httpServer.options(this.httpPrefix + 'post', (req, res) => this.optionCors(req, res))
-        this.httpServer.options(this.httpPrefix + 'commit/', (req, res) => this.optionCors(req, res))
-        this.httpServer.options(this.httpPrefix + 'delete/', (req, res) => this.optionCors(req, res))
-        this.httpServer.options(this.httpPrefix + 'list/', (req, res) => this.optionCors(req, res))
-        this.httpServer.options(this.httpPrefix + 'check/:uuid', (req, res) => this.optionCors(req, res))
-        this.httpServer.options(this.httpPrefix + 'download/:uuid', (req, res) => this.optionCors(req, res))
-        this.httpServer.options(this.httpPrefix + 'zdownload/:uuid', (req, res) => this.optionCors(req, res))
-        this.httpServer.options(this.httpPrefix + ':uuid', (req, res) => this.optionCors(req, res))
+        router.post('/jwt/forge', (req, res) => this.forgeUserToken(req, res))
+        router.get('/storage/:fileid', (req, res) => this.fileService(req, res))
+        router.post('/post', (req, res) => this.postFile(req, res))
+        router.post('/commit', (req, res) => this.commitMedia(req, res))
+        router.post('/delete/:uuid', (req, res) => this.deleteMedia(req, res))
+        router.get('/list', (req, res) => this.listMedias(req, res))
+        router.get('/schema/:name', (req, res) => this.schemas(req, res))
+        router.get('/schemas', (req, res) => this.schemas(req, res))
+        router.get('/check/:uuid', (req, res) => this.checkFile(req, res))
+        router.get('/download/:uuid', (req, res) => this.direct(req, res))
+        router.get('/zdownload/:uuid', (req, res) => this.compress(req, res))
+        router.get('/:uuid', (req, res) => this.media(req, res))
+        router.options('/jwt/forge', (req, res) => this.optionCors(req, res))
+        router.options('/storage/:fileid', (req, res) => this.optionCors(req, res))
+        router.options('/post', (req, res) => this.optionCors(req, res))
+        router.options('/commit/', (req, res) => this.optionCors(req, res))
+        router.options('/delete/', (req, res) => this.optionCors(req, res))
+        router.options('/list/', (req, res) => this.optionCors(req, res))
+        router.options('/schemas', (req, res) => this.schemas(req, res))
+        router.options('/schema/:name', (req, res) => this.schemas(req, res))
+        router.options('/check/:uuid', (req, res) => this.optionCors(req, res))
+        router.options('/download/:uuid', (req, res) => this.optionCors(req, res))
+        router.options('/zdownload/:uuid', (req, res) => this.optionCors(req, res))
+        router.options('/:uuid', (req, res) => this.optionCors(req, res))
 
         this.listen = this.httpServer.listen(this.port, this.netInterface)
         this.syslog.info(`RUDI Media server listening on ${this.netInterface}${this.port ? ':' + this.port : ''}`)
@@ -266,17 +289,10 @@ class HttpService {
      * @param {object} res - the HTTP response.
      */
     schemas(req, res) {
-        const name = req.params.name || 'none'
-        const mimetype = 'application/json'
+        const name = req.params.name || 'all'
         const content = this.schemaSet.toJSON(name)
-        if (!content) {
-            res.status(404).write('Schema not found')
-            res.end()
-            return
-        }
-        res.type(mimetype)
-        res.write(content)
-        res.status(200).end()
+        if (!content) return this.sendAndClose(res, 404, 'Schema not found')
+        this.sendAndClose(res, 200, content)
     }
     /**
      * Create a request context.
@@ -294,7 +310,7 @@ class HttpService {
      * @param {object} req - the HTTP request
      * @param {object} res - the HTTP response.
      */
-    optionCors = (req, res) => {
+    optionCors(req, res) {
         const baseHeaderList =
             'Content-Type, Authorization, Content-Length, X-Requested-With, file_metadata, Media-Access-Method, media_cookie'
         const extendedHeaderList = 'Cache-Control, Pragma, Sec-GPC'
@@ -313,13 +329,11 @@ class HttpService {
      * @param {object} msg - Json message.
      * @param {number} code - the HTML code.
      */
-    sendAndClose = (res, code, msg) => {
+    sendAndClose(res, code, msg) {
         res.header('Access-Control-Allow-Origin', '*')
-        res.status(code).type('application/json')
-        res.write(typeof msg == 'string' ? msg : JSON.stringify(msg))
-        res.end()
+        res.status(code).json(msg)
     }
-    listMedias = (req, res) => {
+    listMedias(req, res) {
         this.syslog.debug(`[listMedias]${req.originalUrl}`, 'http')
         const aclStatus = this.ac.getAccessStatus(req, res)
         if (!this.ac.checkSystemAccessStatus(aclStatus, '---')) return
@@ -334,10 +348,8 @@ class HttpService {
             this.sendAndClose(res, 200, mediaList)
         }
     }
-    forgeUserToken = (req, res) => {
-        console.log('forgeUserToken', 0)
+    forgeUserToken(req, res) {
         this.syslog.debug(`[forgeUserToken] ${req.originalUrl}`, 'http')
-        console.log('forgeUserToken', 1)
         const aclStatus = this.ac.getAccessStatus(req, res)
         if (!this.ac.checkSystemAccessStatus(aclStatus, '--x')) return
 
@@ -354,19 +366,18 @@ class HttpService {
             } catch (err) {
                 return this.sendAndClose(res, 400, { status: 'error', msg: 'malformed application/json' })
             }
-            if (!('user_id' in userDesc))
+            if (!userDesc) return this.sendAndClose(res, 400, { status: 'error', msg: 'malformed application/json' })
+            if (!userDesc.user_id && userDesc.user_id !== 0)
                 return this.sendAndClose(res, 400, { status: 'error', msg: 'missing user_id' })
+            if (!userDesc.user_name) return this.sendAndClose(res, 400, { status: 'error', msg: 'missing user_name' })
+            if (!userDesc.group_name) userDesc.group_name = null
 
-            if (!('user_name' in userDesc))
-                return this.sendAndClose(res, 400, { status: 'error', msg: 'missing user_name' })
-
-            if (!('group_name' in userDesc)) userDesc.group_name = null
             const jwt = this.ac.forgeJwt(aclStatus, userDesc.user_id, userDesc.user_name, userDesc.group_name)
             if (!jwt) return
             else {
                 this.syslog.info(`forged token for ${userDesc.user_name}:${userDesc.group_name || '-'}`, 'core')
                 res.setHeader('cookie', 'rudi.media.auth=' + jwt)
-                res.status(200).send({ status: 'OK', token: jwt })
+                res.status(200).json({ status: 'OK', token: jwt })
             }
         })
     }
@@ -631,7 +642,7 @@ class HttpService {
             if (!nid) this.sendAndClose(res, 404, { status: 'error', msg: 'media uuid not found' })
             else {
                 this.syslog.notice(`[media][access]: ${reqUuid}`, 'API')
-                res.status(200).json({ url: `${this.server + this.httpPrefix}storage/${nid}` })
+                this.sendAndClose(res, 200, { url: `${this.server}${this.httpPrefix}storage/${nid}` })
             }
         }
     }
@@ -686,7 +697,7 @@ class HttpService {
                 const content = data
                 res.header('Access-Control-Allow-Origin', '*')
                 res.setHeader('Content-Disposition', `attachment; filename="${name}"`)
-                if (compressionMode && compressionMode.toLowerCase() == 'true') {
+                if (compressionMode?.toLowerCase() == 'true') {
                     gzip(data, (err, buffer) => {
                         if (err) {
                             res.type('application/octet-stream')
@@ -781,22 +792,23 @@ function updateProperty(base, updated) {
  * @param {object} confDefault  - the default configuration
  * @param {object} confFilename - the defaut init file
  */
-function fetchAndParseArguments(confDefault, confFilename) {
-    if (_argv['ini']) confFilename = _argv['ini']
+function fetchAndParseArguments(confDefault, defaultConfFilename) {
+    console.debug('CLI args:', _argv)
+    const confFilename = _argv.ini || defaultConfFilename
 
     let configuration = confDefault
     try {
-        const configfile = parse(readFileSync(confFilename, 'utf-8'))
+        const configfile = parseIni(readFileSync(confFilename, 'utf-8'))
         configuration = updateProperty(confDefault, configfile)
     } catch (err) {
         console.error('warning: configuration file ignored: ' + err)
     }
 
-    if (_argv['p']) {
-        const np = parseInt(_argv['p'], 10)
+    if (_argv.p) {
+        const np = parseInt(_argv.p, 10)
         if (!isNaN(np)) configuration.server.port = np
     }
-    if (_argv['revision']) configuration.logging.revision = _argv['revision'].slice(0, 40)
+    if (_argv.revision) configuration.logging.revision = _argv.revision.slice(0, 40)
 
     // Error mgmt.
     if (configuration.server.port < 80) {
@@ -828,7 +840,7 @@ class SignalCleaner {
                     console.error('Error closing session: ' + err)
                     process.exit(1)
                 },
-                (context) => exit(0)
+                (context) => process.exit(0)
             )
         } else
             setTimeout(() => {
@@ -846,9 +858,13 @@ class SignalCleaner {
  * Main application function, loads configuration and launch service.
  */
 const run = () => {
-    const configuration = fetchAndParseArguments(DEFAULT_CONF, './rudi_media_custom.ini')
-    const service = new HttpService(configuration)
-    const sc = new SignalCleaner(configuration.server.close_timeout, service)
-    sc.arm()
+    try {
+        const configuration = fetchAndParseArguments(DEFAULT_CONF, './rudi_media_custom.ini')
+        const service = new HttpService(configuration)
+        const sc = new SignalCleaner(configuration.server.close_timeout, service)
+        sc.arm()
+    } catch (err) {
+        console.error('CRITICAL: an error happened during the server launching:', err)
+    }
 }
 run()

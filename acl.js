@@ -5,10 +5,17 @@
  * @version: 1.0.0
  */
 
-import './cycle.js' // For Json Unparsing
-import { createHash } from 'crypto'
-import { validate, version as _version, parse, v5, v4 } from 'uuid'
-import { readPrivateKeyFile, readPublicKeyFile, forgeToken, getJwtRegex, tokenStringToJwtObject, verifyToken } from '@aqmo.org/jwt-lib'
+import {
+    forgeToken,
+    getJwtRegex,
+    readPrivateKeyFile,
+    readPublicKeyFile,
+    tokenStringToJwtObject,
+    verifyToken,
+} from '@aqmo.org/jwt-lib';
+import { createHash } from 'crypto';
+import { version as _version, parse, v4, v5, validate } from 'uuid';
+import './cycle.js'; // For Json Unparsing
 
 const G_ADMIN_UID = 4
 const G_USER_START_UID = 1000
@@ -192,54 +199,54 @@ class Acl {
 /**
  * @class
  */
-function AclStatus(uname, gname, user, accError) {
-    this.uname = uname
-    this.gname = gname
-    this.user = user
-    this.accError = accError
-    if (this.user) {
-        this.uname = this.user.name
-        try {
-            this.group = this.user.validGroup(gname)
-            if (this.group) this.gname = this.group.name
-        } catch (error) {
-            if (!this.accError) this.accError = 'E30'
-            this.group = null
+class AclStatus {
+    constructor(uname, gname, user, accError) {
+        this.uname = uname;
+        this.gname = gname;
+        this.user = user;
+        this.accError = accError;
+        if (this.user) {
+            this.uname = this.user.name;
+            try {
+                this.group = this.user.validGroup(gname);
+                if (this.group) this.gname = this.group.name;
+            } catch (error) {
+                if (!this.accError) this.accError = 'E30';
+                this.group = null;
+            }
+        } else this.group = null;
+        this.context = null;
+        this.access = '---';
+    }
+    setContext(context) {
+        this.context = context;
+    }
+    setAcl(acl) {
+        if (!this.accError && this.user) this.access = this.user.accessMask(acl, this.group);
+    }
+    /* eslint-disable no-multi-spaces */
+    refused(amode) {
+        let acEr = null;
+        amode = amode !== undefined && amode ? amode : '---';
+        if (this.accError) acEr = this.accError;
+        else if (amode[2] == 'x' && this.context && !this.context.validApi()) acEr = 'E12';
+        else if (amode[2] != '-' && amode[2] != this.access[2]) acEr = 'E08';
+        else if (!(amode[0] == '-' && amode[1] == '-' && amode[2] == '-')) {
+            // else no restriction specified, http OK
+            if (this.uname === '-') acEr = 'E01'; // http 401, no credentials
+            else if (!this.user) acEr = 'E02'; // http 401, no credentials
+            else if (this.access === '---') acEr = 'E03'; // http 401, invalid credentials
+            else if (amode[0] != '-' && amode[0] != this.access[0]) acEr = 'E06'; // http 401, invalid credentials
+            else if (amode[1] != '-' && amode[1] != this.access[1]) acEr = 'E07'; // http 401, invalid credentials
         }
-    } else this.group = null
-    this.context = null
-    this.access = '---'
-}
-AclStatus.prototype.setContext = function (context) {
-    this.context = context
-}
-AclStatus.prototype.setAcl = function (acl) {
-    if (!this.accError && this.user) this.access = this.user.accessMask(acl, this.group)
-}
-/* eslint-disable no-multi-spaces */
-AclStatus.prototype.refused = function (amode) {
-    let acEr = null
-    amode = amode !== undefined && amode ? amode : '---'
-    if (this.accError) acEr = this.accError
-    else if (amode[2] == 'x' && this.context && !this.context.validApi()) acEr = 'E12'
-    else if (amode[2] != '-' && amode[2] != this.access[2]) acEr = 'E08'
-    else if (!(amode[0] == '-' && amode[1] == '-' && amode[2] == '-')) {
-        // else no restriction specified, http OK
-        if (this.uname === '-') acEr = 'E01' // http 401, no credentials
-        else if (!this.user) acEr = 'E02' // http 401, no credentials
-        else if (this.access === '---') acEr = 'E03' // http 401, invalid credentials
-        else if (amode[0] != '-' && amode[0] != this.access[0]) acEr = 'E06' // http 401, invalid credentials
-        else if (amode[1] != '-' && amode[1] != this.access[1]) acEr = 'E07' // http 401, invalid credentials
+        if (this.context) {
+            this.context.process(this.uname, this.user ? this.user.uuid : -1, this.access, acEr);
+        }
+        return acEr;
     }
-    if (this.context) {
-        this.context.process(this.uname, this.user ? this.user.uuid : -1, this.access, acEr)
+    toString() {
+        return `ACL:${this.uname}[${this.user ? this.user.id : -1}]:${this.gname}:${this.access}${this.accError ? ' => ' + this.accError : ''}`;
     }
-    return acEr
-}
-AclStatus.prototype.toString = function () {
-    return `ACL:${this.uname}[${this.user ? this.user.id : -1}]:${this.gname}:${this.access}${
-        this.accError ? ' => ' + this.accError : ''
-    }`
 }
 
 /* eslint-disable no-multi-spaces */
@@ -247,12 +254,12 @@ AclStatus.prototype.toString = function () {
 /**
  * @class ACL: defines an ACL entry.
  */
-class AclDB {
+export class AclDB {
     constructor(cfg, syslog) {
         this.syslog = syslog
-        if (typeof cfg != 'object' || cfg.system_groups == undefined || cfg.system_users == undefined) {
+        if (typeof cfg != 'object' || !cfg.system_groups || !cfg.system_users ) 
             throw Error(`Invalid AclDB cfg`)
-        }
+        
         const sg = cfg.system_groups
         const au = cfg.system_users
         try {
@@ -262,6 +269,10 @@ class AclDB {
             this.systemUsers = {}
             this.usersByID = {}
             for (const ui in au) this.newUser(ui, au[ui])
+
+            // Object.entries(cfg.system_groups).forEach((group) => this.newGroup(group[0], group[1]))
+            // Object.entries(cfg.system_users).forEach((user) => this.newUser(user[0], user[1]))
+
         } catch (err) {
             const errStr = `Could not initialize ACL DB: ${err}`
             this.error(errStr)
@@ -310,13 +321,11 @@ class AclDB {
             throw Error(`${msg} in acl ("${JSON.safeStringify(aclconf)}")`)
         }
         if (!(acl.owner in this.systemUsers)) err(`Users ${this.owner} not found`)
-        for (const ui in acl.users) 
-            if (!(ui in this.systemUsers)) err(`Users ${ui} not found`)
-        
+        for (const ui in acl.users) if (!(ui in this.systemUsers)) err(`Users ${ui} not found`)
+
         if (!(acl.group in this.systemGroups)) err(`Group ${this.group} not found`)
-        for (const gi in acl.groups) 
-            if (!(gi in this.systemGroups)) err(`Group ${gi} not found`)
-        
+        for (const gi in acl.groups) if (!(gi in this.systemGroups)) err(`Group ${gi} not found`)
+
         return acl
     }
     newAclStatus(uname, gname, user, accError) {
@@ -393,7 +402,10 @@ class AclDB {
         let aclStatus = null
         try {
             const jwtStr = `${value}`
-            if (!RegExp(getJwtRegex()).exec(jwtStr)) return this.newAclError('E20')
+            if (!RegExp(getJwtRegex()).exec(jwtStr)) {
+                this.syslog.warning(`Input token is not a JWT: ${jwtStr}`)
+                return this.newAclError('E20')
+            }
             let jwt
             try {
                 jwt = tokenStringToJwtObject(value)
@@ -406,7 +418,7 @@ class AclDB {
             const gname = jwtPayload.sub || '-'
             const uname = jwtPayload.client_id || '-'
 
-            const nowepoch = Math.floor(new Date().getTime / 1000)
+            const nowepoch = Math.floor(new Date().getTime() / 1000)
             const expire = jwtPayload.exp || 0
             const nbf = jwtPayload.nbf || 0
             if (expire && nowepoch > expire) return new AclStatus(uname, gname, null, 'E23')
@@ -425,7 +437,6 @@ class AclDB {
             for (const pubkey of user.keys) {
                 try {
                     validated = verifyToken(pubkey, jwtStr)
-                    // this.debug(`pubKey validated the JWT: ${pubkey}`);
                     break
                 } catch (err) {
                     this.debug(`jwt error: ${err}`)
@@ -518,4 +529,3 @@ class AclDB {
     }
 }
 
-export default AclDB
