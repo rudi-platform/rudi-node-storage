@@ -8,17 +8,23 @@ import { mkdirSync, readFile, renameSync, rmSync, stat, writeFile } from 'fs'
 import { v4 as uuidv4 } from 'uuid'
 
 import { Severity } from '@aqmo.org/rudi_logger'
-import {BasicFileEntry} from './basicfile.js'
-import {BasicUrlEntry} from './basicurl.js'
+import { AclDB } from './acl.js'
+import { BasicFileEntry } from './basicfile.js'
+import { BasicUrlEntry } from './basicurl.js'
 
 /**
  * An authorization processing unit.
- * @class
  */
 class ZoneContext {
+    /**
+     *
+     * @param {AclDB} acldb
+     * @param {User} user
+     * @param {string} ztype
+     */
     constructor(acldb, user, ztype) {
         this.acldb = acldb
-        this.user = user != null ? user : { name: '<anonymous>', uuid: -1 }
+        this.user = user || { name: '<anonymous>', uuid: -1 }
         this.source = 'zone'
         this.opType = ztype
         this.auth = {
@@ -32,8 +38,13 @@ class ZoneContext {
     validApi() {
         return true
     }
-    errContext=(code = 0, cid = '') =>( { auth: this.auth, operation: { opType: this.opType, statusCode: code, id: cid } })
-    
+    errContext(code = 0, cid = '') {
+        return {
+            auth: this.auth,
+            operation: { opType: this.opType, statusCode: code, id: cid },
+        }
+    }
+
     process(name, uuid, access, accError) {
         this.auth.userName = name
         this.auth.userId = uuid
@@ -42,9 +53,13 @@ class ZoneContext {
         const sev = accError ? Severity.Warning : Severity.Informational
         this.acldb.log(sev, '[' + this.auth.userName + ']:' + this.opType + ': ' + message, this.errContext(0))
     }
-    toJson = () => ( { source: this.source, ip: this.auth.reqIP, user: this.auth.userName, access: this.auth.access })
-    
-    toString=() => JSON.stringify(this.toJson())
+    toJson() {
+        return { source: this.source, ip: this.auth.reqIP, user: this.auth.userName, access: this.auth.access }
+    }
+
+    toString() {
+        return JSON.stringify(this.toJson())
+    }
 }
 
 /* eslint-disable no-multi-spaces */

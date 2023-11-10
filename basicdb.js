@@ -4,8 +4,8 @@
  * @author: Laurent Morin
  * @version: 1.0.0
  */
-import { BasicZone } from './basiczone.js';
-import './cycle.js'; // For Json Unparsing
+import { BasicZone } from './basiczone.js'
+import './cycle.js' // For Json Unparsing
 
 /**
  * Represents a basic media DB.
@@ -96,7 +96,6 @@ export class BasicFileDB {
         auth.clientApp = 'media/db'
         return { auth: auth, operation: { opType: source, statusCode: 200, id: id } }
     }
-    /* eslint-enable no-multi-spaces */
     /**
      * Interface the error logger
      *
@@ -145,8 +144,6 @@ export class BasicFileDB {
         }
         this.syslog.info(header + extra, this.logid, context, data.operation, data)
     }
-    /* eslint-enable no-multi-spaces */
-    /* eslint-disable guard-for-in */
     /**
      * Initialize the file database with existing zones.
      *
@@ -234,7 +231,6 @@ export class BasicFileDB {
             Promise.all(pl).then(closeAllZones, errFct)
         } else closeAllZones(none, done)
     }
-    /* eslint-enable guard-for-in */
     /**
      * Low level append a new basic media entry.
      *
@@ -441,7 +437,6 @@ export class BasicFileDB {
             if (none) none(err)
         }
     }
-    /* eslint-disable guard-for-in */
     list(aclStatus) {
         const mediaList = {}
         let count = 0,
@@ -615,4 +610,3 @@ export class BasicFileDB {
         }
     }
 }
-

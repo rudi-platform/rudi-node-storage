@@ -12,10 +12,10 @@ import {
     readPublicKeyFile,
     tokenStringToJwtObject,
     verifyToken,
-} from '@aqmo.org/jwt-lib';
-import { createHash } from 'crypto';
-import { version as _version, parse, v4, v5, validate } from 'uuid';
-import './cycle.js'; // For Json Unparsing
+} from '@aqmo.org/jwt-lib'
+import { createHash } from 'crypto'
+import { version as _version, parse, v4, v5, validate } from 'uuid'
+import './cycle.js' // For Json Unparsing
 
 const G_ADMIN_UID = 4
 const G_USER_START_UID = 1000
@@ -105,12 +105,13 @@ class User {
         if (!group || this.groups.indexOf(group) == -1) throw Error(`Invalid group "${gname}" for ${this.name}`)
         return group
     }
+    
     accessMask(acl, group) {
         const access = acl.access(this, group)
         // this.acldb.debug(`Access mask computed: ${this.name}:${group.name} ${access}`);
         return access
     }
-    /* eslint-disable indent */
+    
     forgeDelegatedUserJwt(duser, dgroup, attributes, duration = 300) {
         if (!this.privkey) throw Error(`No private key defined for "${this.name}"`)
         if (attributes === undefined || !attributes) attributes = {}
@@ -199,53 +200,55 @@ class Acl {
 /**
  * @class
  */
-class AclStatus {
+export class AclStatus {
     constructor(uname, gname, user, accError) {
-        this.uname = uname;
-        this.gname = gname;
-        this.user = user;
-        this.accError = accError;
+        this.uname = uname
+        this.gname = gname
+        this.user = user
+        this.accError = accError
         if (this.user) {
-            this.uname = this.user.name;
+            this.uname = this.user.name
             try {
-                this.group = this.user.validGroup(gname);
-                if (this.group) this.gname = this.group.name;
+                this.group = this.user.validGroup(gname)
+                if (this.group) this.gname = this.group.name
             } catch (error) {
-                if (!this.accError) this.accError = 'E30';
-                this.group = null;
+                if (!this.accError) this.accError = 'E30'
+                this.group = null
             }
-        } else this.group = null;
-        this.context = null;
-        this.access = '---';
+        } else this.group = null
+        this.context = null
+        this.access = '---'
     }
     setContext(context) {
-        this.context = context;
+        this.context = context
     }
     setAcl(acl) {
-        if (!this.accError && this.user) this.access = this.user.accessMask(acl, this.group);
+        if (!this.accError && this.user) this.access = this.user.accessMask(acl, this.group)
     }
     /* eslint-disable no-multi-spaces */
     refused(amode) {
-        let acEr = null;
-        amode = amode !== undefined && amode ? amode : '---';
-        if (this.accError) acEr = this.accError;
-        else if (amode[2] == 'x' && this.context && !this.context.validApi()) acEr = 'E12';
-        else if (amode[2] != '-' && amode[2] != this.access[2]) acEr = 'E08';
+        let acEr = null
+        amode = amode !== undefined && amode ? amode : '---'
+        if (this.accError) acEr = this.accError
+        else if (amode[2] == 'x' && this.context && !this.context.validApi()) acEr = 'E12'
+        else if (amode[2] != '-' && amode[2] != this.access[2]) acEr = 'E08'
         else if (!(amode[0] == '-' && amode[1] == '-' && amode[2] == '-')) {
             // else no restriction specified, http OK
-            if (this.uname === '-') acEr = 'E01'; // http 401, no credentials
-            else if (!this.user) acEr = 'E02'; // http 401, no credentials
-            else if (this.access === '---') acEr = 'E03'; // http 401, invalid credentials
-            else if (amode[0] != '-' && amode[0] != this.access[0]) acEr = 'E06'; // http 401, invalid credentials
-            else if (amode[1] != '-' && amode[1] != this.access[1]) acEr = 'E07'; // http 401, invalid credentials
+            if (this.uname === '-') acEr = 'E01' // http 401, no credentials
+            else if (!this.user) acEr = 'E02' // http 401, no credentials
+            else if (this.access === '---') acEr = 'E03' // http 401, invalid credentials
+            else if (amode[0] != '-' && amode[0] != this.access[0]) acEr = 'E06' // http 401, invalid credentials
+            else if (amode[1] != '-' && amode[1] != this.access[1]) acEr = 'E07' // http 401, invalid credentials
         }
         if (this.context) {
-            this.context.process(this.uname, this.user ? this.user.uuid : -1, this.access, acEr);
+            this.context.process(this.uname, this.user ? this.user.uuid : -1, this.access, acEr)
         }
-        return acEr;
+        return acEr
     }
     toString() {
-        return `ACL:${this.uname}[${this.user ? this.user.id : -1}]:${this.gname}:${this.access}${this.accError ? ' => ' + this.accError : ''}`;
+        return `ACL:${this.uname}[${this.user ? this.user.id : -1}]:${this.gname}:${this.access}${
+            this.accError ? ' => ' + this.accError : ''
+        }`
     }
 }
 
@@ -257,9 +260,8 @@ class AclStatus {
 export class AclDB {
     constructor(cfg, syslog) {
         this.syslog = syslog
-        if (typeof cfg != 'object' || !cfg.system_groups || !cfg.system_users ) 
-            throw Error(`Invalid AclDB cfg`)
-        
+        if (typeof cfg != 'object' || !cfg.system_groups || !cfg.system_users) throw Error(`Invalid AclDB cfg`)
+
         const sg = cfg.system_groups
         const au = cfg.system_users
         try {
@@ -272,7 +274,6 @@ export class AclDB {
 
             // Object.entries(cfg.system_groups).forEach((group) => this.newGroup(group[0], group[1]))
             // Object.entries(cfg.system_users).forEach((user) => this.newUser(user[0], user[1]))
-
         } catch (err) {
             const errStr = `Could not initialize ACL DB: ${err}`
             this.error(errStr)
@@ -528,4 +529,3 @@ export class AclDB {
         return [accessMsg, accessRealm]
     }
 }
-

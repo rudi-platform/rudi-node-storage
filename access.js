@@ -28,12 +28,16 @@ class AccessContext {
         this.opType = req.originalUrl + paramstr
         this.sessionOpen = true
     }
-    validApi = () => this.validApiVersion
+    validApi() {
+        return this.validApiVersion
+    }
 
-    errContext = (code = 0, cid = '') => ({
-        auth: this.auth,
-        operation: { opType: this.opType, statusCode: code, id: cid },
-    })
+    errContext(code = 0, cid = '') {
+        return {
+            auth: this.auth,
+            operation: { opType: this.opType, statusCode: code, id: cid },
+        }
+    }
 
     errorCode(accError) {
         if (!accError) return 200
@@ -112,15 +116,12 @@ class AccessContext {
 export class AccessControl {
     constructor(cfg, slogger) {
         this.syslog = slogger
-        cfg = cfg !== undefined ? cfg : {}
-        cfg.authorized_version = cfg.authorized_version !== undefined ? cfg.authorized_version : ['0.1']
-        cfg.system_groups = cfg.system_groups !== undefined ? cfg.system_groups : { admin: 4 }
-        cfg.system_users = cfg.system_users !== undefined ? cfg.system_users : { admin: [4, '', ['admin'], ''] }
-        cfg.system_acl =
-            cfg.system_acl !== undefined
-                ? cfg.system_acl
-                : { core: ['admin', 'admin', 'rwx', '---', '---'], users: {}, groups: {} }
-        cfg.media_priv_keyfile = cfg.media_priv_keyfile !== undefined ? cfg.media_priv_keyfile : './mediapriv.pem'
+        cfg = cfg || {}
+        cfg.authorized_version = cfg.authorized_version || ['0.1']
+        cfg.system_groups = cfg.system_groups || { admin: 4 }
+        cfg.system_users = cfg.system_users || { admin: [4, '', ['admin'], ''] }
+        cfg.system_acl = cfg.system_acl || { core: ['admin', 'admin', 'rwx', '---', '---'], users: {}, groups: {} }
+        cfg.media_priv_keyfile = cfg.media_priv_keyfile || './mediapriv.pem'
         try {
             this.authorizedVersion = JSON.parse(JSON.stringify(cfg.authorized_version)) // json -> deep-copy
             this.privkey = readPrivateKeyFile(cfg.media_priv_keyfile)

@@ -4,11 +4,11 @@
  * @author: Laurent Morin
  * @version: 1.0.0
  */
-import { createHash } from "crypto";
-import { get } from "http";
-import { get as _get } from "https";
-import { URL } from "url";
-import { v4 as uuidv4 } from "uuid";
+import { createHash } from 'crypto'
+import { get } from 'http'
+import { get as _get } from 'https'
+import { URL } from 'url'
+import { v4 as uuidv4 } from 'uuid'
 
 /* eslint-disable no-multi-spaces */
 /**
@@ -29,28 +29,34 @@ import { v4 as uuidv4 } from "uuid";
 export class BasicUrlEntry {
     constructor(metadata, zone, aclStatus, name, uuid, url, date, expire) {
         if (metadata) {
-            this.uuid = metadata.media_id; delete metadata.media_id;
-            this.date = metadata.access_date; delete metadata.access_date;
-            this.zone = zone;
-            this.aclStatus = aclStatus;
-            this.url = metadata.url; delete metadata.url;
-            if ("media_name" in metadata) { this.filename = metadata.media_name; delete metadata.media_name; }
-            else this.filename = "media";
-            if ("expire_date" in metadata) { this.expire = new Date(parseInt(metadata.expire_date) * 1000); delete metadata.expire_date; }
-            else this.expire = 0;
-            this.metadata = metadata;
-        }
-        else {
-            this.zone = zone;
-            this.aclStatus = aclStatus;
-            this.name = name;
-            this.uuid = uuid;
-            this.url = url;
-            this.mimetype = "text/uri-list";
-            this.encoding = "charset=utf-8";
-            this.date = date;
-            this.expire = expire;
-            this.md5 = "-";
+            this.uuid = metadata.media_id
+            delete metadata.media_id
+            this.date = metadata.access_date
+            delete metadata.access_date
+            this.zone = zone
+            this.aclStatus = aclStatus
+            this.url = metadata.url
+            delete metadata.url
+            if ('media_name' in metadata) {
+                this.filename = metadata.media_name
+                delete metadata.media_name
+            } else this.filename = 'media'
+            if ('expire_date' in metadata) {
+                this.expire = new Date(parseInt(metadata.expire_date) * 1000)
+                delete metadata.expire_date
+            } else this.expire = 0
+            this.metadata = metadata
+        } else {
+            this.zone = zone
+            this.aclStatus = aclStatus
+            this.name = name
+            this.uuid = uuid
+            this.url = url
+            this.mimetype = 'text/uri-list'
+            this.encoding = 'charset=utf-8'
+            this.date = date
+            this.expire = expire
+            this.md5 = '-'
         }
     }
     /**
@@ -62,68 +68,62 @@ export class BasicUrlEntry {
      */
     static urlSchema(contextRef, metaRef) {
         return {
-            "title": "The RUDI media DB file Schema",
-            "description": "The descriptor of a file associated to a RUDI media.",
-            "type": "object",
-            "properties": {
-                "uuid": {
-                    "description": "A unique UUID-V4 identifier",
-                    "type": "string"
+            title: 'The RUDI media DB file Schema',
+            description: 'The descriptor of a file associated to a RUDI media.',
+            type: 'object',
+            properties: {
+                uuid: {
+                    description: 'A unique UUID-V4 identifier',
+                    type: 'string',
                 },
-                "zone": {
-                    "description": "The name of the storage zone",
-                    "type": "string"
+                zone: {
+                    description: 'The name of the storage zone',
+                    type: 'string',
                 },
-                "context": {
-                    "description": "The creaction context",
-                    "$ref": contextRef
+                context: {
+                    description: 'The creaction context',
+                    $ref: contextRef,
                 },
-                "name": {
-                    "description": "The name of the media, find with the zone",
-                    "type": "string"
+                name: {
+                    description: 'The name of the media, find with the zone',
+                    type: 'string',
                 },
-                "url": {
-                    "description": "The URL of the media, find with the zone",
-                    "type": "string",
-                    "format": "uri"
+                url: {
+                    description: 'The URL of the media, find with the zone',
+                    type: 'string',
+                    format: 'uri',
                 },
-                "mimetype": {
-                    "description": "The mime-type of the URL",
-                    "type": "string"
+                mimetype: {
+                    description: 'The mime-type of the URL',
+                    type: 'string',
                 },
-                "encoding": {
-                    "description": "The text encoding of the URL",
-                    "type": "string"
+                encoding: {
+                    description: 'The text encoding of the URL',
+                    type: 'string',
                 },
-                "date": {
-                    "description": "The last valid URL access UTC timestamp",
-                    "type": "string",
-                    "format": "date-time"
+                date: {
+                    description: 'The last valid URL access UTC timestamp',
+                    type: 'string',
+                    format: 'date-time',
                 },
-                "expire": {
-                    "description": "The URL expiration UTC timestamp",
-                    "type": "string",
-                    "format": "date-time"
+                expire: {
+                    description: 'The URL expiration UTC timestamp',
+                    type: 'string',
+                    format: 'date-time',
                 },
-                "metadata": {
-                    "description": "The RUDI metara",
-                    "$ref": metaRef
-                }
+                metadata: {
+                    description: 'The RUDI metara',
+                    $ref: metaRef,
+                },
             },
-            "required": [
-                "uuid",
-                "zone",
-                "context",
-                "name",
-                "url"
-            ]
-        };
+            required: ['uuid', 'zone', 'context', 'name', 'url'],
+        }
     }
     /* eslint-enable no-multi-spaces */
     /**
      */
     getStorageName() {
-        return "#" + this.url;
+        return '#' + this.url
     }
     /**
      * Generate the CSV line for the media.
@@ -131,11 +131,11 @@ export class BasicUrlEntry {
      * @returns {string}              - The CSV line.
      */
     getCSVline() {
-        const filetype = this.name + ": " + this.mimetype + "; " + this.encoding;
-        const d = this.date.valueOf();
-        const e = this.expire.valueOf();
-        const s = ";";
-        return "" + this.url + s + this.uuid + s + filetype + s + (d ? d / 1000 : 0) + s + (e ? e / 1000 : 0);
+        const filetype = this.name + ': ' + this.mimetype + '; ' + this.encoding
+        const d = this.date.valueOf()
+        const e = this.expire.valueOf()
+        const s = ';'
+        return '' + this.url + s + this.uuid + s + filetype + s + (d ? d / 1000 : 0) + s + (e ? e / 1000 : 0)
     }
     /**
      * Generate a unique connector ID for the media.
@@ -144,32 +144,40 @@ export class BasicUrlEntry {
      */
     generateFileId() {
         return {
-            ref: this.uuid, fileid: uuidv4(),
-            count: 0, access: [], cdate: Date(),
-            zone: this.zone.name, source: this.zone.getPathFromConnector(this),
-            name: this.name
-        };
+            ref: this.uuid,
+            fileid: uuidv4(),
+            count: 0,
+            access: [],
+            cdate: Date(),
+            zone: this.zone.name,
+            source: this.zone.getPathFromConnector(this),
+            name: this.name,
+        }
     }
     clear(staged) {
-        staged.process(`URL [${this.uuid}]:${this.url} marked not confirmed`);
+        staged.process(`URL [${this.uuid}]:${this.url} marked not confirmed`)
     }
     commit(staged) {
-        const path = this.zone.getPathFromConnector(this);
-        staged.process(`URL [${this.uuid}]:${path} commited`);
+        const path = this.zone.getPathFromConnector(this)
+        staged.process(`URL [${this.uuid}]:${path} commited`)
     }
     destroy(staged) {
-        if (staged) staged.process(`URL [${this.uuid}]:${this.url} destroyed`);
+        if (staged) staged.process(`URL [${this.uuid}]:${this.url} destroyed`)
     }
     /**
      */
     toJson() {
         return {
-            uuid: this.uuid, zone: this.zone.name,
+            uuid: this.uuid,
+            zone: this.zone.name,
             context: this.aclStatus.context.toJson(),
-            url: this.url, mimetype: this.mimetype, encoding: this.encoding,
-            name: this.name, date: this.date,
-            basefile: this.getStorageName()
-        };
+            url: this.url,
+            mimetype: this.mimetype,
+            encoding: this.encoding,
+            name: this.name,
+            date: this.date,
+            basefile: this.getStorageName(),
+        }
     }
     /**
      * Load the media content.
@@ -181,49 +189,52 @@ export class BasicUrlEntry {
      *                                 Returns an array with the content, then name, and the mime type.
      */
     getFile(idesc, none, done) {
-        if (!("url" in idesc)) {
-            if (none) none("loading URL media: url missing in context", 400);
-            return;
+        if (!('url' in idesc)) {
+            if (none) none('loading URL media: url missing in context', 400)
+            return
         }
-        const source = idesc.url;
+        const source = idesc.url
 
         try {
-            const sourceUrl = new URL(source);
+            const sourceUrl = new URL(source)
             switch (sourceUrl.protocol) {
-                case "https:": {
+                case 'https:': {
                     _get(sourceUrl.href, (res) => {
-                        let data = "";
-                        res.on("data", (chunk) => { data += chunk; });
-                        res.on("end", () => {
-                            if (done) done(data, idesc.name, "charset=binary");
-                        });
-                    }).on("error", (error) => {
-                        console.error("Error: critical failure: could not load " + sourceUrl.href + ": " + error);
-                        if (none) none("loading media: file error", 500);
-                        return;
-                    });
-                    break;
+                        let data = ''
+                        res.on('data', (chunk) => {
+                            data += chunk
+                        })
+                        res.on('end', () => {
+                            if (done) done(data, idesc.name, 'charset=binary')
+                        })
+                    }).on('error', (error) => {
+                        console.error('Error: critical failure: could not load ' + sourceUrl.href + ': ' + error)
+                        if (none) none('loading media: file error', 500)
+                        return
+                    })
+                    break
                 }
-                case "http:": {
+                case 'http:': {
                     get(sourceUrl.href, (res) => {
-                        let data = "";
-                        res.on("data", (chunk) => { data += chunk; });
-                        res.on("end", () => {
-                            if (done) done(data, idesc.name, "charset=binary");
-                        });
-                    }).on("error", (error) => {
-                        console.error("Error: critical failure: could not load " + sourceUrl.href + ": " + error);
-                        if (none) none("loading media: file error", 500);
-                        return;
-                    });
-                    break;
+                        let data = ''
+                        res.on('data', (chunk) => {
+                            data += chunk
+                        })
+                        res.on('end', () => {
+                            if (done) done(data, idesc.name, 'charset=binary')
+                        })
+                    }).on('error', (error) => {
+                        console.error('Error: critical failure: could not load ' + sourceUrl.href + ': ' + error)
+                        if (none) none('loading media: file error', 500)
+                        return
+                    })
+                    break
                 }
                 default:
-                    if (none) none("loading URL media: protocol not supported (" + sourceUrl.protocol + ")", 400);
+                    if (none) none('loading URL media: protocol not supported (' + sourceUrl.protocol + ')', 400)
             }
-        }
-        catch (e) {
-            if (none) none("loading URL media: content access error", 500);
+        } catch (e) {
+            if (none) none('loading URL media: content access error', 500)
         }
     }
     /**
@@ -236,21 +247,13 @@ export class BasicUrlEntry {
      */
     getRealMd5(none, done) {
         return this.getFile(this, none, (data, name, charset) => {
-            const hash = createHash("md5").update(data).digest("hex");
-            const previousHash = this.md5;
+            const hash = createHash('md5').update(data).digest('hex')
+            const previousHash = this.md5
             if (hash != previousHash) {
-                this.md5 = hash;
-                this.size = data.length;
+                this.md5 = hash
+                this.size = data.length
             }
-            if (done) done(hash, previousHash, this.size);
-        });
+            if (done) done(hash, previousHash, this.size)
+        })
     }
-};
-
-
-
-
-
-
-
-
+}

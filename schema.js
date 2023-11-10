@@ -1,5 +1,4 @@
 /* eslint-disable no-multi-spaces */
-/* eslint-disable guard-for-in */
 /**
  * Interface for various Json schema syntax and management
  *
@@ -15,10 +14,11 @@
  *   https://json-schema.org/specification.html
  *
  * The class interface the management of a base URL and the interface with mongo.
- *
- * @param {string}     baseurl    - The URL serving the schema.
  */
 export class SchemaSet {
+    /**
+     * @param {string} baseURL The URL serving the schema.
+     */
     constructor(baseURL) {
         this.baseURL = baseURL
         this.schemaList = {}
@@ -106,7 +106,7 @@ export class SchemaSet {
      * @returns {string}           - The final schema.
      */
     toJSON(name) {
-        if (name == 'all') {
+        if (!name) {
             const schemas = {}
             Object.keys(this.schemaList).forEach((name) => (schemas[name] = this.toJSON(name)))
             return schemas

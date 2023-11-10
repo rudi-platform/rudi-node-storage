@@ -4,18 +4,21 @@
  * @author: Laurent Morin
  * @version: 1.0.0
  */
+import { RudiLogger } from '@aqmo.org/rudi_logger'
 import { MongoClient } from 'mongodb'
 
 /**
  * Basic interface for the storage of LOG events MongoDB.
- *
- * @class
- * @param {json}        config       - The DB configuration with the MongoDB URL and its name.
- * @param {object}      schemaSet    - the schemas DB
- * @param {string}      mediaSchema  - the name of the media schema
- * @param {string}      eventSchema  - the name of the event schema
  */
 export class MongoService {
+    /**
+     * @param {Json} config the DB configuration with the MongoDB URL and its name.
+     * @param {object} schemaSet the schemas DB
+     * @param {string} mediaSchema the name of the media schema
+     * @param {string} urlSchema  the name of the url schema
+     * @param {string} eventSchema the name of the event schema
+     * @param {RudiLogger} syslog RUDI syslog 
+     */
     constructor(config, schemaSet, mediaSchema, urlSchema, eventSchema, syslog) {
         this.disabled = !!config?.disabled
         this.mongoClient = MongoClient

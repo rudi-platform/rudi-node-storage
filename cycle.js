@@ -1,4 +1,3 @@
-/* eslint-disable no-multi-spaces */
 /*
     cycle.js
     2021-05-31

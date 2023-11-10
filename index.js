@@ -23,18 +23,16 @@ import { DEFAULT_CONF } from './configuration.js'
 import { MongoService } from './db.js'
 import { SchemaSet } from './schema.js'
 
-/* eslint-disable no-multi-spaces */
 /**
  * The code express based HTTP server.
  * The web server creates the media db, and serves:
  *  - a route for requesting a connector for a media UUID
  *  - a route for loading the data loaded from a media UUID.
- *
- * The configuration used:
- * @class
- * @param {object}  configuration - The listening port.
  */
 class HttpService {
+    /**
+     * @param {object}  configuration The configuration used
+     */
     constructor(configuration) {
         this.port = configuration.server.listening_port
         this.netInterface = configuration.server.listening_address
@@ -233,11 +231,12 @@ class HttpService {
      * Flush and stop the database, and close the server.
      *
      */
-    close = (err, done) =>
-        this.listen.close((err) => {
+    close(err, done) {
+        return this.listen.close((err) => {
             this.db.close(err)
             this.mongodb.close(err, done)
         })
+    }
 
     /**
      * Serves a favicon. For fun because I like it (CC Licence).
@@ -296,7 +295,7 @@ class HttpService {
      * @param {object} res - the HTTP response.
      */
     schemas(req, res) {
-        const name = req.params.name || 'all'
+        const name = req.params.name
         const content = this.schemaSet.toJSON(name)
         if (!content) return this.sendAndClose(res, 404, 'Schema not found')
         this.sendAndClose(res, 200, content)
@@ -825,7 +824,6 @@ function fetchAndParseArguments(confDefault, defaultConfFilename) {
     return configuration
 }
 
-/* eslint-disable indent */
 /**
  * A Signal handler, close in a clean way, with a timeout
  *
@@ -847,17 +845,20 @@ class SignalCleaner {
                     console.error('Error closing session: ' + err)
                     process.exit(1)
                 },
-                (context) => process.exit(0)
+                (context) => {
+                    console.debug(`Closing session on signal ${signal}`)
+                    process.exit(0)
+                }
             )
         } else
             setTimeout(() => {
-                console.error('Warning: timeout while closing, terminated')
+                console.error(`Warning: timeout while closing, terminated on signal ${signal}`)
                 process.exit(0)
             }, 1000 * this.timeout)
     }
     arm() {
-        process.on('SIGINT', (req, res) => this.interruption(req, res))
-        process.on('SIGTERM', (req, res) => this.interruption(req, res))
+        process.on('SIGINT', () => this.interruption('SIGINT'))
+        process.on('SIGTERM', () => this.interruption('SIGTERM'))
     }
 }
 
