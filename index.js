@@ -42,8 +42,6 @@ class HttpService {
         this.httpPrefix = configuration.server.server_prefix
         this.revision = configuration.logging.revision
 
-        this.normalizePrefix()
-
         this.initHttpService(configuration)
             .then(() => this.syslog.debug('Initialization complete'))
             .catch((err) => {
@@ -53,22 +51,18 @@ class HttpService {
     }
     /**
      * What we want is a prefix that is either '/' or '/something/'
-     * This makes sure the prefix adopts this convention
+     * The prefix is here normalized to make sure it adopts this convention.
      */
-    normalizePrefix() {
-        if (this.httpPrefix == '/') return
-        if (!this.httpPrefix || this.httpPrefix == '') {
+    setHttpPrefix(prefix) {
+        if (!prefix || prefix == '' || prefix == '/') {
             this.httpPrefix = '/'
             return
         }
-        if (!this.httpPrefix.startsWith('/')) {
-            this.httpPrefix = `/${this.httpPrefix}`
-        }
-        if (!this.httpPrefix.endsWith('/')) {
-            this.httpPrefix = `${this.httpPrefix}/`
-        }
+        if (!prefix.startsWith('/')) this.httpPrefix = `/${prefix}`
+        if (!prefix.endsWith('/')) this.httpPrefix += `/`
     }
     async initHttpService(configuration) {
+        this.setHttpPrefix()
         this.httpServer = express()
 
         const schemaURL = `${this.server}${this.httpPrefix}schema`
