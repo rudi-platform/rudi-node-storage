@@ -40,9 +40,9 @@ class HttpService {
         this.netInterface = configuration.server.listening_address
         this.server = configuration.server.server_url
         this.revision = configuration.logging.revision
-        this.setHttpPrefix(configuration.server.server_prefix)
+        this.httpPrefix = this._normalizeHttpPrefix(configuration.server.server_prefix)
 
-        this.initHttpService(configuration)
+        this._initHttpService(configuration)
             .then(() => this.syslog.debug('Initialization complete'))
             .catch((err) => {
                 console.error(err)
@@ -53,15 +53,14 @@ class HttpService {
      * What we want is a prefix that is either '/' or '/something/'
      * The prefix is here normalized to make sure it adopts this convention.
      */
-    setHttpPrefix(prefix) {
-        if (!prefix || prefix == '' || prefix == '/') this.httpPrefix = '/'
-        else {
-            if (!prefix.startsWith('/')) this.httpPrefix = `/${prefix}`
-            if (!prefix.endsWith('/')) this.httpPrefix += `/`
-        }
+    _normalizeHttpPrefix(prefix) {
+        if (!prefix || prefix == '' || prefix == '/') return '/'
+        if (!prefix.startsWith('/')) prefix = `/${prefix}`
+        if (!prefix.endsWith('/')) prefix += `/`
+        return prefix
     }
 
-    async initHttpService(configuration) {
+    async _initHttpService(configuration) {
         this.httpServer = express()
 
         const schemaURL = `${this.server}${this.httpPrefix}schema`
@@ -111,18 +110,18 @@ class HttpService {
         }
         this.syslog.debug(`Zones configured: ${JSON.stringify(configuration.storage.zones)}`)
 
-        this.declareRoutes()
+        this._declareRoutes()
     }
-    errorHandler(err, req, res, next) {
+    _errorHandler(err, req, res, next) {
         const errTime = new Date().getTime()
         console.error(`[${errTime}]`, err)
         res.status(500).json({ error: `An error was thrown, please contact the Admin (code ${errTime})` })
     }
-    declareRoutes() {
+    _declareRoutes() {
         const router = express.Router()
         this.syslog.info(`This server prefix is: ${this.httpPrefix}`)
         this.httpServer.use(this.httpPrefix, router)
-        this.httpServer.use(this.errorHandler)
+        this.httpServer.use(this._errorHandler)
 
         router.get('/fail', () => {
             throw new Error('Nevermind this error')
