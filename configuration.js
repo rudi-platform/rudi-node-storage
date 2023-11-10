@@ -50,7 +50,7 @@ export const DEFAULT_CONF = {
         acc_timeout: 60 * 2,
         zones: [
             { name:"zone1", staging_time:300, destroy_time:600 },
-            { name:"static", path: process.env.HOME + "/media", csv:"list.csv" }
+            { name:"static", path: `${process.env.HOME}/media`, csv:"list.csv" }
         ]
     },
     database: {

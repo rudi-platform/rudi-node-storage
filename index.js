@@ -107,6 +107,7 @@ class HttpService {
             this.db.init(configuration.storage.zones, false)
         }
         this.syslog.debug(`Zones configured: ${JSON.stringify(configuration.storage.zones)}`)
+        this.syslog.debug(`Storage: ${JSON.stringify(configuration.storage)}`)
 
         this._declareRoutes()
     }
@@ -804,8 +805,12 @@ function fetchAndParseArguments(confDefault, defaultConfFilename) {
 
     let configuration = confDefault
     try {
-        const configfile = parseIni(readFileSync(confFilename, 'utf-8'))
-        configuration = updateProperty(confDefault, configfile)
+        const iniFileContent = readFileSync(confFilename, 'utf-8')
+        console.debug('iniFileContent:', iniFileContent)
+        const config = parseIni(iniFileContent)
+        console.debug('config:', config)
+        configuration = updateProperty(confDefault, config)
+        console.debug('configuration:', configuration)
     } catch (err) {
         console.error('warning: configuration file ignored: ' + err)
     }
