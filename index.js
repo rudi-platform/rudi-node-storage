@@ -39,8 +39,8 @@ class HttpService {
         this.port = configuration.server.listening_port
         this.netInterface = configuration.server.listening_address
         this.server = configuration.server.server_url
-        this.httpPrefix = configuration.server.server_prefix
         this.revision = configuration.logging.revision
+        this.setHttpPrefix(configuration.server.server_prefix)
 
         this.initHttpService(configuration)
             .then(() => this.syslog.debug('Initialization complete'))
@@ -54,15 +54,14 @@ class HttpService {
      * The prefix is here normalized to make sure it adopts this convention.
      */
     setHttpPrefix(prefix) {
-        if (!prefix || prefix == '' || prefix == '/') {
-            this.httpPrefix = '/'
-            return
+        if (!prefix || prefix == '' || prefix == '/') this.httpPrefix = '/'
+        else {
+            if (!prefix.startsWith('/')) this.httpPrefix = `/${prefix}`
+            if (!prefix.endsWith('/')) this.httpPrefix += `/`
         }
-        if (!prefix.startsWith('/')) this.httpPrefix = `/${prefix}`
-        if (!prefix.endsWith('/')) this.httpPrefix += `/`
     }
+
     async initHttpService(configuration) {
-        this.setHttpPrefix()
         this.httpServer = express()
 
         const schemaURL = `${this.server}${this.httpPrefix}schema`
