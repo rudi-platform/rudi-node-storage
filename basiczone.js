@@ -82,7 +82,7 @@ export class BasicZone {
             mkdirSync(this.dirname, { recursive: true })
         } catch (err) {
             if (none) {
-                none(`[${this.name}]: could not create storage dir ${this.dirname}`)
+                none(`[${this.name}]: could not create storage dir '${this.dirname}'`)
             }
             return
         }

@@ -42,10 +42,8 @@ class HttpService {
         this.httpPrefix = configuration.server.server_prefix
         this.revision = configuration.logging.revision
 
-        if (!this.httpPrefix || this.httpPrefix == '') this.httpPrefix = '/'
-        else if (!this.httpPrefix.startsWith('/')) {
-            this.httpPrefix = `/${this.httpPrefix}`
-        }
+        this.normalizePrefix()
+
         this.initHttpService(configuration)
             .then(() => this.syslog.debug('Initialization complete'))
             .catch((err) => {
@@ -53,7 +51,23 @@ class HttpService {
                 this.syslog.error(`An error happened during initialization: ${JSON.stringify(err)}`)
             })
     }
-
+    /**
+     * What we want is a prefix that is either '/' or '/something/'
+     * This makes sure the prefix adopts this convention
+     */
+    normalizePrefix() {
+        if (this.httpPrefix == '/') return
+        if (!this.httpPrefix || this.httpPrefix == '') {
+            this.httpPrefix = '/'
+            return
+        }
+        if (!this.httpPrefix.startsWith('/')) {
+            this.httpPrefix = `/${this.httpPrefix}`
+        }
+        if (!this.httpPrefix.endsWith('/')) {
+            this.httpPrefix = `${this.httpPrefix}/`
+        }
+    }
     async initHttpService(configuration) {
         this.httpServer = express()
 
