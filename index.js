@@ -34,10 +34,13 @@ class HttpService {
      * @param {object}  configuration The configuration used
      */
     constructor(configuration) {
+        this.revision = configuration.logging.revision
+        this.syslog = new RudiLogger(configuration.logging.app_name, this.revision, configuration)
+
         this.port = configuration.server.listening_port
         this.netInterface = configuration.server.listening_address
         this.server = configuration.server.server_url
-        this.revision = configuration.logging.revision
+
         this.httpPrefix = this._normalizeHttpPrefix(configuration.server.server_prefix)
 
         this._initHttpService(configuration)
@@ -53,9 +56,9 @@ class HttpService {
      */
     _normalizeHttpPrefix(prefix) {
         if (!prefix || prefix == '' || prefix == '/') return '/'
-        if (!prefix.startsWith('/')) prefix = `/${prefix}`
-        if (!prefix.endsWith('/')) prefix += `/`
-        return prefix
+        if (prefix.endsWith('/')) prefix = prefix.slice(0, -1)
+        // this.syslog.debug(`Http prefix: '${prefix}'`)
+        return prefix.startsWith('/') ? prefix : `/${prefix}`
     }
 
     async _initHttpService(configuration) {
@@ -68,8 +71,6 @@ class HttpService {
         const eventRef = `${schemaBase}${configuration.schemas.schema_event}`
         const fileRef = `${schemaBase}${configuration.schemas.schema_file}`
         const urlRef = `${schemaBase}${configuration.schemas.schema_url}`
-
-        this.syslog = new RudiLogger(configuration.logging.app_name, this.revision, configuration)
 
         this.schemaSet = new SchemaSet(schemaURL)
         this.schemaSet.addSchema(contextRef, HttpService.contextSchema())
@@ -106,59 +107,94 @@ class HttpService {
             this.syslog.error('DB initialization failed: ' + err, 'core')
             this.db.init(configuration.storage.zones, false)
         }
-        this.syslog.debug(`Zones configured: ${JSON.stringify(configuration.storage.zones)}`)
-        this.syslog.debug(`Storage: ${JSON.stringify(configuration.storage)}`)
+        // this.syslog.debug(`Zones configured: ${JSON.stringify(configuration.storage.zones)}`)
+        // this.syslog.debug(`Storage: ${JSON.stringify(configuration.storage)}`)
 
         this._declareRoutes()
     }
     _errorHandler(err, req, res, next) {
-        const errTime = new Date().getTime()
-        console.error(`[${errTime}]`, err)
-        res.status(500).json({ error: `An error was thrown, please contact the Admin (code ${errTime})` })
+        const now = new Date()
+        // console.error(now, `[Express default error handler]`, err)
+        this.syslog.error(`An error happened on ${req.method} ${req.url}: ${err}`)
+        console.error('[Local dump]',err)
+
+        if (res.headersSent) {
+            return
+        }
+        // res.status(500)
+        // res.render('error', { time: now.getTime(), error: err })
+        res.status(500).json({
+            error: `An error was thrown, please contact the Admin with the information bellow`,
+            message: err.message,
+            time: now.getTime(),
+        })
+    }
+    _logRequests(req, reply, next) {
+        this.syslog.info(`Request <= ${req.method} ${req.url}`)
+        next()
+
+        reply.on('finish', () => {
+            if (reply.statusCode < 400) {
+                this.syslog.info(`=> OK ${reply.statusCode}: ${req.method} ${req.originalUrl}`)
+                // console.debug(res)
+            } else {
+                // console.error(res)
+                this.syslog.warn(`ERR ${reply.statusCode} ${reply.statusMessage} > ${req.method} ${req.originalUrl}`)
+            }
+        })
+    }
+    _logRouterRequests(req, reply, next) {
+        this.syslog.info(`Route <= ${req.method} ${req.url}`)
+        next()
     }
     _declareRoutes() {
+        this.httpServer.use((req, res, next) => this._logRequests(req, res, next))
+
         const router = express.Router()
-        this.syslog.info(`This server prefix is: ${this.httpPrefix}`)
-        this.httpServer.use(this.httpPrefix, router)
-        this.httpServer.use(this._errorHandler)
+        router.use((req, res, next) => this._logRouterRequests(req, res, next))
+        // this.syslog.info(`This server prefix is: ${this.httpPrefix}`)
 
         router.get('/fail', () => {
-            throw new Error('Nevermind this error')
+            throw new Error(`This error is handled, isn't it?`)
         })
-        router.get('', (req, res) => this.root(req, res))
-        router.get('favicon.ico', (req, res) => this.favicon(req, res))
-        router.get('revision', (req, res) => this.getRevision(req, res))
+        router.get('/', (req, res) => this.root(req, res))
+        router.get('/favicon.ico', (req, res) => this.favicon(req, res))
+        router.get('/revision', (req, res) => this.getRevision(req, res))
         if (this.logweb) {
-            router.get('logs', (req, res) => this.logweb.logContent(req, res))
-            router.get('logs/:name', (req, res) => this.logweb.logFile(req, res))
+            router.get('/logs', (req, res) => this.logweb.logContent(req, res))
+            router.get('/logs/:name', (req, res) => this.logweb.logFile(req, res))
         }
-        router.post('jwt/forge', (req, res) => this.forgeUserToken(req, res))
-        router.get('storage/:fileid', (req, res) => this.fileService(req, res))
-        router.post('post', (req, res) => this.postFile(req, res))
-        router.post('commit', (req, res) => this.commitMedia(req, res))
-        router.post('delete/:uuid', (req, res) => this.deleteMedia(req, res))
-        router.get('list', (req, res) => this.listMedias(req, res))
-        router.get('schema/:name', (req, res) => this.schemas(req, res))
-        router.get('schemas', (req, res) => this.schemas(req, res))
-        router.get('check/:uuid', (req, res) => this.checkFile(req, res))
-        router.get('download/:uuid', (req, res) => this.direct(req, res))
-        router.get('zdownload/:uuid', (req, res) => this.compress(req, res))
-        router.get(':uuid', (req, res) => this.media(req, res))
-        router.options('jwt/forge', (req, res) => this.optionCors(req, res))
-        router.options('storage/:fileid', (req, res) => this.optionCors(req, res))
-        router.options('post', (req, res) => this.optionCors(req, res))
-        router.options('commit/', (req, res) => this.optionCors(req, res))
-        router.options('delete/', (req, res) => this.optionCors(req, res))
-        router.options('list/', (req, res) => this.optionCors(req, res))
-        router.options('schemas', (req, res) => this.schemas(req, res))
-        router.options('schema/:name', (req, res) => this.schemas(req, res))
-        router.options('check/:uuid', (req, res) => this.optionCors(req, res))
-        router.options('download/:uuid', (req, res) => this.optionCors(req, res))
-        router.options('zdownload/:uuid', (req, res) => this.optionCors(req, res))
-        router.options(':uuid', (req, res) => this.optionCors(req, res))
+        router.post('/jwt/forge', (req, res) => this.forgeUserToken(req, res))
+        router.get('/storage/:fileid', (req, res) => this.fileService(req, res))
+        router.post('/post', (req, res) => this.postFile(req, res))
+        router.post('/commit', (req, res) => this.commitMedia(req, res))
+        router.post('/delete/:uuid', (req, res) => this.deleteMedia(req, res))
+        router.get('/list', (req, res) => this.listMedias(req, res))
+        router.get('/schema/:name', (req, res) => this.schemas(req, res))
+        router.get('/schemas', (req, res) => this.schemas(req, res))
+        router.get('/check/:uuid', (req, res) => this.checkFile(req, res))
+        router.get('/download/:uuid', (req, res) => this.direct(req, res))
+        router.get('/zdownload/:uuid', (req, res) => this.compress(req, res))
+        router.get('/:uuid', (req, res) => this.media(req, res))
+        router.options('/jwt/forge', (req, res) => this.optionCors(req, res))
+        router.options('/storage/:fileid', (req, res) => this.optionCors(req, res))
+        router.options('/post', (req, res) => this.optionCors(req, res))
+        router.options('/commit/', (req, res) => this.optionCors(req, res))
+        router.options('/delete/', (req, res) => this.optionCors(req, res))
+        router.options('/list/', (req, res) => this.optionCors(req, res))
+        router.options('/schemas', (req, res) => this.schemas(req, res))
+        router.options('/schema/:name', (req, res) => this.schemas(req, res))
+        router.options('/check/:uuid', (req, res) => this.optionCors(req, res))
+        router.options('/download/:uuid', (req, res) => this.optionCors(req, res))
+        router.options('/zdownload/:uuid', (req, res) => this.optionCors(req, res))
+        router.options('/:uuid', (req, res) => this.optionCors(req, res))
 
+        this.httpServer.use(this.httpPrefix, router)
         this.listen = this.httpServer.listen(this.port, this.netInterface)
-        this.syslog.info(`RUDI Media server listening on ${this.netInterface}${this.port ? ':' + this.port : ''}`)
+        this.syslog.info(
+            `RUDI Media server listening on ${this.netInterface}${this.port ? ':' + this.port : ''}${this.httpPrefix}`
+        )
+        this.httpServer.use((err, req, res, next) => this._errorHandler(err, req, res, next)) // Should stay at the end!
     }
     /**
      * Generate a Json Schema for a *context* with the proper registering URL.

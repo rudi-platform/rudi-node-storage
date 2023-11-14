@@ -12,9 +12,9 @@ import {
     readPublicKeyFile,
     tokenStringToJwtObject,
     verifyToken,
-} from '@aqmo.org/jwt-lib';
-import { createHash } from 'crypto';
-import { version as getVersion, parse, v4, v5, validate } from 'uuid';
+} from '@aqmo.org/jwt-lib'
+import { createHash } from 'crypto'
+import { version as getVersion, parse, v4, v5, validate } from 'uuid'
 import './cycle.js'; // For Json Unparsing
 
 const G_ADMIN_UID = 4
@@ -105,13 +105,13 @@ export class User {
         if (!group || this.groups.indexOf(group) == -1) throw Error(`Invalid group "${gname}" for ${this.name}`)
         return group
     }
-    
+
     accessMask(acl, group) {
         const access = acl.access(this, group)
         // this.acldb.debug(`Access mask computed: ${this.name}:${group.name} ${access}`);
         return access
     }
-    
+
     forgeDelegatedUserJwt(duser, dgroup, attributes, duration = 300) {
         if (!this.privkey) throw Error(`No private key defined for "${this.name}"`)
         if (attributes === undefined || !attributes) attributes = {}
@@ -134,12 +134,11 @@ export class User {
         // this.acldb.debug(`Access token forged: ${token} [${JSON.stringify(xattr)}]`);
         return token
     }
-    /* eslint-enable indent */
     /**
      * Perform a password hash.
      *
      * @param {object}   p      - the reference password
-     * @param {object}   input  - the given password
+     * @param {string}   input  - the given password
      * @returns {string}        - passwords matches
      */
     checkPassword(input) {
