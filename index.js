@@ -160,6 +160,7 @@ class HttpService {
         router.get('/', (req, res) => this.root(req, res))
         router.get('/favicon.ico', (req, res) => this.favicon(req, res))
         router.get('/revision', (req, res) => this.getRevision(req, res))
+        router.get('/hash', (req, res) => this.getRevision(req, res))
         if (this.logweb) {
             router.get('/logs', (req, res) => this.logweb.logContent(req, res))
             router.get('/logs/:name', (req, res) => this.logweb.logFile(req, res))

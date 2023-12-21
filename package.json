@@ -19,17 +19,17 @@
         "@aqmo.org/rudi_logger": "^1.1.5",
         "express": "^4.18.2",
         "ini": "^4.1.1",
-        "magic-bytes.js": "^1.5.0",
+        "magic-bytes.js": "^1.7.0",
         "md5": "^2.3.0",
         "minimist": "^1.2.8",
-        "mongodb": "^6.2.0",
+        "mongodb": "^6.3.0",
         "uuid": "^9.0.1"
     },
     "devDependencies": {
         "@babel/eslint-parser": "^7.23.3",
-        "@babel/preset-env": "^7.23.3",
-        "eslint": "^8.53.0",
-        "nodemon": "^3.0.1"
+        "@babel/preset-env": "^7.23.6",
+        "eslint": "^8.56.0",
+        "nodemon": "^3.0.2"
     },
     "couldHaveDependencies": {
         "unix-dgram": "^2.0.4"
