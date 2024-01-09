@@ -451,7 +451,8 @@ class HttpService {
 
         // Bufferize file data
         const chunkSize = 65536 * 4
-        const fileSize = metadata.file_size || parseInt(req.headers['content-length']) || chunkSize
+        const contentLength = req.headers['Content-Length'] || req.headers['content-length']
+        const fileSize = metadata.file_size || parseInt(contentLength) || chunkSize
         // TODO: shouldAppend -> check actual file size + size of the new file bit
         if (fileSize > MAX_FILE_SIZE) {
             this.syslog.error(`file too large, use a different upload method: ${JSON.stringify(metadata)}`)
@@ -561,7 +562,8 @@ class HttpService {
                 processJson(metadata)
             } else {
                 // Bufferize file data
-                const size = parseInt(req.headers['content-length']) || 4096
+                const contentLength = req.headers['Content-Length'] || req.headers['content-length']
+                const size = parseInt(contentLength) || 4096
                 const dwnld = new DownloadService(4096, size)
                 req.on('readable', () => dwnld.read(req))
                 // Build the entry, Close the request
