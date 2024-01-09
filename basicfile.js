@@ -41,19 +41,19 @@ export class BasicFileEntry {
             delete metadata.access_date
             this.zone = zone
             this.aclStatus = aclStatus
-            if ('media_name' in metadata) {
+            if (metadata.media_name) {
                 this.filename = metadata.media_name
                 delete metadata.media_name
             } else this.filename = 'media'
-            if ('file_type' in metadata) {
+            if (metadata.file_type) {
                 this.mimetype = metadata.file_type
                 delete metadata.file_type
             } else this.mimetype = mimeFromContent(filecontent)
-            if ('charset' in metadata) {
+            if (metadata.charset) {
                 this.encoding = metadata.charset
                 delete metadata.charset
             } else this.encoding = charsetFromContent(filecontent)
-            if ('file_size' in metadata) {
+            if (metadata.file_size) {
                 this.size = metadata.file_size
                 delete metadata.file_size
             } else this.size = filecontent.length
@@ -199,7 +199,7 @@ export class BasicFileEntry {
      *                                 Returns the content, then name, and the mime type.
      */
     getFile(idesc, none, done) {
-        if (!('source' in idesc)) {
+        if (!idesc?.source) {
             if (none) none('loading media: source missing in context', 404)
             return
         }

@@ -17,15 +17,15 @@ export function mimeFromContent(filecontent) {
     // this.syslog.debug('Filetype: '+ JSON.stringify(info, null, 4), this.logid);
     if (info.length) {
         // Take the 1st matching.
-        if ('mime' in info[0]) mimetype = info[0].mime
-        else if ('typename' in info[0]) mimetype = 'application/' + info[0].typename
+        if (info[0]?.mime) mimetype = info[0].mime
+        else if (info[0].typename) mimetype = 'application/' + info[0].typename
     } else if (Buffer.isBuffer(filecontent)) {
-    /* TODO: Clean-up json/csv analysis.
-     *
-     * For sure, the following code is full of "magic-values". The
-     * purpose of this code is to provide a content basic analysis
-     * for demos.
-     */
+        /* TODO: Clean-up json/csv analysis.
+         *
+         * For sure, the following code is full of "magic-values". The
+         * purpose of this code is to provide a content basic analysis
+         * for demos.
+         */
         const itecur = function (s, p) {
             let i = 0,
                 c = -1

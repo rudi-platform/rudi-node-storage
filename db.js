@@ -17,7 +17,7 @@ export class MongoService {
      * @param {string} mediaSchema the name of the media schema
      * @param {string} urlSchema  the name of the url schema
      * @param {string} eventSchema the name of the event schema
-     * @param {RudiLogger} syslog RUDI syslog 
+     * @param {RudiLogger} syslog RUDI syslog
      */
     constructor(config, schemaSet, mediaSchema, urlSchema, eventSchema, syslog) {
         this.disabled = !!config?.disabled
@@ -132,12 +132,12 @@ export class MongoService {
             if (err) err('Media insertion error: ' + reason, this)
             else this.syslog.error(`[addMedia] ${reason}`)
         }
-        if (!('uuid' in media) || !('zone' in media)) {
+        if (!media?.uuid || !media?.zone) {
             errFct('Malformed media descriptor')
             return
         }
         try {
-            if ('url' in media) {
+            if (media?.url) {
                 const emedia = await this.urlColl.findOne({ uuid: media.uuid })
                 // if (!emedia) console.log('URL add '+util.inspect(media));
                 if (!emedia) done(await this.urlColl.insertOne(media))
@@ -173,7 +173,7 @@ export class MongoService {
             if (done) done(this)
         }
 
-        if (!('uuid' in opdesc) || !('zone' in opdesc)) {
+        if (!opdesc?.uuid || !(opdesc?.zone)) {
             errFct('Malformed operation descriptor')
             return
         }

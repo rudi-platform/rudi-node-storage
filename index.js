@@ -1,4 +1,3 @@
-/* eslint-disable no-multi-str, max-len */
 /**
  * RUDI media access driver for media data.
  *
@@ -23,6 +22,7 @@ import { DEFAULT_CONF } from './configuration.js'
 import { MongoService } from './db.js'
 import { SchemaSet } from './schema.js'
 
+const MAX_FILE_SIZE = 500e6
 /**
  * The code express based HTTP server.
  * The web server creates the media db, and serves:
@@ -116,7 +116,7 @@ class HttpService {
         const now = new Date()
         // console.error(now, `[Express default error handler]`, err)
         this.syslog.error(`An error happened on ${req.method} ${req.url}: ${err}`)
-        console.error('[Local dump]',err)
+        console.error('[Local dump]', err)
 
         if (res.headersSent) {
             return
@@ -147,6 +147,7 @@ class HttpService {
         this.syslog.info(`Route <= ${req.method} ${req.url}`)
         next()
     }
+
     _declareRoutes() {
         this.httpServer.use((req, res, next) => this._logRequests(req, res, next))
 
@@ -159,8 +160,7 @@ class HttpService {
         })
         router.get('/', (req, res) => this.root(req, res))
         router.get('/favicon.ico', (req, res) => this.favicon(req, res))
-        router.get('/revision', (req, res) => this.getRevision(req, res))
-        router.get('/hash', (req, res) => this.getRevision(req, res))
+        router.get(/\/(revision|hash)/, (req, res) => this.getRevision(req, res))
         if (this.logweb) {
             router.get('/logs', (req, res) => this.logweb.logContent(req, res))
             router.get('/logs/:name', (req, res) => this.logweb.logFile(req, res))
@@ -168,6 +168,7 @@ class HttpService {
         router.post('/jwt/forge', (req, res) => this.forgeUserToken(req, res))
         router.get('/storage/:fileid', (req, res) => this.fileService(req, res))
         router.post('/post', (req, res) => this.postFile(req, res))
+        router.post('/append', (req, res) => this.appendFile(req, res))
         router.post('/commit', (req, res) => this.commitMedia(req, res))
         router.post('/delete/:uuid', (req, res) => this.deleteMedia(req, res))
         router.get('/list', (req, res) => this.listMedias(req, res))
@@ -179,23 +180,22 @@ class HttpService {
         router.get('/:uuid', (req, res) => this.media(req, res))
         router.options('/jwt/forge', (req, res) => this.optionCors(req, res))
         router.options('/storage/:fileid', (req, res) => this.optionCors(req, res))
-        router.options('/post', (req, res) => this.optionCors(req, res))
-        router.options('/commit/', (req, res) => this.optionCors(req, res))
-        router.options('/delete/', (req, res) => this.optionCors(req, res))
-        router.options('/list/', (req, res) => this.optionCors(req, res))
+        router.options(/\/(post|commit|delete|list)/, (req, res) => this.optionCors(req, res))
         router.options('/schemas', (req, res) => this.schemas(req, res))
         router.options('/schema/:name', (req, res) => this.schemas(req, res))
         router.options('/check/:uuid', (req, res) => this.optionCors(req, res))
-        router.options('/download/:uuid', (req, res) => this.optionCors(req, res))
-        router.options('/zdownload/:uuid', (req, res) => this.optionCors(req, res))
+        router.options(/\/z?download\/:uuid/, (req, res) => this.optionCors(req, res))
         router.options('/:uuid', (req, res) => this.optionCors(req, res))
 
         this.httpServer.use(this.httpPrefix, router)
         this.listen = this.httpServer.listen(this.port, this.netInterface)
+
+        // Launching message
         this.syslog.info(
             `RUDI Media server listening on ${this.netInterface}${this.port ? ':' + this.port : ''}${this.httpPrefix}`
         )
-        this.httpServer.use((err, req, res, next) => this._errorHandler(err, req, res, next)) // Should stay at the end!
+        // This line should stay at the end: it handles the uncaught errors
+        this.httpServer.use((err, req, res, next) => this._errorHandler(err, req, res, next))
     }
     /**
      * Generate a Json Schema for a *context* with the proper registering URL.
@@ -309,9 +309,8 @@ class HttpService {
     root(req, res) {
         const aclStatus = this.ac.getAccessStatus(req, res)
         if (!this.ac.checkSystemAccessStatus(aclStatus, '---')) return
-        if ('file_metadata' in req.headers) {
-            return this.media(req, res)
-        }
+        if (req?.headers?.file_metadata) return this.media(req, res)
+
         res.send(
             '<!DOCTYPE html>\
 <html lang="en">\
@@ -397,7 +396,8 @@ class HttpService {
         const aclStatus = this.ac.getAccessStatus(req, res)
         if (!this.ac.checkSystemAccessStatus(aclStatus, '--x')) return
 
-        if (!('content-type' in req.headers) || req.headers['content-type'] != 'application/json')
+        const contentType = req.headers?.['Content-Type'] || req.headers?.['content-type']
+        if (contentType != 'application/json')
             return this.sendAndClose(res, 400, { status: 'error', msg: 'application/json Content-Type expected' })
 
         // Get the config
@@ -425,34 +425,36 @@ class HttpService {
             }
         })
     }
+
     /**
-     * Serves a post of a new media.
+     * Post a new media.
      * The post HTTP header must contain the ":file_metadata" with all necessary fields.
      *
      * @param {object} req - the HTTP request
      * @param {object} res - the HTTP response.
      */
-    postFile(req, res) {
-        this.syslog.debug('[postFile]' + req.originalUrl, 'http')
+    postFile(req, res, shouldAppend) {
+        this.syslog.debug(`[postFile]${req.originalUrl}`, 'http')
         const aclStatus = this.ac.getAccessStatus(req, res, 'API')
         if (!this.ac.checkSystemAccessStatus(aclStatus, '-w-')) return
 
-        if (!('file_metadata' in req.headers))
-            return this.sendAndClose(res, 400, { status: 'error', msg: 'no meta-data provided' })
+        if (!req.headers?.file_metadata)
+            return this.sendAndClose(res, 400, { status: 'error', msg: 'no metadata provided' })
 
         let metadata = req.headers.file_metadata
         try {
             metadata = JSON.parse(metadata)
         } catch (err) {
-            this.syslog.error('malformed metadata: ' + JSON.stringify(metadata), 'core')
+            this.syslog.error(`malformed metadata: ${JSON.stringify(metadata)}`, 'core')
             return this.sendAndClose(res, 400, { status: 'error', msg: 'malformed metadata' })
         }
 
         // Bufferize file data
         const chunkSize = 65536 * 4
         const fileSize = metadata.file_size || parseInt(req.headers['content-length']) || chunkSize
-        if (fileSize > 500e6) {
-            this.syslog.error('file too large, use a different upload method: ' + JSON.stringify(metadata))
+        // TODO: shouldAppend -> check actual file size + size of the new file bit
+        if (fileSize > MAX_FILE_SIZE) {
+            this.syslog.error(`file too large, use a different upload method: ${JSON.stringify(metadata)}`)
             return this.sendAndClose(res, 400, {
                 status: 'error',
                 msg: 'file too large, use a different upload method',
@@ -488,12 +490,23 @@ class HttpService {
                     content += '{ "status": "OK" } ]'
                     res.write(content)
                     res.status(200).end()
-                }
+                },
+                shouldAppend
             )
         })
     }
+
     /**
-     * Serves a post of a new media.
+     * Append additional content to an existing media.
+     * The post HTTP header must contain the ":file_metadata" with all necessary fields.
+     *
+     * @param {object} req - the HTTP request
+     * @param {object} res - the HTTP response.
+     */
+    appendFile = (req, res) => this.postFile(req, res, 'append')
+
+    /**
+     * Commit the post/append of a new media.
      * The post HTTP header must contain the ":file_metadata" with all necessary fields.
      *
      * @param {object} req - the HTTP request
@@ -537,13 +550,13 @@ class HttpService {
 
         let commitUuid = '-'
         let zoneName = '-'
-        if ('zone_name' in req.query && 'commit_uuid' in req.query) {
+        if (req.query?.zone_name && req.query.commit_uuid) {
             zoneName = req.query.zone_name
             commitUuid = req.query.commit_uuid
             processCommit(zoneName, commitUuid)
         } else {
             let metadata = req.body
-            if ('media_commit' in req.headers) {
+            if (req.headers?.media_commit) {
                 metadata = req.headers.media_commit
                 processJson(metadata)
             } else {
@@ -592,20 +605,21 @@ class HttpService {
         }
 
         let uuid = '-'
-        if ('uuid' in req.params) {
+        if (req.params?.uuid) {
             uuid = req.params.uuid
             processDelete(uuid)
-        } else if ('zone_name' in req.query && 'commit_uuid' in req.query) {
+        } else if (req.query?.zone_name && req.query.commit_uuid) {
             uuid = req.query.commit_uuid
             processDelete(uuid)
         } else {
             let metadata = req.body
-            if ('media_delete' in req.headers) {
+            if (req.headers?.media_delete) {
                 metadata = req.headers.media_delete
                 processJson(metadata)
             } else {
                 // Bufferize file data
-                const size = parseInt(req.headers['content-length']) || 4096
+                const contentLength = req.headers['Content-Length'] || req.headers['content-length']
+                const size = parseInt(contentLength) || 4096
                 const dwnld = new DownloadService(4096, size)
                 req.on('readable', () => dwnld.read(req))
                 // Build the entry, Close the request
@@ -627,9 +641,9 @@ class HttpService {
         if (!this.ac.checkSystemAccessStatus(aclStatus, '---')) return
 
         let reqUuid = '-'
-        if ('uuid' in req.params) reqUuid = req.params.uuid
+        if (req.params?.uuid) reqUuid = req.params.uuid
         else {
-            if (!('file_metadata' in req.headers)) {
+            if (!req.headers?.file_metadata) {
                 this.sendAndClose(res, 400, { status: 'error', msg: 'no meta-data provided' })
                 return
             }

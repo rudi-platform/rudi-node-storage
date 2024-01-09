@@ -204,8 +204,8 @@ export class AccessControl {
         /* Check API version compatibility */
         if (this.authorizedVersion[0] == '0.1') return true
         let apiCompatible = false
-        if ('version' in header) {
-            const version = header['version']
+        if (header?.version) {
+            const version = header.version
             for (const i in this.authorizedVersion) {
                 if (version == this.authorizedVersion[i]) {
                     apiCompatible = true
@@ -225,8 +225,8 @@ export class AccessControl {
      */
     _readBasicAccessRights(header) {
         let aclStatus = null
-        if ('authorization' in header) {
-            const authorization = header['authorization']
+        if (header?.authorization || header?.Authorization) {
+            const authorization = header.authorization || header.Authorization
             const [authType, b64auth] = authorization.split(' ') || ''
             if (authType.toLowerCase() == 'basic') {
                 const pl = Buffer.from(b64auth, 'base64').toString().split(':')
@@ -256,7 +256,7 @@ export class AccessControl {
     _readJwtAccessRights(header) {
         const klist = ['cookie', 'media_cookie']
         for (const headerKey of klist) {
-            if (headerKey in header) {
+            if (header?.[headerKey]) {
                 const cookies = header[headerKey].split(' ')
                 for (const cookieStr of cookies) {
                     const [cookieName, cookieValue] = cookieStr.split('=')

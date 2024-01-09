@@ -134,7 +134,7 @@ export class BasicFileDB {
             data.operation === 'list_media' ||
             data.operation === 'delete_media'
         ) {
-            if ('url' in data.value) extra = ` url=${data.value.url}`
+            if (data.value?.url) extra = ` url=${data.value.url}`
             else extra = ` file=${data.value.filename}`
             context = this.convertContext(data.operation, data.uuid, aclStatus)
         } else if (data.operation === 'check_entry' || data.operation === 'new_conn' || data.operation === 'del_conn') {
@@ -280,30 +280,36 @@ export class BasicFileDB {
     /**
      * Add a new basic media entry.
      *
-     * @param {json}      metadata,   - The meta-data dictionary
-     * @param {buffer}    filecontent - The raw file content
-     * @param {function=} none        - An optional callback with the error if meta-data are malformed
-     * @param {function=} done        - An optional callback with the entry when done.
+     * @param {json}      metadata,     - The meta-data dictionary
+     * @param {*}         aclStatus
+     * @param {buffer}    filecontent   - The raw file content
+     * @param {function=} none          - An optional callback with the error if meta-data are malformed
+     * @param {function=} done          - An optional callback with the entry when done.
+     * @param {Boolean}   shouldAppend  - true if the file content should be appened to the existing file
      */
-    addEntry(metadata, aclStatus, filecontent, none, done) {
+    addEntry(metadata, aclStatus, filecontent, none, done, shouldAppend) {
         // console.debug('T [BasicFileDB.addEntry]')
-        if (!('media_type' in metadata)) {
-            this.errorCtx('(ignored) Missing media type: ' + JSON.safeStringify(metadata), 'add_media', '-', aclStatus)
+        if (!metadata) {
+            this.errorCtx('Missing metadata', 'add_media', '-', aclStatus)
+            if (none) none('Missing metadata', 400)
+        }
+        if (!metadata.media_type) {
+            this.errorCtx(`(ignored) Missing media type: ${JSON.safeStringify(metadata)}`, 'add_media', '-', aclStatus)
             metadata.media_type = 'FILE'
         }
-        if (!('media_id' in metadata)) {
-            this.errorCtx('Missing media UUID: ' + JSON.safeStringify(metadata), 'add_media', '-', aclStatus)
+        if (!metadata.media_id) {
+            this.errorCtx(`Missing media UUID: ${JSON.safeStringify(metadata)}`, 'add_media', '-', aclStatus)
             if (none) none('Missing media UUID', 400)
             return
         }
-        if (!('access_date' in metadata)) metadata.access_date = new Date()
+        if (!metadata.access_date) metadata.access_date = new Date()
         else {
             metadata.access_date = parseInt(metadata.access_date) * 1000
             metadata.access_date = new Date(metadata.access_date)
         }
-        if ('file_size' in metadata && filecontent.length != metadata.file_size)
+        if (metadata.file_size && filecontent.length != metadata.file_size)
             this.errorCtx(
-                '(ignored) inconsistent provided file size: ' + metadata.file_size + ' received: ' + filecontent.length,
+                `(ignored) inconsistent provided file size: ${metadata.file_size} received: ${filecontent.length}`,
                 'add_media',
                 metadata.media_id,
                 aclStatus
@@ -316,22 +322,13 @@ export class BasicFileDB {
         }
         const zone = this.zone_db[this.default_zone]
         const errFct = (err, code) => {
-            this.errorCtx('could not add entry: ' + err, 'add_media', metadata.media_id, aclStatus)
+            this.errorCtx(`could not add entry: ${err}`, 'add_media', metadata.media_id, aclStatus)
             if (none) none(err, code)
         }
         const addStepEntry = (message) => this.notice('[add_media]:' + message)
 
         const addDone = (entry, commitId = null) => {
-            this.notice(
-                'new file: name=' +
-                    entry.uuid +
-                    ' size=' +
-                    entry.size +
-                    ' (' +
-                    filecontent.length +
-                    ') hash=' +
-                    entry.md5
-            )
+            this.notice(`new file: name=${entry.uuid} size=${entry.size} (${filecontent.length}) hash=${entry.md5}`)
             let logType = 'stage_media'
             if (!commitId) {
                 logType = 'add_media'
@@ -351,9 +348,9 @@ export class BasicFileDB {
             return
         }
 
-        if (!(zoneName in this.zone_db)) {
-            this.errorCtx('Zone ' + zoneName + ' not found', 'commit_media', zoneName, aclStatus)
-            if (none) none('Zone ' + zoneName + ' not found', 404)
+        if (!this.zone_db?.[zoneName]) {
+            this.errorCtx(`Zone '${zoneName}' not found`, 'commit_media', zoneName, aclStatus)
+            if (none) none(`Zone '${zoneName}' not found`, 404)
             return
         }
         const zone = this.zone_db[zoneName]
@@ -376,8 +373,8 @@ export class BasicFileDB {
         )
     }
     mdelete(uuid, aclStatus, none, done) {
-        if (!(uuid in this.db)) {
-            const errstr = 'media ' + uuid + ' not found'
+        if (!this.db?.[uuid]) {
+            const errstr = `media ${uuid} not found`
             this.errorCtx(errstr, 'delete_media', uuid, aclStatus)
             if (none) none(errstr, 404)
             return
@@ -386,7 +383,7 @@ export class BasicFileDB {
         const zone = entry.zone
         const deleteDone = (entry) => {
             delete this.db[entry.uuid]
-            this.notice('delete file: name=' + entry.uuid)
+            this.notice(`delete file: name=${entry.uuid}`)
             this.logEntry(zone, 'delete_media', aclStatus, entry, none, done)
         }
 
@@ -479,13 +476,13 @@ export class BasicFileDB {
      * @returns {string}         - A unique connector ID.
      */
     get(uuid, aclStatus) {
-        if (!(uuid in this.db)) return null
+        if (!this.db?.[uuid]) return null
         const media = this.db[uuid]
         try {
             const niddesc = media.generateFileId()
             let connectorTimeout = this.connectorTimeout
-            if ('timeout' in niddesc) {
-                connectorTimeout = niddesc['timeout']
+            if (niddesc?.timeout) {
+                connectorTimeout = niddesc.timeout
             }
             this.storageId[niddesc.fileid] = niddesc
             const opdesc = {
@@ -518,7 +515,7 @@ export class BasicFileDB {
      * @param   {string}   fileid  - The file UUID.
      */
     deleleteFileId(fileid, aclStatus, none, done) {
-        if (fileid in this.storageId) {
+        if (this.storageId?.[fileid]) {
             const niddesc = this.storageId[fileid]
             delete this.storageId[fileid]
             const opdesc = {
@@ -544,7 +541,7 @@ export class BasicFileDB {
      * @param {function}  done   - An callback with the media content, the name, and the mime type.
      */
     find(fileid, aclStatus, none, done) {
-        if (!(fileid in this.storageId)) {
+        if (!this.storageId?.[fileid]) {
             const errmsg = 'media connector id "' + fileid + '" not found'
             this.errorCtx(errmsg, 'get_media', fileid, aclStatus)
             if (none) none(errmsg, 404)
@@ -586,7 +583,7 @@ export class BasicFileDB {
      * @return {string}         - The MD5 value.
      */
     check(uuid, aclStatus, none, done) {
-        if (!(uuid in this.db)) return none('media uuid not found', 404)
+        if (!this.db?.[uuid]) return none('media uuid not found', 404)
         const media = this.db[uuid]
         try {
             const opdesc = {

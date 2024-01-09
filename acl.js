@@ -12,9 +12,9 @@ import {
     readPublicKeyFile,
     tokenStringToJwtObject,
     verifyToken,
-} from '@aqmo.org/jwt-lib'
-import { createHash } from 'crypto'
-import { version as getVersion, parse, v4, v5, validate } from 'uuid'
+} from '@aqmo.org/jwt-lib';
+import { createHash } from 'crypto';
+import { version as getVersion, parse, v4, v5, validate } from 'uuid';
 import './cycle.js'; // For Json Unparsing
 
 const G_ADMIN_UID = 4
@@ -175,9 +175,9 @@ class Acl {
         const err = function (msg) {
             throw Error(`${msg} in acl ("${JSON.safeStringify(aclDesc)}")`)
         }
-        if (!('core' in aclDesc)) err('Missing core')
-        if (!('users' in aclDesc)) err('Missing users')
-        if (!('groups' in aclDesc)) err('Missing groups')
+        if (!aclDesc?.core) err('Missing core')
+        if (!aclDesc?.users) err('Missing users')
+        if (!aclDesc?.groups) err('Missing groups')
         const core = aclDesc['core']
         if (core.length != 5) err('Incorrect number of elements for core')
         ;[this.owner, this.group, this.uaccess, this.gaccess, this.oaccess] = core
@@ -187,9 +187,9 @@ class Acl {
     /* eslint-disable no-multi-spaces */
     access(user, group) {
         if (user.name == this.owner) return this.uaccess
-        else if (user.name in this.users) return this.users[user.name]
-        else if (group.name == this.group) return this.gaccess
-        else if (group.name in this.groups) return this.groups[group.name]
+        else if (this.users?.[user.name]) return this.users[user.name]
+        else if (this.group?.[group.name]) return this.gaccess
+        else if (this.groups?.[group.name]) return this.groups[group.name]
         else return this.oaccess
     }
 }
@@ -301,7 +301,7 @@ export class AclDB {
     /* eslint-enable guard-for-in */
     newGroup(name, goupId) {
         const ng = new Group(name, goupId)
-        if (ng.id in this.groupsByID)
+        if (this.groupsByID?.[ng.id])
             throw Error(`Group id already set ("${ng.id} is in ${this.groupsByID[ng.id].name}" for ${gi})`)
         this.systemGroups[name] = ng
         this.groupsByID[ng.id] = ng
@@ -309,7 +309,7 @@ export class AclDB {
     }
     newUser(name, userDesc) {
         const nu = new User(this, name, userDesc)
-        if (nu.id in this.usersByID)
+        if (this.usersByID?.[nu.id])
             throw Error(`User id already set ("${nu.id} is in ${this.usersByID[nu.id].name}" for ${ui})`)
         this.systemUsers[name] = nu
         this.usersByID[nu.id] = nu
@@ -320,44 +320,32 @@ export class AclDB {
         const err = (msg) => {
             throw Error(`${msg} in acl ("${JSON.safeStringify(aclconf)}")`)
         }
-        if (!(acl.owner in this.systemUsers)) err(`Users ${this.owner} not found`)
-        for (const ui in acl.users) if (!(ui in this.systemUsers)) err(`Users ${ui} not found`)
+        if (!this.systemUsers?.[acl.owner]) err(`Users ${this.owner} not found`)
+        for (const ui in acl.users) if (!this.systemUsers?.[ui]) err(`Users ${ui} not found`)
 
-        if (!(acl.group in this.systemGroups)) err(`Group ${this.group} not found`)
-        for (const gi in acl.groups) if (!(gi in this.systemGroups)) err(`Group ${gi} not found`)
+        if (!this.systemGroups?.[acl.group]) err(`Group ${this.group} not found`)
+        for (const gi in acl.groups) if (!this.systemGroups?.[gi]) err(`Group ${gi} not found`)
 
         return acl
     }
-    newAclStatus(uname, gname, user, accError) {
-        return new AclStatus(uname, gname, user, accError)
-    }
-    newUserAclStatus(user, group = '-') {
-        return new AclStatus(user.name, group, user, null)
-    }
-    newAclError(accError) {
-        return new AclStatus('-', '-', null, accError)
-    }
-    newAclAnonymous() {
-        return new AclStatus('-', '-', null, null)
-    }
+    newAclStatus = (uname, gname, user, accError) => new AclStatus(uname, gname, user, accError)
+    newUserAclStatus = (user, group = '-') => new AclStatus(user.name, group, user, null)
+    newAclError = (accError) => new AclStatus('-', '-', null, accError)
+    newAclAnonymous = () => new AclStatus('-', '-', null, null)
+
     findGroup(gname) {
         if (!gname || gname == '-') return null
-        if (gname in this.systemGroups) {
-            return this.systemGroups[gname]
-        } else {
-            const id = parseInt(gname)
-            if (!isNaN(id) && id in this.groupsByID) {
-                return this.groupsByID[id]
-            }
-        }
+        if (this.systemGroups?.[gname]) return this.systemGroups[gname]
+        const id = parseInt(gname)
+        if (!isNaN(id) && this.groupsByID?.[id]) return this.groupsByID[id]
         return null
     }
     findUser(login, gname = '-', password = null) {
         let user = null
-        if (login in this.systemUsers) user = this.systemUsers[login]
+        if (this.systemUsers?.[login]) user = this.systemUsers[login]
         else {
             const id = parseInt(login)
-            if (!isNaN(id) && id in this.usersByID) user = this.usersByID[id]
+            if (!isNaN(id) && this.usersByID?.[id]) user = this.usersByID[id]
         }
         if (password && user && !user.checkPassword(password)) user = null
         return new AclStatus(login, gname, user, user ? null : 'E02')
@@ -367,7 +355,7 @@ export class AclDB {
         let user = null,
             group = null
         try {
-            if (name in this.systemUsers) {
+            if (this.systemUsers?.[name]) {
                 user = this.systemUsers[name]
                 if (user.id != sysid) {
                     if (user.id < G_USER_START_UID) {
@@ -378,7 +366,7 @@ export class AclDB {
                 }
             } else {
                 const [id] = idFromStr(name, sysid)
-                if (id in this.usersByID) user = this.usersByID[id]
+                if (this.usersByID?.[id]) user = this.usersByID[id]
                 else user = this.newUser(name, [id, '', [gname], ''])
                 this.debug(`Forge delegation for ${name}:${gname} => ${id}:${sysid}`)
             }

@@ -52,7 +52,7 @@ class ZoneContext {
         const sev = accError ? Severity.Warning : Severity.Informational
         this.acldb.log(sev, '[' + this.auth.userName + ']:' + this.opType + ': ' + message, this.errContext(0))
     }
-    
+
     toJSON = () => ({
         source: this.source,
         ip: this.auth.reqIP,
@@ -74,10 +74,10 @@ export class BasicZone {
         this.acldb = acldb
         this.parent = parent
         this.name = zoneconf.name
-        this.csv = 'csv' in zoneconf && zoneconf.csv ? zoneconf.csv : '_file.csv'
-        this.abspath = 'abspath' in zoneconf && zoneconf.abspath ? zoneconf.abspath : false
+        this.csv = zoneconf.csv || '_file.csv'
+        this.abspath = zoneconf.abspath || false
         this.db = {}
-        if (!('path' in zoneconf)) {
+        if (!zoneconf.path) {
             const basedir = !parent ? '' : typeof parent == 'object' ? parent.dirname() : '' + parent
             this.dirname = basedir + '/' + this.name
         } else this.dirname = zoneconf.path
@@ -86,8 +86,8 @@ export class BasicZone {
             users: {},
             groups: { auth: 'rwx', admin: 'rwx' },
         })
-        this.staging_timeout = 'staging_time' in zoneconf ? zoneconf.staging_time : 5
-        this.destroy_timeout = 'destroy_time' in zoneconf ? zoneconf.destroy_time : 10
+        this.staging_timeout = zoneconf.staging_time || 5
+        this.destroy_timeout = zoneconf.destroy_time || 10
         this.staged_prefix = '.staged_'
         this.staging_db = {}
         this.staging_trash = {}
@@ -180,7 +180,7 @@ export class BasicZone {
         const suid = uuidv4()
         this.staging_db[suid] = { suid, entry, date: new Date(), process }
         setTimeout(() => {
-            if (!(suid in this.staging_db)) return // Commited
+            if (!this.staging_db?.[suid]) return // Commited
             const staged = this.staging_db[suid]
             delete this.staging_db[suid]
             this.staging_trash[suid] = staged
@@ -202,8 +202,8 @@ export class BasicZone {
             return
         }
 
-        if (!(suid in this.staging_db))
-            none(`could not commit file: ${suid in this.staging_trash ? 'time exceeded' : 'entry not found'}.`, 400)
+        if (!this.staging_db?.[suid])
+            none(`could not commit file: ${this.staging_trash?.[suid] ? 'time exceeded' : 'entry not found'}.`, 400)
         else {
             const stg = this.staging_db[suid]
             delete this.staging_db[suid]
@@ -222,7 +222,7 @@ export class BasicZone {
             return
         }
 
-        if (!(uuid in this.db)) {
+        if (!this.db?.[uuid]) {
             none('could not delete file: entry not found.', 404)
         } else {
             const entry = this.db[uuid]
@@ -247,11 +247,15 @@ export class BasicZone {
         }
         return content
     }
-    /* eslint-enable guard-for-in */
+
     newBasicEntryFromMetadata(metadata, filecontent, aclStatus, none, step, done) {
         try {
-            if (!('media_type' in metadata)) {
-                none('Missing media type')
+            if (!metadata) {
+                if (none) none('Missing metadata')
+                return
+            }
+            if (!metadata.media_type) {
+                if (none) none('Missing media type')
                 return
             }
 
@@ -286,19 +290,20 @@ export class BasicZone {
                 if (this.abspath) entry.abspath = true
                 const path = this.getPathFromConnector(entry, needValidation)
                 writeFile(path, filecontent, { flag: 'w' }, (err, data) => {
-                    if (err) none('could not write file: ' + path, 500)
+                    // TODO: HERE
+                    if (err) none(`could not write file: ${path}`, 500)
                     recordOrStageEntry(entry)
                 })
             } else if (metadata.media_type == 'INDIRECT') {
-                if (!('url' in metadata)) {
+                if (!metadata.url) {
                     none('Missing media URL', 400)
                     return
                 }
                 const entry = new BasicUrlEntry(metadata, this, aclStatus)
                 this.recordOrStageEntry(entry)
-            } else none('Unsupported Media Type: ' + metadata.media_type, 400)
+            } else none(`Unsupported Media Type: ${metadata.media_type}`, 400)
         } catch (err) {
-            none('invalid meta-data: ' + err + ' value: ' + JSON.stringify(metadata), 400)
+            none(`invalid meta-data: ${err}; value: ${JSON.stringify(metadata)}`, 400)
         }
     }
     /**

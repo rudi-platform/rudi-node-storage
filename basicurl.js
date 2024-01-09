@@ -37,11 +37,11 @@ export class BasicUrlEntry {
             this.aclStatus = aclStatus
             this.url = metadata.url
             delete metadata.url
-            if ('media_name' in metadata) {
+            if (metadata.media_name) {
                 this.filename = metadata.media_name
                 delete metadata.media_name
             } else this.filename = 'media'
-            if ('expire_date' in metadata) {
+            if (metadata.expire_date) {
                 this.expire = new Date(parseInt(metadata.expire_date) * 1000)
                 delete metadata.expire_date
             } else this.expire = 0
@@ -189,7 +189,7 @@ export class BasicUrlEntry {
      *                                 Returns an array with the content, then name, and the mime type.
      */
     getFile(idesc, none, done) {
-        if (!('url' in idesc)) {
+        if (!idesc?.url) {
             if (none) none('loading URL media: url missing in context', 400)
             return
         }
