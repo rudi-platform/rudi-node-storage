@@ -132,10 +132,8 @@ export class BasicFileEntry {
     /* eslint-enable no-multi-spaces */
     /**
      */
-    getStorageName() {
-        if (this.abspath) return this.filename
-        else return `${this.uuid}_${this.filename}`
-    }
+    getStorageName = () => (this.abspath ? this.filename : `${this.uuid}_${this.filename}`)
+
     /**
      * Generate the CSV line for the media.
      *
@@ -178,11 +176,11 @@ export class BasicFileEntry {
     }
     /**
      */
-    toJson() {
+    toJSON() {
         return {
             uuid: this.uuid,
             zone: this.zone.name,
-            context: this.aclStatus.context.toJson(),
+            context: this.aclStatus.context.toJSON(),
             filename: this.filename,
             mimetype: this.mimetype,
             encoding: this.encoding,
@@ -240,4 +238,3 @@ export class BasicFileEntry {
         })
     }
 }
-

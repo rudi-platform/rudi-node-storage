@@ -35,9 +35,8 @@ class ZoneContext {
             access: '---',
         }
     }
-    validApi() {
-        return true
-    }
+    validApi = () => true
+
     errContext(code = 0, cid = '') {
         return {
             auth: this.auth,
@@ -53,13 +52,15 @@ class ZoneContext {
         const sev = accError ? Severity.Warning : Severity.Informational
         this.acldb.log(sev, '[' + this.auth.userName + ']:' + this.opType + ': ' + message, this.errContext(0))
     }
-    toJson() {
-        return { source: this.source, ip: this.auth.reqIP, user: this.auth.userName, access: this.auth.access }
-    }
+    
+    toJSON = () => ({
+        source: this.source,
+        ip: this.auth.reqIP,
+        user: this.auth.userName,
+        access: this.auth.access,
+    })
 
-    toString() {
-        return JSON.stringify(this.toJson())
-    }
+    toString = () => JSON.stringify(this.toJSON())
 }
 
 /* eslint-disable no-multi-spaces */
@@ -242,7 +243,7 @@ export class BasicZone {
         const content = []
         for (const ei in this.db) {
             const entry = this.db[ei]
-            content.push(entry.toJson())
+            content.push(entry.toJSON())
         }
         return content
     }

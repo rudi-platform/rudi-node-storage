@@ -28,9 +28,7 @@ class AccessContext {
         this.opType = req.originalUrl + paramstr
         this.sessionOpen = true
     }
-    validApi() {
-        return this.validApiVersion
-    }
+    validApi = () => this.validApiVersion
 
     errContext(code = 0, cid = '') {
         return {
@@ -97,12 +95,14 @@ class AccessContext {
             this.res.status(code).send(message) // Game over, we close the connexion with an error.
         } else this.res.status(code)
     }
-    toJson() {
-        return { source: this.source, ip: this.auth.reqIP, user: this.auth.userName, access: this.auth.access }
-    }
-    toString() {
-        return JSON.stringify(this.toJson())
-    }
+    toJSON = () => ({
+        source: this.source,
+        ip: this.auth.reqIP,
+        user: this.auth.userName,
+        access: this.auth.access,
+    })
+
+    toString = () => JSON.stringify(this.toJSON())
 }
 
 /**

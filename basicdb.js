@@ -250,8 +250,8 @@ export class BasicFileDB {
                 uuid: entry.uuid,
                 ref: entry.uuid,
                 zone: zone.name,
-                context: aclStatus.context.toJson(),
-                value: entry.toJson(),
+                context: aclStatus.context.toJSON(),
+                value: entry.toJSON(),
             }
             const doneFct = (entry) => {
                 this.db[entry.uuid] = entry
@@ -263,13 +263,13 @@ export class BasicFileDB {
                 doneFct(entry) // We stand at a warning level for Mongo up to now.
             }
             if (this.mongodb)
-                this.mongodb.addMedia(entry.toJson(), errFct, () =>
+                this.mongodb.addMedia(entry.toJSON(), errFct, () =>
                     this.mongodb.addEvent(opdesc, errFct, () => doneFct(entry))
                 )
             else doneFct(entry)
         } catch (err) {
             this.errorCtx(
-                `Invalid media entry: ${err} entry: ${JSON.stringify(entry.toJson())}`,
+                `Invalid media entry: ${err} entry: ${JSON.stringify(entry.toJSON())}`,
                 'add_media',
                 '-',
                 aclStatus
@@ -418,8 +418,8 @@ export class BasicFileDB {
                 uuid: entry.uuid,
                 ref: entry.uuid,
                 zone: zone.name,
-                context: context.toJson(),
-                value: entry.toJson(),
+                context: context.toJSON(),
+                value: entry.toJSON(),
             }
             const doneFct = (entry) => {
                 this.logReq(aclStatus, opdesc)
@@ -430,7 +430,7 @@ export class BasicFileDB {
                 doneFct(entry) // We stand at a warning level for Mongo up to now.
             }
             if (this.mongodb)
-                this.mongodb.addMedia(entry.toJson(), errFct, (mongodb) =>
+                this.mongodb.addMedia(entry.toJSON(), errFct, (mongodb) =>
                     this.mongodb.addEvent(opdesc, errFct, (mongodb) => doneFct(entry))
                 )
             else doneFct(entry)
@@ -493,7 +493,7 @@ export class BasicFileDB {
                 uuid: niddesc.fileid,
                 ref: uuid,
                 zone: niddesc.zone,
-                context: aclStatus.context.toJson(),
+                context: aclStatus.context.toJSON(),
             }
             this.logReq(aclStatus, opdesc)
 
@@ -526,7 +526,7 @@ export class BasicFileDB {
                 uuid: niddesc.fileid,
                 ref: niddesc.ref,
                 zone: niddesc.zone,
-                context: aclStatus.context.toJson(),
+                context: aclStatus.context.toJSON(),
                 value: niddesc,
             }
             this.logReq(aclStatus, opdesc)
@@ -552,7 +552,7 @@ export class BasicFileDB {
         }
         const now = new Date()
         const iddesc = this.storageId[fileid]
-        const accessEntry = { date: now, client: aclStatus.context.toJson() }
+        const accessEntry = { date: now, client: aclStatus.context.toJSON() }
         const opdesc = {
             operation: 'acc_conn',
             uuid: iddesc.fileid,
@@ -594,7 +594,7 @@ export class BasicFileDB {
                 uuid: '-',
                 ref: media.uuid,
                 zone: media.zone.name,
-                context: aclStatus.context.toJson(),
+                context: aclStatus.context.toJSON(),
             }
             this.logReq(aclStatus, opdesc)
             media.getRealMd5(none, done)

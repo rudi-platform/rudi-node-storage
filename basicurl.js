@@ -166,11 +166,11 @@ export class BasicUrlEntry {
     }
     /**
      */
-    toJson() {
+    toJSON() {
         return {
             uuid: this.uuid,
             zone: this.zone.name,
-            context: this.aclStatus.context.toJson(),
+            context: this.aclStatus.context.toJSON(),
             url: this.url,
             mimetype: this.mimetype,
             encoding: this.encoding,
