@@ -1,8 +1,8 @@
 stages:
-  - install:dev
-  - quality:dev
-  - install:prod
-  - pack:prod
+  - install_dev
+  - quality_dev
+  - install_prod
+  - pack_prod
 
 # This folder is cached between builds
 default:
@@ -17,7 +17,7 @@ default:
       } | tee -a .npmrc
 
 install:dev:
-  stage: install
+  stage: install_dev
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push"'
       when: always
@@ -35,7 +35,7 @@ install:dev:
     - npm i
 
 quality:dev:
-  stage: quality
+  stage: quality_dev
   needs: [install:dev]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push"'
@@ -55,7 +55,7 @@ quality:dev:
     - npm run lint
 
 install:prod:
-  stage: install
+  stage: install_prod
   needs: [quality:dev]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push"'
@@ -70,7 +70,7 @@ install:prod:
     - npm i
 
 pack:prod:
-  stage: pack
+  stage: pack_prod
   needs: [install:prod]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push"'
