@@ -8,16 +8,14 @@ import { inspect } from 'util'
  * @returns {String} JSON.stringify options
  */
 export const jsonToStr = (jsonObject, option) => {
-    try {
-        return `${JSON.stringify(jsonObject, null, option).replace(/\\"/g, '"')}${option != null ? '\n' : ''}`
-    } catch (err) {
-        return `${inspect(jsonObject)}`
-    }
+  try {
+    return `${JSON.stringify(jsonObject, null, option).replace(/\\"/g, '"')}${option != null ? '\n' : ''}`
+  } catch (err) {
+    return `${inspect(jsonObject)}`
+  }
 }
 
 export const cleanHeadersAuth = (str) =>
-    typeof str == 'string'
-        ? str.replace(/["'](Bearer|Basic) [\w-/\.]+["']/g, '<auth>')
-        : cleanHeadersAuth(jsonToStr(str))
+  typeof str == 'string' ? str.replace(/["'](Bearer|Basic) [\w-/\.]+["']/g, '<auth>') : cleanHeadersAuth(jsonToStr(str))
 
 export const safeStringify = (str) => (str ? cleanHeadersAuth(str) : '')
