@@ -36,7 +36,7 @@ quality_lint:
   variables:
     NODE_ENV: development
   script:
-    - npm run prettify
+    # - npm run prettify
     - npm run lint
 
 pack_media:
