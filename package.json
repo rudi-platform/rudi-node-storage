@@ -44,7 +44,7 @@
     "debug_ini": "nodemon index.js --ini local.ini",
     "docker": "./node_modules/.bin/nodemon index.js -p ${L_PORT} -l ${L_LOGNAME}",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "prettier -c \"**/*.js\"; eslint \"**/*.js\"",
+    "lint": "prettier -c \"**/*.js\" && eslint \"**/*.js\"",
     "prettify": "prettier -w \"**/*.js\""
   },
   "author": "Laurent Morin",

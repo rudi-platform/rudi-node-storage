@@ -1,7 +1,11 @@
+# --------------------------------------------------------------------------------------------------
+# Notes:
+# - jobs are executed in the order indicated at root "stages" property
+# - "needs" property needs an array of job names (not stages names)
+# - linter needs install:dev as eslint and prettier are dev dependencies
+# --------------------------------------------------------------------------------------------------
 stages:
-  - install_dev
-  - quality_dev
-  - install_prod
+  - quality
   - pack_prod
 
 # This folder is cached between builds
@@ -16,8 +20,8 @@ default:
         echo "${CI_API_V4_URL#https?}/projects/59/packages/npm/:_authToken=\${CI_JOB_TOKEN}"
       } | tee -a .npmrc
 
-install:dev:
-  stage: install_dev
+quality:dev:
+  stage: quality
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push"'
       when: always
@@ -25,53 +29,14 @@ install:dev:
       when: manual
   tags:
     - nodejs-20
-  cache:
-    - key:
-        files: [./package-lock.json]
-      paths: [./node_modules/]
   variables:
     NODE_ENV: development
   script:
     - npm i
-
-quality:dev:
-  stage: quality_dev
-  needs: [install:dev]
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "push"'
-      when: always
-    - if: '$CI_PIPELINE_SOURCE != "push"'
-      when: manual
-  cache:
-    - key:
-        files: [./package-lock.json]
-      paths: [./node_modules/]
-  tags:
-    - nodejs-20
-  variables:
-    NODE_ENV: production
-  script:
-    # - npm run prettify
     - npm run lint
-
-install:prod:
-  stage: install_prod
-  needs: [quality:dev]
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "push"'
-      when: always
-    - if: '$CI_PIPELINE_SOURCE != "push"'
-      when: manual
-  tags:
-    - nodejs-20
-  variables:
-    NODE_ENV: production
-  script:
-    - npm i
 
 pack:prod:
   stage: pack_prod
-  needs: [install:prod]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push"'
       when: always
@@ -82,6 +47,7 @@ pack:prod:
   variables:
     NODE_ENV: production
   script:
+    - npm i
     - npm pack
   artifacts:
     name: 'rudi_media.tgz'
