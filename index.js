@@ -437,7 +437,8 @@ class HttpService {
   postFile(req, res) {
     this.syslog.debug(`[postFile]${req.originalUrl}`, 'http')
     const aclStatus = this.ac.getAccessStatus(req, res, 'API')
-    if (!this.ac.checkSystemAccessStatus(aclStatus, '-w-')) return
+    if (!this.ac.checkSystemAccessStatus(aclStatus, '-w-'))
+      return this.sendAndClose(res, 401, { status: 'error', msg: 'permission refused' })
 
     if (!req.headers?.file_metadata)
       return this.sendAndClose(res, 400, { status: 'error', msg: 'no metadata provided' })
@@ -851,6 +852,10 @@ function updateProperty(base, updated) {
   return newo
 }
 
+/**
+ * @param {*} iniFileContent
+ * @returns
+ */
 function parseIniMultiligne(iniFileContent) {
   const multilineContent = iniParse(iniFileContent)
   const content = {}
@@ -957,6 +962,7 @@ class SignalCleaner {
 const run = () => {
   try {
     const configuration = fetchAndParseArguments(DEFAULT_CONF, './rudi_media_custom.ini')
+    console.info(JSON.stringify(configuration, null, 2))
     const service = new HttpService(configuration)
     const sc = new SignalCleaner(configuration.server.close_timeout, service)
     sc.arm()

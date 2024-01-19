@@ -15,6 +15,8 @@ export const jsonToStr = (jsonObject, option) => {
   }
 }
 
+export const beautify = jsonToStr
+
 export const cleanHeadersAuth = (str) =>
   typeof str == 'string' ? str.replace(/["'](Bearer|Basic) [\w-/\.]+["']/g, '<auth>') : cleanHeadersAuth(jsonToStr(str))
 

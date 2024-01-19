@@ -108,7 +108,6 @@ export class User {
 
   accessMask(acl, group) {
     const access = acl.access(this, group)
-    // this.acldb.debug(`Access mask computed: ${this.name}:${group.name} ${access}`);
     return access
   }
 
@@ -184,17 +183,14 @@ class Acl {
     this.users = JSON.parse(JSON.stringify(aclDesc['users'])) // json -> deep-copy
     this.groups = JSON.parse(JSON.stringify(aclDesc['groups'])) // json -> deep-copy
   }
-  /* eslint-disable no-multi-spaces */
   access(user, group) {
     if (user.name == this.owner) return this.uaccess
     else if (this.users?.[user.name]) return this.users[user.name]
-    else if (this.group?.[group.name]) return this.gaccess
+    else if (this.group == group.name) return this.gaccess
     else if (this.groups?.[group.name]) return this.groups[group.name]
     else return this.oaccess
   }
 }
-
-/* eslint-enable no-multi-spaces */
 
 /**
  * @class
@@ -218,13 +214,15 @@ export class AclStatus {
     this.context = null
     this.access = '---'
   }
+
   setContext(context) {
     this.context = context
   }
+
   setAcl(acl) {
     if (!this.accError && this.user) this.access = this.user.accessMask(acl, this.group)
   }
-  /* eslint-disable no-multi-spaces */
+
   refused(amode) {
     let acEr = null
     amode = amode !== undefined && amode ? amode : '---'
@@ -248,6 +246,7 @@ export class AclStatus {
     }
     return acEr
   }
+
   toString() {
     return `ACL:${this.uname}[${this.user ? this.user.id : -1}]:${this.gname}:${this.access}${
       this.accError ? ' => ' + this.accError : ''
@@ -439,8 +438,8 @@ export class AclDB {
       if (validated) {
         let extraNotice = ''
         if (group.name == 'delegate') {
-          extraNotice = ' by ' + user.name
-          this.debug('JWT delegation' + extraNotice)
+          extraNotice = ` by ${user.name}`
+          this.debug(`JWT delegation${extraNotice}`)
           const dgname = jwtPayload.group_id || '-'
           const duname = jwtPayload.user_id || '-'
           aclStatus = this.findUser(duname, dgname)
@@ -448,7 +447,7 @@ export class AclDB {
           user = aclStatus.user
           group = aclStatus.group
         }
-        this.info('JWT validated for ' + user.name + ':' + group.name + extraNotice)
+        this.info(`JWT validated for ${user.name}:` + group.name + extraNotice)
       } else aclStatus.accError = 'E22'
     } catch (err) {
       this.warn(`Could not decode JWT: ${err}`)

@@ -92,7 +92,7 @@ export class BasicZone {
     this.staging_db = {}
     this.staging_trash = {}
   }
-  /* eslint-enable no-multi-spaces */
+
   init(entrycb, none, done) {
     try {
       mkdirSync(this.dirname, { recursive: true })
@@ -113,17 +113,15 @@ export class BasicZone {
     this.user = aclStatus.user
     this.loadCSV(entrycb, none, done)
   }
+
   close(none, done) {
     if (done) done()
   }
-  /**
-   */
-  getStorageName() {
-    return this.csv
-  }
-  _absPath(path) {
-    return (this.dirname == '' ? '' : this.dirname + '/') + path
-  }
+
+  getStorageName = () => this.csv
+
+  _absPath = (path) => (this.dirname == '' ? '' : this.dirname + '/') + path
+
   /* eslint-disable no-multi-spaces */
   /**
    * Compute the real file path from the file.
@@ -140,6 +138,7 @@ export class BasicZone {
     }
     return this._absPath(storageName)
   }
+
   commitPath(media) {
     let storageName = media.getStorageName()
     if (storageName[0] == '/') return storageName
@@ -153,6 +152,7 @@ export class BasicZone {
     }
     return storageName
   }
+
   commitClear(media) {
     const storageName = media.getStorageName()
     if (storageName[0] == '/' || storageName[0] == '#') return false
@@ -164,6 +164,7 @@ export class BasicZone {
     }
     return true
   }
+
   destroyMedia(media, staged) {
     if (staged) return false
     const storageName = media.getStorageName()
@@ -176,6 +177,7 @@ export class BasicZone {
     }
     return true
   }
+
   stageEntry(entry, process) {
     const suid = uuidv4()
     this.staging_db[suid] = { suid, entry, date: new Date(), process }
@@ -193,6 +195,7 @@ export class BasicZone {
     }, this.destroy_timeout * 1000)
     return suid
   }
+
   commitEntry(aclStatus, suid, none, done) {
     const ctx = new ZoneContext(this.acldb, aclStatus.user, 'zone_commit')
     aclStatus.setContext(ctx)
@@ -212,7 +215,7 @@ export class BasicZone {
       this.saveZoneCSV(none, (path) => done(stg))
     }
   }
-  /* eslint-enable no-multi-spaces */
+
   deleteEntry(aclStatus, uuid, none, done) {
     const ctx = new ZoneContext(this.acldb, aclStatus.user, 'zone_delete')
     aclStatus.setContext(ctx)
@@ -233,7 +236,7 @@ export class BasicZone {
       })
     }
   }
-  /* eslint-disable guard-for-in */
+
   listMedias(aclStatus) {
     const ctx = new ZoneContext(this.acldb, aclStatus.user, 'zone_list')
     aclStatus.setContext(ctx)
@@ -241,7 +244,7 @@ export class BasicZone {
     if (aclStatus.refused('r--')) throw Error('Access denied')
 
     const content = []
-    for (const ei in this.db) {
+    for (const ei of Object.keys(this.db)) {
       const entry = this.db[ei]
       content.push(entry.toJSON())
     }

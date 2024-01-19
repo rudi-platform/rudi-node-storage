@@ -144,12 +144,10 @@ export class BasicFileDB {
    * @param {function=} done        - An callback with the entry when done.
    */
   init(zones, withmongo, none, done) {
-    // console.debug('T [BasicFileDB.init]')
     if (!withmongo) this.mongodb = null
 
     let defzone = null
     if (typeof zones == 'string') zones = [zones]
-    // console.debug('T zones',zones)
     for (const zoneDesc of zones) {
       const zoneDescObj = typeof zoneDesc == 'string' ? { name: zoneDesc } : zoneDesc
       const nzone = new BasicZone(this.acldb, this.mediaDir, zoneDescObj)
@@ -271,7 +269,6 @@ export class BasicFileDB {
    * @param {Boolean}   shouldAppend  - true if the file content should be appened to the existing file
    */
   addEntry(metadata, aclStatus, filecontent, mediaAccessMethod, none, done) {
-    // console.debug('T [BasicFileDB.addEntry]')
     if (!metadata) {
       this.errorCtx('Missing metadata', 'add_media', '-', aclStatus)
       if (none) none('Missing metadata', 400)
@@ -297,17 +294,18 @@ export class BasicFileDB {
         metadata.media_id,
         aclStatus
       )
-
     if (Object.keys(this.zone_db).length == 0) {
       this.errorCtx('DB not ready for adding', 'add_media', metadata.media_id, aclStatus)
       if (none) none(`DB not ready for adding`, 400)
       return
     }
+
     const zone = this.zone_db[this.default_zone]
     const errFct = (err, code) => {
       this.errorCtx(`could not add entry: ${err}`, 'add_media', metadata.media_id, aclStatus)
       if (none) none(err, code)
     }
+
     const addStepEntry = (message) => this.notice(`[add_media]:${message}`)
 
     const addDone = (entry, commitId = null) => {
@@ -322,6 +320,7 @@ export class BasicFileDB {
         if (done) done(zname, commitId)
       })
     }
+
     zone.newBasicEntryFromMetadata(metadata, filecontent, aclStatus, mediaAccessMethod, errFct, addStepEntry, addDone)
   }
   commit(zoneName, commitId, aclStatus, none, done) {
