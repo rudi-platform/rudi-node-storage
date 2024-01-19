@@ -1,7 +1,8 @@
 stages:
-  - install
-  - quality
-  - pack
+  - install:dev
+  - quality:dev
+  - install:prod
+  - pack:prod
 
 # This folder is cached between builds
 default:
@@ -15,8 +16,47 @@ default:
         echo "${CI_API_V4_URL#https?}/projects/59/packages/npm/:_authToken=\${CI_JOB_TOKEN}"
       } | tee -a .npmrc
 
-install_back:
+install:dev:
   stage: install
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+      when: always
+    - if: '$CI_PIPELINE_SOURCE != "push"'
+      when: manual
+  tags:
+    - nodejs-20
+  cache:
+    - key:
+        files: [./package-lock.json]
+      paths: [./node_modules/]
+  variables:
+    NODE_ENV: development
+  script:
+    - npm i
+
+quality:dev:
+  stage: quality
+  needs: [install:dev]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+      when: always
+    - if: '$CI_PIPELINE_SOURCE != "push"'
+      when: manual
+  cache:
+    - key:
+        files: [./package-lock.json]
+      paths: [./node_modules/]
+  tags:
+    - nodejs-20
+  variables:
+    NODE_ENV: production
+  script:
+    # - npm run prettify
+    - npm run lint
+
+install:prod:
+  stage: install
+  needs: [quality:dev]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push"'
       when: always
@@ -29,25 +69,9 @@ install_back:
   script:
     - npm i
 
-quality_lint:
-  stage: quality
-  needs: [install_back]
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "push"'
-      when: always
-    - if: '$CI_PIPELINE_SOURCE != "push"'
-      when: manual
-  tags:
-    - nodejs-20
-  variables:
-    NODE_ENV: production
-  script:
-    # - npm run prettify
-    - npm run lint
-
-pack_media:
+pack:prod:
   stage: pack
-  needs: [quality_lint]
+  needs: [install:prod]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push"'
       when: always
