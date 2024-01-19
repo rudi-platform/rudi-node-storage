@@ -26,8 +26,22 @@ install_media:
   script:
     - npm install
 
+quality_lint:
+  stage: quality
+  needs: [install]
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+  tags:
+    - nodejs
+  variables:
+    NODE_ENV: development
+  script:
+    - npm run prettify
+    - npm run lint
+
 pack_media:
   stage: pack
+  needs: [quality]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push"'
   tags:
@@ -37,19 +51,7 @@ pack_media:
   script:
     - npm pack
   artifacts:
-    name: "rudi_media.tgz"
+    name: 'rudi_media.tgz'
     when: on_success
     paths:
       - ./rudi_media_drv-*.tgz
-
-quality_lint:
-  stage: quality
-  rules:
-    - if: '$CI_PIPELINE_SOURCE == "push"'
-  tags:
-    - nodejs
-  variables:
-    NODE_ENV: development
-  script:
-    - npm install
-    - npm run lint
