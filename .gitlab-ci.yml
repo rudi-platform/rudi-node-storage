@@ -28,7 +28,7 @@ install_media:
 
 quality_lint:
   stage: quality
-  needs: [install]
+  needs: [install_media]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push"'
   tags:
@@ -41,7 +41,7 @@ quality_lint:
 
 pack_media:
   stage: pack
-  needs: [quality]
+  needs: [quality_lint]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push"'
   tags:
