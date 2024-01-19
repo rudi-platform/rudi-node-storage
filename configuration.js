@@ -22,7 +22,7 @@ export const DEFAULT_CONF = {
         system_users: {
             "admin":       [   4, "$1$1586de76f5f26e8a6dbbe05182e4dc94$", [ "admin", "delegate" ], "./keys/mediapriv.pem" ], //
             "rudimanager": [ 101, "$1$1586de76f5f26e8a6dbbe05182e4dc94$", [ "auth" ], "./adminpub.pem" ], //
-            "rudiprod":    [ 102, "$1$1586de76f5f26e8a6dbbe05182e4dc94$", [ "producer" ], "" ], // sysadminisgreat!
+            "rudiprod":    [ 102, "$1$1586de76f5f26e8a6dbbe05182e4dc94$", [ "producer" ], "" ], 
             "rudiadmin":   [ 103, "$1$1586de76f5f26e8a6dbbe05182e4dc94$", [ "monitor", "producer" ], "" ] //
         },
         media_priv_keyfile: "./keys/mediapriv.pem",

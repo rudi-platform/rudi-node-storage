@@ -248,7 +248,7 @@ export class BasicZone {
         return content
     }
 
-    newBasicEntryFromMetadata(metadata, filecontent, aclStatus, none, step, done) {
+    newBasicEntryFromMetadata(metadata, filecontent, aclStatus, mediaAccessMethod, none, step, done) {
         try {
             if (!metadata) {
                 if (none) none('Missing metadata')
@@ -289,7 +289,8 @@ export class BasicZone {
                 const entry = new BasicFileEntry(metadata, filecontent, this, aclStatus)
                 if (this.abspath) entry.abspath = true
                 const path = this.getPathFromConnector(entry, needValidation)
-                writeFile(path, filecontent, { flag: 'w' }, (err, data) => {
+                const flag = mediaAccessMethod == 'append' ? 'a' : 'w'
+                writeFile(path, filecontent, { flag }, (err, data) => {
                     // TODO: HERE
                     if (err) none(`could not write file: ${path}`, 500)
                     recordOrStageEntry(entry)

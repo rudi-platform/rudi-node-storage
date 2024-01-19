@@ -23,6 +23,7 @@ import { MongoService } from './db.js'
 import { SchemaSet } from './schema.js'
 
 const MAX_FILE_SIZE = 500e6
+
 /**
  * The code express based HTTP server.
  * The web server creates the media db, and serves:
@@ -433,7 +434,7 @@ class HttpService {
      * @param {object} req - the HTTP request
      * @param {object} res - the HTTP response.
      */
-    postFile(req, res, shouldAppend) {
+    postFile(req, res) {
         this.syslog.debug(`[postFile]${req.originalUrl}`, 'http')
         const aclStatus = this.ac.getAccessStatus(req, res, 'API')
         if (!this.ac.checkSystemAccessStatus(aclStatus, '-w-')) return
@@ -476,10 +477,12 @@ class HttpService {
         req.on('end', () => {
             const data = dwnld.finish()
             this.syslog.debug(`content: ${data.length}`, 'core')
+            const mediaAccessMethod = req?.headers?.['media-access-method']
             this.db.addEntry(
                 metadata,
                 aclStatus,
                 data,
+                mediaAccessMethod,
                 (err, code = 400) => {
                     res.write(`{"status": "error", "msg":"${err}"} ]`)
                     res.status(code).end()
@@ -491,8 +494,7 @@ class HttpService {
                     content += '{ "status": "OK" } ]'
                     res.write(content)
                     res.status(200).end()
-                },
-                shouldAppend
+                }
             )
         })
     }
@@ -504,7 +506,10 @@ class HttpService {
      * @param {object} req - the HTTP request
      * @param {object} res - the HTTP response.
      */
-    appendFile = (req, res) => this.postFile(req, res, 'append')
+    appendFile = (req, res) => {
+        req.headers['media-access-method'] = 'append'
+        return this.postFile(req, res)
+    }
 
     /**
      * Commit the post/append of a new media.
@@ -848,7 +853,7 @@ function updateProperty(base, updated) {
 
 function parseIniMultiligne(iniFileContent) {
     const multilineContent = iniParse(iniFileContent)
-    let content = {}
+    const content = {}
     let accumulatedKey
     let accumulatedVal
     for (const section of Object.keys(multilineContent)) {
@@ -856,14 +861,14 @@ function parseIniMultiligne(iniFileContent) {
         content[section] = {}
         for (const param of Object.keys(sectionParams)) {
             const val = sectionParams[param]
-            if (val == '[') {
+            if (val == '[' || val == '{') {
                 accumulatedKey = param
                 accumulatedVal = val
             } else if (!accumulatedVal) {
                 content[section][param] = val
             } else {
                 accumulatedVal += param
-                if (param == ']') {
+                if (param == ']' || param == '}') {
                     content[section][accumulatedKey] = accumulatedVal
                     accumulatedVal = null
                 }

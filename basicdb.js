@@ -287,7 +287,7 @@ export class BasicFileDB {
      * @param {function=} done          - An optional callback with the entry when done.
      * @param {Boolean}   shouldAppend  - true if the file content should be appened to the existing file
      */
-    addEntry(metadata, aclStatus, filecontent, none, done, shouldAppend) {
+    addEntry(metadata, aclStatus, filecontent, mediaAccessMethod, none, done) {
         // console.debug('T [BasicFileDB.addEntry]')
         if (!metadata) {
             this.errorCtx('Missing metadata', 'add_media', '-', aclStatus)
@@ -325,7 +325,7 @@ export class BasicFileDB {
             this.errorCtx(`could not add entry: ${err}`, 'add_media', metadata.media_id, aclStatus)
             if (none) none(err, code)
         }
-        const addStepEntry = (message) => this.notice('[add_media]:' + message)
+        const addStepEntry = (message) => this.notice(`[add_media]:${message}`)
 
         const addDone = (entry, commitId = null) => {
             this.notice(`new file: name=${entry.uuid} size=${entry.size} (${filecontent.length}) hash=${entry.md5}`)
@@ -339,7 +339,15 @@ export class BasicFileDB {
                 if (done) done(zname, commitId)
             })
         }
-        zone.newBasicEntryFromMetadata(metadata, filecontent, aclStatus, errFct, addStepEntry, addDone)
+        zone.newBasicEntryFromMetadata(
+            metadata,
+            filecontent,
+            aclStatus,
+            mediaAccessMethod,
+            errFct,
+            addStepEntry,
+            addDone
+        )
     }
     commit(zoneName, commitId, aclStatus, none, done) {
         if (Object.keys(this.zone_db).length <= 0) {
@@ -423,7 +431,7 @@ export class BasicFileDB {
                 if (done) done()
             }
             const errFct = (err) => {
-                this.warn('Could not update DB (add): ' + err + ' with ' + JSON.safeStringify(opdesc))
+                this.warn(`Could not update DB (add): ${err} with ${JSON.safeStringify(opdesc)}`)
                 doneFct(entry) // We stand at a warning level for Mongo up to now.
             }
             if (this.mongodb)
@@ -432,7 +440,7 @@ export class BasicFileDB {
                 )
             else doneFct(entry)
         } catch (err) {
-            this.errorCtx('Invalid media entry: ' + err + ' entry: ' + entry.getCSVline(), 'add_media', '-', aclStatus)
+            this.errorCtx(`Invalid media entry: ${err}; entry: ${entry.getCSVline()}`, 'add_media', '-', aclStatus)
             if (none) none(err)
         }
     }

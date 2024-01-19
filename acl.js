@@ -467,7 +467,7 @@ export class AclDB {
                     accessMsg = 'Authentication failed: invalid user/password'
                     /* */ /* */ break
                 case 'E03':
-                    accessMsg = 'Access not granted: the user miss one or several credentials'
+                    accessMsg = 'Access not granted: the user misses one or several credentials'
                     /* */ /* */ break
                 case 'E05':
                     accessRealm = accessMsg = 'Authentication method invalid'
