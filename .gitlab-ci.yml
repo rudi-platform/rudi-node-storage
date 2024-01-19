@@ -15,26 +15,32 @@ default:
         echo "${CI_API_V4_URL#https?}/projects/59/packages/npm/:_authToken=\${CI_JOB_TOKEN}"
       } | tee -a .npmrc
 
-install_media:
+install_back:
   stage: install
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push"'
+      when: always
+    - if: '$CI_PIPELINE_SOURCE != "push"'
+      when: manual
   tags:
-    - nodejs
+    - nodejs-20
   variables:
     NODE_ENV: production
   script:
-    - npm install
+    - npm i
 
 quality_lint:
   stage: quality
-  needs: [install_media]
+  needs: [install_back]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push"'
+      when: always
+    - if: '$CI_PIPELINE_SOURCE != "push"'
+      when: manual
   tags:
-    - nodejs
+    - nodejs-20
   variables:
-    NODE_ENV: development
+    NODE_ENV: production
   script:
     # - npm run prettify
     - npm run lint
@@ -44,6 +50,9 @@ pack_media:
   needs: [quality_lint]
   rules:
     - if: '$CI_PIPELINE_SOURCE == "push"'
+      when: always
+    - if: '$CI_PIPELINE_SOURCE != "push"'
+      when: manual
   tags:
     - nodejs
   variables:
