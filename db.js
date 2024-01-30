@@ -139,12 +139,10 @@ export class MongoService {
     try {
       if (media?.url) {
         const emedia = await this.urlColl.findOne({ uuid: media.uuid })
-        // if (!emedia) console.log('URL add '+util.inspect(media));
         if (!emedia) done(await this.urlColl.insertOne(media))
         else done(await this.urlColl.updateOne({ uuid: media.uuid }, { $set: media }))
       } else {
         const emedia = await this.mediaColl.findOne({ uuid: media.uuid })
-        // if (!emedia) console.log('MEDIA add '+util.inspect(media));
         if (!emedia) done(await this.mediaColl.insertOne(media))
         else done(await this.mediaColl.updateOne({ uuid: media.uuid }, { $set: media }))
       }

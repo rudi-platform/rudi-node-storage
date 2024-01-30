@@ -245,7 +245,7 @@ class MediaClient(object):
         return ''
 
     def commit(self, stageId):
-        if type(stageId) == list:
+        if isinstance(stageId, list):
             if len(stageId) < 2: logging.error('Unexpected stage array: '+json.dumps(stageId))
             else: stageId = stageId[-2]
         if (not r'zone_name' in stageId) or (not r'commit_uuid' in stageId):

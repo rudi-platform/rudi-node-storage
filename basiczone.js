@@ -12,6 +12,7 @@ import { AclDB } from './acl.js' // eslint-disable-line no-unused-vars
 import { BasicFileEntry } from './basicfile.js'
 import { BasicUrlEntry } from './basicurl.js'
 
+export const WRITE_OPT_APPEND = 'Append'
 /**
  * An authorization processing unit.
  */
@@ -262,15 +263,22 @@ export class BasicZone {
         return
       }
 
+      /**
+       * If mediaAccessMethod == 'Append'
+       *    - we don't need a commit, so we don't need a '--x' validation
+       *    - writing on file is done with 'a' option instead of 'w'
+       */
       let needValidation = false
       if (!aclStatus.user) none('Authentication required', 401)
       const ctx = new ZoneContext(this.acldb, aclStatus.user, 'zone_add')
       aclStatus.setContext(ctx)
       aclStatus.setAcl(this.zoneAcl)
       if (aclStatus.refused('-w-')) none('Access denied', 401)
-      ctx.opType = 'zone_commit'
-      if (aclStatus.refused('--x')) needValidation = true
-
+      const isAppend = mediaAccessMethod == WRITE_OPT_APPEND
+      if (!isAppend) {
+        ctx.opType = 'zone_commit'
+        if (aclStatus.refused('--x')) needValidation = true
+      }
       const recordEntry = (entry, none, done) => {
         this.db[entry.uuid] = entry
         this.saveZoneCSV(none, (path) => {
@@ -292,7 +300,7 @@ export class BasicZone {
         const entry = new BasicFileEntry(metadata, filecontent, this, aclStatus)
         if (this.abspath) entry.abspath = true
         const path = this.getPathFromConnector(entry, needValidation)
-        const flag = mediaAccessMethod == 'append' ? 'a' : 'w'
+        const flag = isAppend ? 'a' : 'w'
         writeFile(path, filecontent, { flag }, (err, data) => {
           // TODO: HERE
           if (err) none(`could not write file: ${path}`, 500)

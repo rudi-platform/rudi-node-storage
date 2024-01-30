@@ -18,6 +18,7 @@ import { AccessControl } from './access.js'
 import { BasicFileDB } from './basicdb.js'
 import { BasicFileEntry } from './basicfile.js'
 import { BasicUrlEntry } from './basicurl.js'
+import { WRITE_OPT_APPEND } from './basiczone.js'
 import { DEFAULT_CONF } from './configuration.js'
 import { MongoService } from './db.js'
 import { SchemaSet } from './schema.js'
@@ -169,7 +170,6 @@ class HttpService {
     router.post('/jwt/forge', (req, res) => this.forgeUserToken(req, res))
     router.get('/storage/:fileid', (req, res) => this.fileService(req, res))
     router.post('/post', (req, res) => this.postFile(req, res))
-    router.post('/append', (req, res) => this.appendFile(req, res))
     router.post('/commit', (req, res) => this.commitMedia(req, res))
     router.post('/delete/:uuid', (req, res) => this.deleteMedia(req, res))
     router.get('/list', (req, res) => this.listMedias(req, res))
@@ -451,6 +451,8 @@ class HttpService {
       return this.sendAndClose(res, 400, { status: 'error', msg: 'malformed metadata' })
     }
 
+    if (req.query?.append) req.headers['media-access-method'] = WRITE_OPT_APPEND
+
     // Bufferize file data
     const chunkSize = 65536 * 4
     const contentLength = req.headers['Content-Length'] || req.headers['content-length']
@@ -501,18 +503,6 @@ class HttpService {
   }
 
   /**
-   * Append additional content to an existing media.
-   * The post HTTP header must contain the ":file_metadata" with all necessary fields.
-   *
-   * @param {object} req - the HTTP request
-   * @param {object} res - the HTTP response.
-   */
-  appendFile = (req, res) => {
-    req.headers['media-access-method'] = 'append'
-    return this.postFile(req, res)
-  }
-
-  /**
    * Commit the post/append of a new media.
    * The post HTTP header must contain the ":file_metadata" with all necessary fields.
    *
@@ -529,7 +519,7 @@ class HttpService {
         zoneName,
         commitUuid,
         aclStatus,
-        (err, code = null) => this.sendAndClose(res, code || 400, { status: 'error', msg: '${err}' }),
+        (err, code = null) => this.sendAndClose(res, code || 400, { status: 'error', msg: `${err}` }),
         () => this.sendAndClose(res, 200, { status: 'OK' })
       )
     }
@@ -537,18 +527,18 @@ class HttpService {
       try {
         metadata = JSON.parse(metadata)
       } catch (err) {
-        this.syslog.error('malformed commit message: ' + metadata, 'core')
+        this.syslog.error(`malformed commit message: ${metadata}`, 'core')
         this.sendAndClose(res, 400, { status: 'error', msg: 'malformed metadata' })
         return
       }
 
       if (!metadata.commit_uuid) {
-        this.syslog.error('commit_uuid missing in metadata: ' + JSON.stringify(metadata))
+        this.syslog.error(`commit_uuid missing in metadata: ${JSON.stringify(metadata)}`)
         this.sendAndClose(res, 400, { status: 'error', msg: 'commit_uuid missing in metadata' })
         return
       }
       if (!metadata.zone_name) {
-        this.syslog.error('zone_name missing in metadata: ' + JSON.stringify(metadata))
+        this.syslog.error(`zone_name missing in metadata: ${JSON.stringify(metadata)}`)
         this.sendAndClose(res, 400, { status: 'error', msg: 'zone_name missing in metadata' })
         return
       }
