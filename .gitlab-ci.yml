@@ -36,7 +36,7 @@ pack_prod:
     NODE_ENV: production
   script:
     - npm i
-    - echo "//repository.aqmo.org/npm/:_authToken=\${CI_JOB_TOKEN}" | tee -a .npmrc
+    # - echo "//repository.aqmo.org/npm/:_authToken=\${CI_JOB_TOKEN}" | tee -a .npmrc
     - npm pack
   artifacts:
     name: 'rudi_media.tgz'
