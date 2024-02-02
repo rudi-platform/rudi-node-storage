@@ -7,6 +7,6 @@ keys
 
 .vscode
 _logs
-/media
-/_media
+_media
+media
 *.pyc
