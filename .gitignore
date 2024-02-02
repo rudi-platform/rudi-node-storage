@@ -1,9 +1,12 @@
 package-lock.json
+*.lock
+node_modules
+
 keys
 *.pem
+
 .vscode
-/node_modules
-/_logs
+_logs
 /media
 /_media
 *.pyc
