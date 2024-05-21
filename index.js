@@ -12,8 +12,6 @@ import { readFileSync } from 'fs'
 import { parse as iniParse } from 'ini'
 import { gzip } from 'zlib'
 
-import minimist from 'minimist'
-
 import { RudiLogger } from '@aqmo.org/rudi_logger'
 
 // -------------------------------------------------------------------------------------------------
@@ -27,12 +25,12 @@ import { WRITE_OPT_APPEND } from './src/basiczone.js'
 import { DEFAULT_CONF } from './src/configuration.js'
 import { MongoService } from './src/db.js'
 import { SchemaSet } from './src/schema.js'
-import { jsonToStr, omit } from './src/utils.js'
+import { getArgv, jsonToStr } from './src/utils.js'
 
 // -------------------------------------------------------------------------------------------------
 // Constants
 // -------------------------------------------------------------------------------------------------
-const _argv = omit(minimist(process.argv.slice(2)), '_')
+const ARGV = getArgv()
 
 const MAX_FILE_SIZE = 500e6
 
@@ -896,8 +894,7 @@ function parseIniMultiligne(iniFileContent) {
  * @param {object} confFilename - the defaut init file
  */
 function fetchAndParseArguments(confDefault, defaultConfFilename) {
-  console.debug('CLI args:', _argv)
-  const confFilename = _argv.ini || defaultConfFilename
+  const confFilename = ARGV.ini || defaultConfFilename
 
   let configuration = confDefault
   try {
@@ -910,13 +907,13 @@ function fetchAndParseArguments(confDefault, defaultConfFilename) {
     console.error('warning: configuration file ignored: ' + err)
   }
 
-  if (_argv.p) {
-    const np = parseInt(_argv.p, 10)
+  if (ARGV.p) {
+    const np = parseInt(ARGV.p, 10)
     if (!isNaN(np)) configuration.server.port = np
   }
-  if (_argv.revision) configuration.logging.revision = _argv.revision.slice(0, 40)
-  if (_argv.l) {
-    const logFolder = _argv.l.slice(0, 60)
+  if (ARGV.revision) configuration.logging.revision = ARGV.revision.slice(0, 40)
+  if (ARGV.l) {
+    const logFolder = ARGV.l.slice(0, 60)
     configuration.log_local.directory = logFolder.endsWith('/') ? logFolder : `${logFolder}/`
   }
 

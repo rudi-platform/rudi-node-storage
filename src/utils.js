@@ -34,3 +34,7 @@ export const omit = (obj, key) => {
   const { [key]: omitted, ...rest } = obj // NOSONAR
   return rest
 }
+
+const ARGV = omit(minimist(process.argv), '_')
+console.debug('CLI options:', ARGV)
+export const getArgv = (opt) => (opt ? ARGV[opt] : ARGV)
