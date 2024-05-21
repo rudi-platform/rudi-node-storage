@@ -22,3 +22,15 @@ export const cleanHeadersAuth = (str) =>
   typeof str == 'string' ? str.replace(/["'](Bearer|Basic) [\w-/\.]+["']/g, '<auth>') : cleanHeadersAuth(jsonToStr(str))
 
 export const safeStringify = (str) => (str ? cleanHeadersAuth(str) : '')
+
+/**
+ *
+ * @param {Object} obj a source object
+ * @param {string} key the name of a property to omit in the source object
+ * @returns An object without the named property
+ */
+export const omit = (obj, key) => {
+  // eslint-disable-next-line no-unused-vars
+  const { [key]: omitted, ...rest } = obj // NOSONAR
+  return rest
+}

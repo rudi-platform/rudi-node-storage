@@ -13,7 +13,6 @@ import { parse as iniParse } from 'ini'
 import { gzip } from 'zlib'
 
 import minimist from 'minimist'
-const _argv = minimist(process.argv.slice(2))
 
 import { RudiLogger } from '@aqmo.org/rudi_logger'
 
@@ -28,11 +27,13 @@ import { WRITE_OPT_APPEND } from './src/basiczone.js'
 import { DEFAULT_CONF } from './src/configuration.js'
 import { MongoService } from './src/db.js'
 import { SchemaSet } from './src/schema.js'
-import { jsonToStr } from './src/utils.js'
+import { jsonToStr, omit } from './src/utils.js'
 
 // -------------------------------------------------------------------------------------------------
 // Constants
 // -------------------------------------------------------------------------------------------------
+const _argv = omit(minimist(process.argv.slice(2)), '_')
+
 const MAX_FILE_SIZE = 500e6
 
 /**
