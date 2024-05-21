@@ -4,9 +4,12 @@
  * @author: Laurent Morin
  * @version: 1.0.0
  */
+// -------------------------------------------------------------------------------------------------
+// External dependencies
+// -------------------------------------------------------------------------------------------------
 import { createHash } from 'crypto'
-import { get } from 'http'
-import { get as _get } from 'https'
+import { get as httpGet } from 'http'
+import { get as httpsGet } from 'https'
 import { URL } from 'url'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -199,7 +202,7 @@ export class BasicUrlEntry {
       const sourceUrl = new URL(source)
       switch (sourceUrl.protocol) {
         case 'https:': {
-          _get(sourceUrl.href, (res) => {
+          httpsGet(sourceUrl.href, (res) => {
             let data = ''
             res.on('data', (chunk) => {
               data += chunk
@@ -215,7 +218,7 @@ export class BasicUrlEntry {
           break
         }
         case 'http:': {
-          get(sourceUrl.href, (res) => {
+          httpGet(sourceUrl.href, (res) => {
             let data = ''
             res.on('data', (chunk) => {
               data += chunk

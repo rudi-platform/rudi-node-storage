@@ -4,11 +4,20 @@
  * @author: Laurent Morin
  * @version: 1.0.0
  */
+
+// -------------------------------------------------------------------------------------------------
+// External dependencies
+// -------------------------------------------------------------------------------------------------
+import { inspect } from 'util'
+
 import { readPrivateKeyFile } from '@aqmo.org/jwt-lib'
 import { Severity } from '@aqmo.org/rudi_logger'
 
-import { inspect } from 'util'
+// -------------------------------------------------------------------------------------------------
+// Internal dependencies
+// -------------------------------------------------------------------------------------------------
 import { AclDB } from './acl.js'
+import { jsonToStr } from './utils.js'
 
 /**
  * An authorization processing unit.
@@ -99,7 +108,7 @@ class AccessContext {
     access: this.auth.access,
   })
 
-  toString = () => JSON.stringify(this.toJSON())
+  toString = () => jsonToStr(this.toJSON())
 }
 
 /**
@@ -117,10 +126,14 @@ export class AccessControl {
     cfg.authorized_version = cfg.authorized_version || ['0.1']
     cfg.system_groups = cfg.system_groups || { admin: 4 }
     cfg.system_users = cfg.system_users || { admin: [4, '', ['admin'], ''] }
-    cfg.system_acl = cfg.system_acl || { core: ['admin', 'admin', 'rwx', '---', '---'], users: {}, groups: {} }
+    cfg.system_acl = cfg.system_acl || {
+      core: ['admin', 'admin', 'rwx', '---', '---'],
+      users: {},
+      groups: {},
+    }
     cfg.media_priv_keyfile = cfg.media_priv_keyfile || './mediapriv.pem'
     try {
-      this.authorizedVersion = JSON.parse(JSON.stringify(cfg.authorized_version)) // json -> deep-copy
+      this.authorizedVersion = JSON.parse(jsonToStr(cfg.authorized_version)) // json -> deep-copy
       this.privkey = readPrivateKeyFile(cfg.media_priv_keyfile)
       this.acldb = new AclDB(cfg, slogger)
       this.systemAcl = this.acldb.newAcl(cfg.system_acl)
@@ -129,13 +142,13 @@ export class AccessControl {
       throw Error(`Could not initialize AccessControl unit: ${err}`)
     }
   }
-  error(message, context = null) {
+  error(message, context) {
     if (this.syslog) this.syslog.error(message, 'ac', context)
   }
-  debug(message, context = null) {
+  debug(message, context) {
     if (this.syslog) this.syslog.debug(message, 'ac', context)
   }
-  notice(message, context = null) {
+  notice(message, context) {
     if (this.syslog) this.syslog.notice(message, 'ac', context)
   }
   /**

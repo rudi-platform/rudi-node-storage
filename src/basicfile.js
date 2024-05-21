@@ -4,9 +4,16 @@
  * @author: Laurent Morin
  * @version: 1.0.0
  */
+// -------------------------------------------------------------------------------------------------
+// External dependencies
+// -------------------------------------------------------------------------------------------------
 import { createHash } from 'crypto'
 import { readFile } from 'fs'
 import { v4 as uuidv4 } from 'uuid'
+
+// -------------------------------------------------------------------------------------------------
+// Internal dependencies
+// -------------------------------------------------------------------------------------------------
 import { charsetFromContent, mimeFromContent } from './basicutils.js'
 
 /* eslint-disable no-multi-spaces */

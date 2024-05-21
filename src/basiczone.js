@@ -4,13 +4,21 @@
  * @author: Laurent Morin
  * @version: 1.0.0
  */
+// -------------------------------------------------------------------------------------------------
+// External dependencies
+// -------------------------------------------------------------------------------------------------
 import { mkdirSync, readFile, renameSync, rmSync, stat, writeFile } from 'fs'
 import { v4 as uuidv4 } from 'uuid'
 
 import { Severity } from '@aqmo.org/rudi_logger'
+
+// -------------------------------------------------------------------------------------------------
+// Internal dependencies
+// -------------------------------------------------------------------------------------------------
 import { AclDB } from './acl.js' // eslint-disable-line no-unused-vars
 import { BasicFileEntry } from './basicfile.js'
 import { BasicUrlEntry } from './basicurl.js'
+import { jsonToStr } from './utils.js'
 
 export const WRITE_OPT_APPEND = 'Append'
 /**
@@ -61,7 +69,7 @@ class ZoneContext {
     access: this.auth.access,
   })
 
-  toString = () => JSON.stringify(this.toJSON())
+  toString = () => jsonToStr(this.toJSON())
 }
 
 /* eslint-disable no-multi-spaces */
@@ -315,7 +323,7 @@ export class BasicZone {
         this.recordOrStageEntry(entry)
       } else none(`Unsupported Media Type: ${metadata.media_type}`, 400)
     } catch (err) {
-      none(`invalid meta-data: ${err}; value: ${JSON.stringify(metadata)}`, 400)
+      none(`invalid meta-data: ${err}; value: ${jsonToStr(metadata)}`, 400)
     }
   }
   /**

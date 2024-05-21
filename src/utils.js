@@ -1,11 +1,14 @@
+// -------------------------------------------------------------------------------------------------
+// External dependencies
+// -------------------------------------------------------------------------------------------------
 import { inspect } from 'util'
 
 /**
- * Custom JSON beautifying function
+ * Custom JSON jsonToString function (aka beautify)
  * @param {JSON} jsonObject: a JSON object
- * @param {String or number} options: JSON.stringify options. 4 or '\t' make it possible
+ * @param {String or number} options: jsonToStr options. 4 or '\t' make it possible
  *                                    to display the JSON on several lines
- * @returns {String} JSON.stringify options
+ * @returns {String} jsonToStr options
  */
 export const jsonToStr = (jsonObject, option) => {
   try {
@@ -14,8 +17,6 @@ export const jsonToStr = (jsonObject, option) => {
     return `${inspect(jsonObject)}`
   }
 }
-
-export const beautify = jsonToStr
 
 export const cleanHeadersAuth = (str) =>
   typeof str == 'string' ? str.replace(/["'](Bearer|Basic) [\w-/\.]+["']/g, '<auth>') : cleanHeadersAuth(jsonToStr(str))

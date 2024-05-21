@@ -4,8 +4,12 @@
  * @author: Laurent Morin
  * @version: 1.0.0
  */
-import { RudiLogger } from '@aqmo.org/rudi_logger' // eslint-disable-line no-unused-vars
+// -------------------------------------------------------------------------------------------------
+// External dependencies
+// -------------------------------------------------------------------------------------------------
 import { MongoClient } from 'mongodb'
+
+import { RudiLogger } from '@aqmo.org/rudi_logger' // eslint-disable-line no-unused-vars
 
 /**
  * Basic interface for the storage of LOG events MongoDB.

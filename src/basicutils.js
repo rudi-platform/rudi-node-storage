@@ -4,6 +4,9 @@
  * @author: Laurent Morin
  * @version: 1.0.0
  */
+// -------------------------------------------------------------------------------------------------
+// External dependencies
+// -------------------------------------------------------------------------------------------------
 import { filetypeinfo } from 'magic-bytes.js'
 
 /**
@@ -14,7 +17,7 @@ import { filetypeinfo } from 'magic-bytes.js'
 export function mimeFromContent(filecontent) {
   let mimetype = 'application/octet-stream'
   const info = filetypeinfo(filecontent)
-  // this.syslog.debug('Filetype: '+ JSON.stringify(info, null, 4), this.logid);
+  // this.syslog.debug('Filetype: '+ jsonToStr(info, null, 4), this.logid);
   if (info.length) {
     // Take the 1st matching.
     if (info[0]?.mime) mimetype = info[0].mime

@@ -5,6 +5,12 @@
  * @version: 1.0.0
  */
 
+// -------------------------------------------------------------------------------------------------
+// External dependencies
+// -------------------------------------------------------------------------------------------------
+import { createHash } from 'crypto'
+import { version as getVersion, parse, v4, v5, validate } from 'uuid'
+
 import {
   forgeToken,
   getJwtRegex,
@@ -13,10 +19,15 @@ import {
   tokenStringToJwtObject,
   verifyToken,
 } from '@aqmo.org/jwt-lib'
-import { createHash } from 'crypto'
-import { version as getVersion, parse, v4, v5, validate } from 'uuid'
-import './cycle.js' // For Json Unparsing
 
+// -------------------------------------------------------------------------------------------------
+// Internal dependencies
+// -------------------------------------------------------------------------------------------------
+import { jsonToStr } from './utils.js'
+
+// -------------------------------------------------------------------------------------------------
+// Constants
+// -------------------------------------------------------------------------------------------------
 const G_ADMIN_UID = 4
 const G_USER_START_UID = 1000
 
@@ -130,7 +141,7 @@ export class User {
       duration
     )
     this.acldb.notice(`Access token forged by ${this.name}: ${duser.name}:${dgroup.name}`)
-    // this.acldb.debug(`Access token forged: ${token} [${JSON.stringify(xattr)}]`);
+    // this.acldb.debug(`Access token forged: ${token} [${jsonToStr(xattr)}]`);
     return token
   }
   /**
@@ -172,7 +183,7 @@ export class User {
 class Acl {
   constructor(aclDesc) {
     const err = function (msg) {
-      throw Error(`${msg} in acl ("${JSON.safeStringify(aclDesc)}")`)
+      throw Error(`${msg} in acl ("${jsonToStr(aclDesc)}")`)
     }
     if (!aclDesc?.core) err('Missing core')
     if (!aclDesc?.users) err('Missing users')
@@ -180,8 +191,8 @@ class Acl {
     const core = aclDesc['core']
     if (core.length != 5) err('Incorrect number of elements for core')
     ;[this.owner, this.group, this.uaccess, this.gaccess, this.oaccess] = core
-    this.users = JSON.parse(JSON.stringify(aclDesc['users'])) // json -> deep-copy
-    this.groups = JSON.parse(JSON.stringify(aclDesc['groups'])) // json -> deep-copy
+    this.users = JSON.parse(jsonToStr(aclDesc['users'])) // json -> deep-copy
+    this.groups = JSON.parse(jsonToStr(aclDesc['groups'])) // json -> deep-copy
   }
   access(user, group) {
     if (user.name == this.owner) return this.uaccess
@@ -321,7 +332,7 @@ export class AclDB {
   newAcl(aclconf) {
     const acl = new Acl(aclconf)
     const err = (msg) => {
-      throw Error(`${msg} in acl ("${JSON.safeStringify(aclconf)}")`)
+      throw Error(`${msg} in acl ("${jsonToStr(aclconf)}")`)
     }
     if (!this.systemUsers?.[acl.owner]) err(`Users ${this.owner} not found`)
     for (const ui in acl.users) if (!this.systemUsers?.[ui]) err(`Users ${ui} not found`)
@@ -403,7 +414,7 @@ export class AclDB {
       } catch (e) {
         return this.newAclError('E21')
       }
-      this.debug(`Decoded JWT payload: ${JSON.safeStringify(jwt.payload)}`)
+      this.debug(`Decoded JWT payload: ${jsonToStr(jwt.payload)}`)
 
       const jwtPayload = jwt.payload
       const gname = jwtPayload.sub || '-'

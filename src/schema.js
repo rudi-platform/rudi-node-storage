@@ -6,6 +6,11 @@
  * @version: 1.0.0
  */
 
+// -------------------------------------------------------------------------------------------------
+// Internal dependencies
+// -------------------------------------------------------------------------------------------------
+import { jsonToStr } from './utils.js'
+
 /**
  * Represents a generic Json schema together with some usefull functions.
  *
@@ -87,7 +92,7 @@ export class SchemaSet {
     sdb.addSchema('rudia-media-db-file.json', file)
     sdb.addSchema('rudia-media-db-meta.json', meta)
     sdb.addSchema('rudia-media-db-context.json', context)
-    return JSON.stringify([sdb.toJSON('rudia-media-db-file.json'), sdb.toBson('rudia-media-db-file.json')], null, 4)
+    return jsonToStr([sdb.toJSON('rudia-media-db-file.json'), sdb.toBson('rudia-media-db-file.json')], null, 4)
   }
   /**
    * Add a new schema in the DB.
@@ -113,7 +118,7 @@ export class SchemaSet {
     }
     if (!(name in this.schemaList)) return
     const base = { $schema: 'http://json-schema.org/draft-07/schema', $id: `${this.baseURL}/${name}` }
-    const newo = JSON.parse(JSON.stringify(this.schemaList[name])) // TODO: Need better
+    const newo = JSON.parse(jsonToStr(this.schemaList[name])) // TODO: Need better
     return { ...base, ...this.replaceToJson(newo) }
   }
   /**
@@ -124,7 +129,7 @@ export class SchemaSet {
    */
   toBson(name) {
     if (!(name in this.schemaList)) return
-    const newo = JSON.parse(JSON.stringify(this.schemaList[name])) // TODO: Need better
+    const newo = JSON.parse(jsonToStr(this.schemaList[name])) // TODO: Need better
     return this.replaceToBson(newo)
   }
   /*

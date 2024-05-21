@@ -4,8 +4,12 @@
  * @author: Laurent Morin
  * @version: 1.0.0
  */
+
+// -------------------------------------------------------------------------------------------------
+// Internal dependencies
+// -------------------------------------------------------------------------------------------------
 import { BasicZone } from './basiczone.js'
-import './cycle.js' // For Json Unparsing
+import { jsonToStr } from './utils.js'
 
 /**
  * Represents a basic media DB.
@@ -247,14 +251,14 @@ export class BasicFileDB {
         if (done) done(opdesc)
       }
       const errFct = (err, desc = opdesc) => {
-        this.warn(`Could not update DB (init add): ${err}; with ${JSON.safeStringify(desc)}`)
+        this.warn(`Could not update DB (init add): ${err}; with ${jsonToStr(desc)}`)
         doneFct(entry) // We stand at a warning level for Mongo up to now.
       }
       if (this.mongodb)
         this.mongodb.addMedia(entry.toJSON(), errFct, () => this.mongodb.addEvent(opdesc, errFct, () => doneFct(entry)))
       else doneFct(entry)
     } catch (err) {
-      this.errorCtx(`Invalid media entry: ${err} entry: ${JSON.stringify(entry.toJSON())}`, 'add_media', '-', aclStatus)
+      this.errorCtx(`Invalid media entry: ${err} entry: ${jsonToStr(entry.toJSON())}`, 'add_media', '-', aclStatus)
       if (none) none(err)
     }
   }
@@ -274,11 +278,11 @@ export class BasicFileDB {
       if (none) none('Missing metadata', 400)
     }
     if (!metadata.media_type) {
-      this.errorCtx(`(ignored) Missing media type: ${JSON.safeStringify(metadata)}`, 'add_media', '-', aclStatus)
+      this.errorCtx(`(ignored) Missing media type: ${jsonToStr(metadata)}`, 'add_media', '-', aclStatus)
       metadata.media_type = 'FILE'
     }
     if (!metadata.media_id) {
-      this.errorCtx(`Missing media UUID: ${JSON.safeStringify(metadata)}`, 'add_media', '-', aclStatus)
+      this.errorCtx(`Missing media UUID: ${jsonToStr(metadata)}`, 'add_media', '-', aclStatus)
       if (none) none('Missing media UUID', 400)
       return
     }
@@ -405,7 +409,7 @@ export class BasicFileDB {
         if (done) done()
       }
       const errFct = (err) => {
-        this.warn(`Could not update DB (add): ${err} with ${JSON.safeStringify(opdesc)}`)
+        this.warn(`Could not update DB (add): ${err} with ${jsonToStr(opdesc)}`)
         doneFct(entry) // We stand at a warning level for Mongo up to now.
       }
       if (this.mongodb)
@@ -429,7 +433,7 @@ export class BasicFileDB {
         count += 1
         const content = zone.listMedias(aclStatus)
         this.notice('list medias: count=' + Object.keys(content).length)
-        this.debug('list medias: name=' + JSON.safeStringify(content))
+        this.debug('list medias: name=' + jsonToStr(content))
         mediaList[zoneName] = {
           list: content,
           status: 'OK',
@@ -476,8 +480,7 @@ export class BasicFileDB {
       }
       this.logReq(aclStatus, opdesc)
 
-      const errFct = (err, desc = opdesc) =>
-        this.error(`Could not update DB (new): ${err} with ${JSON.safeStringify(desc)}`)
+      const errFct = (err, desc = opdesc) => this.error(`Could not update DB (new): ${err} with ${jsonToStr(desc)}`)
 
       if (this.mongodb) this.mongodb.addEvent(opdesc, errFct, (mongodb) => {})
 
@@ -540,7 +543,7 @@ export class BasicFileDB {
       context: accessEntry,
     }
     this.logReq(aclStatus, opdesc)
-    const errFct = (err) => this.error(`Could not update DB (get): ${err} with ${JSON.safeStringify(opdesc)}`)
+    const errFct = (err) => this.error(`Could not update DB (get): ${err} with ${jsonToStr(opdesc)}`)
 
     if (this.mongodb) this.mongodb.addEvent(opdesc, errFct, () => {})
 
@@ -578,7 +581,7 @@ export class BasicFileDB {
       this.logReq(aclStatus, opdesc)
       media.getRealMd5(none, done)
 
-      const errFct = (err) => this.error(`Could not update DB (check): ${err} with ${JSON.safeStringify(opdesc)}`)
+      const errFct = (err) => this.error(`Could not update DB (check): ${err} with ${jsonToStr(opdesc)}`)
 
       if (this.mongodb) this.mongodb.addEvent(opdesc, errFct, () => {})
 
