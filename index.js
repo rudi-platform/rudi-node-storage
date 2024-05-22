@@ -386,6 +386,8 @@ class HttpService {
     res.header('Access-Control-Allow-Origin', '*')
     res.status(code).json(msg)
   }
+  sendOK = (res) => this.sendAndClose(res, 200, { status: 'OK' })
+
   listMedias(req, res) {
     this.syslog.debug(`[listMedias]${req.originalUrl}`, 'http')
     const aclStatus = this.ac.getAccessStatus(req, res)
@@ -514,32 +516,32 @@ class HttpService {
     })
   }
 
-  processCommit = (zoneName, commitUuid) =>
+  processCommit = (res, zoneName, commitUuid, aclStatus) =>
     this.db.commit(
       zoneName,
       commitUuid,
       aclStatus,
       (err, code) => this.sendAndClose(res, code || 400, { status: 'error', msg: `${err}` }),
-      () => this.sendAndClose(res, 200, { status: 'OK' })
+      () => this.sendOK(res)
     )
 
-  processJsonAndCommit = (metadata) => {
+  processJsonAndCommit = (res, metadata, aclStatus) => {
     try {
       metadata = JSON.parse(metadata)
     } catch (err) {
       this.syslog.error(`malformed commit message: ${jsonToStr(metadata)}`, 'core')
       return this.sendAndClose(res, 400, { status: 'error', msg: 'malformed metadata' })
     }
-
-    if (!metadata.commit_uuid) {
-      this.syslog.error(`commit_uuid missing in metadata: ${jsonToStr(metadata)}`)
-      return this.sendAndClose(res, 400, { status: 'error', msg: 'commit_uuid missing in metadata' })
-    }
     if (!metadata.zone_name) {
       this.syslog.error(`zone_name missing in metadata: ${jsonToStr(metadata)}`)
       return this.sendAndClose(res, 400, { status: 'error', msg: 'zone_name missing in metadata' })
     }
-    this.processCommit(metadata.zone_name, metadata.commit_uuid)
+    if (!metadata.commit_uuid) {
+      this.syslog.error(`commit_uuid missing in metadata: ${jsonToStr(metadata)}`)
+      return this.sendAndClose(res, 400, { status: 'error', msg: 'commit_uuid missing in metadata' })
+    }
+
+    return this.processCommit(res, metadata.zone_name, metadata.commit_uuid, aclStatus)
   }
   /**
    * Commit the post/append of a new media.
@@ -555,49 +557,43 @@ class HttpService {
 
     let commitUuid = '-'
     let zoneName = '-'
+
     if (req.query?.zone_name && req.query.commit_uuid) {
       zoneName = req.query.zone_name
       commitUuid = req.query.commit_uuid
-      return this.db.commit(
-        zoneName,
-        commitUuid,
-        aclStatus,
-        (err, code = null) => this.sendAndClose(res, code || 400, { status: 'error', msg: `${err}` }),
-        () => this.sendAndClose(res, 200, { status: 'OK' })
-      )
-    } else {
-      let metadata = req.body
-      if (req.headers?.media_commit) {
-        metadata = req.headers.media_commit
-        this.processJsonAndCommit(metadata)
-      } else {
-        // Bufferize file data
-        const contentLength = req.headers['Content-Length'] || req.headers['content-length']
-        const size = parseInt(contentLength) || 4096
-        const dwnld = new DownloadService(4096, size)
-        req.on('readable', () => dwnld.read(req))
-        // Build the entry, Close the request
-        req.on('end', () => {
-          metadata = dwnld.finish().toString('utf-8')
-          this.processJsonAndCommit(metadata)
-        })
-      }
+      return this.processCommit(res, zoneName, commitUuid, aclStatus)
     }
+
+    if (req.headers?.media_commit) {
+      const metadata = req.headers.media_commit
+      return this.processJsonAndCommit(res, metadata, aclStatus)
+    }
+
+    let metadata = req.body
+    // Bufferize file data
+    const contentLength = req.headers['Content-Length'] || req.headers['content-length']
+    const size = parseInt(contentLength) || 4096
+    const dwnld = new DownloadService(4096, size)
+    req.on('readable', () => dwnld.read(req))
+    // Build the entry, Close the request
+    req.on('end', () => {
+      metadata = dwnld.finish().toString('utf-8')
+      this.processJsonAndCommit(res, metadata, aclStatus)
+    })
   }
 
-  processDelete = (uuid) => {
+  processDelete = (res, uuid, aclStatus) =>
     this.db.mdelete(
       uuid,
       aclStatus,
       (err, code) => this.sendAndClose(res, code || 400, { status: 'error', msg: `${err}` }),
       () => {
-        this.syslog.notice('[deleteMedia] ' + uuid, 'API')
-        this.sendAndClose(res, 200, { status: 'OK' })
+        this.syslog.notice(`[deleteMedia] ${uuid}`, 'API')
+        this.sendOK(res)
       }
     )
-  }
 
-  processJsonAndDelete = (metadata) => {
+  processJsonAndDelete = (res, metadata, aclStatus) => {
     try {
       metadata = JSON.parse(metadata)
     } catch (err) {
@@ -608,7 +604,7 @@ class HttpService {
       this.syslog.error(`uuid missing in metadata: ${jsonToStr(metadata)}`)
       return this.sendAndClose(res, 400, { status: 'error', msg: 'uuid missing in metadata' })
     }
-    this.processDelete(metadata.uuid)
+    this.processDelete(res, metadata.uuid, aclStatus)
   }
 
   deleteMedia(req, res) {
@@ -619,15 +615,15 @@ class HttpService {
     let uuid = '-'
     if (req.params?.uuid) {
       uuid = req.params.uuid
-      this.processDelete(uuid)
+      this.processDelete(res, uuid, aclStatus)
     } else if (req.query?.zone_name && req.query.commit_uuid) {
       uuid = req.query.commit_uuid
-      this.processDelete(uuid)
+      this.processDelete(res, uuid, aclStatus)
     } else {
       let metadata = req.body
       if (req.headers?.media_delete) {
         metadata = req.headers.media_delete
-        this.processJsonAndDelete(metadata)
+        this.processJsonAndDelete(res, metadata, aclStatus)
       } else {
         // Bufferize file data
         const contentLength = req.headers['Content-Length'] || req.headers['content-length']
@@ -637,7 +633,7 @@ class HttpService {
         // Build the entry, Close the request
         req.on('end', () => {
           metadata = dwnld.finish().toString('utf-8')
-          this.processJsonAndDelete(metadata)
+          this.processJsonAndDelete(res, metadata, aclStatus)
         })
       }
     }

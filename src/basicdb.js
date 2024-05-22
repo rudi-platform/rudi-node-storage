@@ -24,6 +24,8 @@ import { jsonToStr } from './utils.js'
  * @param {object} mongodb  - The mongo database interface
  */
 export class BasicFileDB {
+  className = 'BasicFileDB'
+
   constructor(mediaDir, acldb, logger, mongodb, timeout) {
     this.mediaDir = mediaDir
     this.acldb = acldb
@@ -328,6 +330,8 @@ export class BasicFileDB {
     zone.newBasicEntryFromMetadata(metadata, filecontent, aclStatus, mediaAccessMethod, errFct, addStepEntry, addDone)
   }
   commit(zoneName, commitId, aclStatus, none, done) {
+    const here = `${this.className}.commit`
+
     if (Object.keys(this.zone_db).length <= 0) {
       this.errorCtx('DB not ready for committing', 'commit_media', zoneName, aclStatus)
       if (none) none(`DB not ready for committing`, 400)
