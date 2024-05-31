@@ -118,9 +118,6 @@ class HttpService {
       this.syslog.error('DB initialization failed: ' + err, 'core')
       this.db.init(configuration.storage.zones, false)
     }
-    // this.syslog.debug(`Zones configured: ${jsonToStr(configuration.storage.zones)}`)
-    // this.syslog.debug(`Storage: ${jsonToStr(configuration.storage)}`)
-
     this._declareRoutes()
   }
   _errorHandler(err, req, res, next) {
@@ -321,18 +318,7 @@ class HttpService {
     if (!this.ac.checkSystemAccessStatus(aclStatus, '---')) return
     if (req?.headers?.file_metadata) return this.media(req, res)
 
-    res.send(
-      '<!DOCTYPE html>\
-<html lang="en">\
-  <head><meta charset="utf-8"><title>Rudi media access driver</title></head>\
-  <body>\
-    <H1>Rudi media access driver, access restricted</H1>\
-    <H2><a href="' +
-        this.httpPrefix +
-        'logs/" >Log file list (requires authorization)</a></H2>\
-  </body>\
-</html>'
-    )
+    return this.sendAndClose(res, 400, { status: 'error', msg: `Rudi media access driver, access restricted` })
   }
   /**
    * Serves a post of a new media.

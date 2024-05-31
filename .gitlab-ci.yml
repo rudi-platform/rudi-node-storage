@@ -20,7 +20,7 @@ quality_dev:
   variables:
     NODE_ENV: development
   script:
-    - npm i
+    - npm i || (npm cache clean --force && npm i)
     - npm run lint
 
 pack_prod:
@@ -35,8 +35,7 @@ pack_prod:
   variables:
     NODE_ENV: production
   script:
-    - npm i
-    # - echo "//repository.aqmo.org/npm/:_authToken=\${CI_JOB_TOKEN}" | tee -a .npmrc
+    - npm i || (npm cache clean --force && npm i)
     - npm pack
   artifacts:
     name: 'rudi_media.tgz'
