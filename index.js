@@ -94,7 +94,7 @@ class HttpService {
     this.ac = new AccessControl(configuration.auth, this.syslog)
     if (this.logweb) this.logweb.setWebAccessControlInterface(this.ac)
     // this.wl.setWebAccessControlInterface(this.ac);
-    // eslint-disable-next-line new-cap
+
     this.icon = Buffer.from(
       'AAABAAEAEBAAAAEAIABoBAAAFgAAACgAAAAQAAAAIAAAAAEAIAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACe7OkFqNqYQ6jZlKWo2ZTjpdiR+5bQgvuc04Pj5PWgovv/qED4/6cEAAAAAAAAAAAAAAAAAAAAAAAAAACb7/wSm+/7h6Hlyeyo2pb/qNmU/6XYkv+W0IL/ndOD/+n4of/5/6fq+P+ng/j/pxAAAAAAAAAAAAAAAACa7/sQm+/7oZvv+/2b7/j/ouTG/6jalv+m2JH/ltCC/53Tg//p+KH/+f+n//j/p/34/6eb+P+mDgAAAACf7voBm+/7e5vv+/yb7/v/m+/8/5vu+P+i5MX/pdiT/5bQgv+d04P/6fih//n/p//4/6f/+P+n+/j9p3UAAAAAnPD7MZvw++Cb7/v/m+/7/5vv+/+b8Pz/nO/4/5/iwv+V0IT/ndOD/+n4of/5/6f/+P+n//j7qP/35qvc9tStLJPl+YWV5/n+lef5/5Xn+f+V5/n/lef5/5bo+viY7PbSj9mq053Tg/jp96H/+f+n//j8p//35av/9tat/fbWrX1+yfPEfsnz/37J8/9+yfP/fsr0/37K9PqAy/SHkOj/FITcuhWk14eN6vii+/n9qP/35av/9tat//bWrf/21q28fMfz33zH8/98x/P/fMfz/3zF8/+AqOvYgpDmGgAAAAAAAAAA4/efHfb7p9z35qv/9tat//bWrf/21q3/9tat2HzH8958x/P/fMfz/3zG8/+BoOr/iXTf2Z173hwAAAAAAAAAAPnuqh/346vd9tet//bWrf/21q3/9tat//bWrdh8x/PCfMfz/3zH8/+Boer/h3Lf/5R43/vJpOOP5a3TGuWTrhvzya2S9M6t/PTOrf/0zq3/9M6t//TOrf/00K26fMfzgnzH8/6Bour/iHPf/4du3v+Ved//zqjk+dup2Nnfg7La4oit+uKKrf/iiq3/4oqt/+KKrf/iiq3944+te3zK8y6Boerdh3Tf/4hu3v+Hbt7/lXnf/86o5P/TqeP/0YnI/917rv/eeq3/3nqt/956rf/eeq3/3nqt2t55rSoAAAAAiHDedohu3vuIb97/h27e/5V53//OqOT/0qrj/8SS3v/Phcf/3Xyu/957rf/ee63/3nut+t57rXAAAAAAAAAAAIdu3g2Ib96aiG/e/Idu3v+Ved//zqjk/9Kq4//Ekt//wo7d/9CFxv/dfK7/3nut/N57rZXee60MAAAAAAAAAAAAAAAAiG7eD4hv3n+Hbt7nlXnf/86o5P/SqeP/xJLf/8KP3v/Dj93/0YXF5d57rXvfeqwOAAAAAAAAAADT0c4F09HOBeHjyASwotIGjHXdQJp/357PquPd0qrj+MST3/jCkN7dw5LencSV3D7Tr8cG0N/VBNPRzgXT0c4F+B8AAOAHAADAAwAAwAMAAIABAAAAAQAAAYAAAAPAAAADwAAAAYAAAAABAACAAQAAwAMAAMADAADwDwAA+B8AAA==',
       'base64'
@@ -408,7 +408,7 @@ class HttpService {
       let userDesc = Buffer.concat(body).toString()
       try {
         userDesc = JSON.parse(userDesc)
-      } catch (err) {
+      } catch {
         return this.sendAndClose(res, 400, { status: 'error', msg: 'malformed application/json' })
       }
       if (!userDesc) return this.sendAndClose(res, 400, { status: 'error', msg: 'malformed application/json' })
@@ -447,7 +447,7 @@ class HttpService {
     try {
       metadata = JSON.parse(metadata)
     } catch (err) {
-      this.syslog.error(`malformed metadata: ${jsonToStr(metadata)}`, 'core')
+      this.syslog.error(`malformed metadata: ${jsonToStr(metadata)}: ${err}`, 'core')
       return this.sendAndClose(res, 400, { status: 'error', msg: 'malformed metadata' })
     }
 
@@ -515,7 +515,7 @@ class HttpService {
     try {
       metadata = JSON.parse(metadata)
     } catch (err) {
-      this.syslog.error(`malformed commit message: ${jsonToStr(metadata)}`, 'core')
+      this.syslog.error(`malformed commit message: ${jsonToStr(metadata)}: ${err}`, 'core')
       return this.sendAndClose(res, 400, { status: 'error', msg: 'malformed metadata' })
     }
     if (!metadata.zone_name) {
@@ -583,7 +583,7 @@ class HttpService {
     try {
       metadata = JSON.parse(metadata)
     } catch (err) {
-      this.syslog.error(`malformed delete message: ${jsonToStr(metadata)}`, 'core')
+      this.syslog.error(`malformed delete message: ${jsonToStr(metadata)}: ${err}`, 'core')
       return this.sendAndClose(res, 400, { status: 'error', msg: 'malformed metadata' })
     }
     if (!metadata.uuid) {
@@ -645,7 +645,7 @@ class HttpService {
       try {
         metadata = JSON.parse(metadata)
       } catch (err) {
-        this.syslog.error(`malformed metadata: ${jsonToStr(metadata)}`, 'core')
+        this.syslog.error(`malformed metadata: ${jsonToStr(metadata)}: ${err}`, 'core')
         this.sendAndClose(res, 400, { status: 'error', msg: 'malformed metadata' })
         return
       }
@@ -742,7 +742,7 @@ class HttpService {
     this.db.find(
       fileid,
       aclStatus,
-      (err, code) => this.sendAndClose(res, 404, '{"status":"error", "msg":"could not get media content"}'),
+      () => this.sendAndClose(res, 404, '{"status":"error", "msg":"could not get media content"}'),
       (data, name, mimetype) => {
         this.syslog.info(`full read with connector: ${fileid}`, 'core')
         const compressionMode = req.headers['media-access-compression']
@@ -829,7 +829,7 @@ function updateProperty(base, updated) {
       else {
         try {
           newo[elt] = JSON.parse(updated[elt])
-        } catch (err) {
+        } catch {
           newo[elt] = updated[elt]
         }
       }
@@ -901,7 +901,7 @@ function fetchAndParseArguments(confDefault, defaultConfFilename) {
 
   // Error mgmt.
   if (configuration.server.port < 80) {
-    console.log('Incorrect port provided: ' + configuration.server.port)
+    console.error(`Incorrect port provided: ${configuration.server.port}`)
     process.exit(-1)
   }
   return configuration
@@ -928,7 +928,7 @@ class SignalCleaner {
           console.error('Error closing session: ' + err)
           process.exit(1)
         },
-        (context) => {
+        () => {
           console.debug(`Closing session on signal ${signal}`)
           process.exit(0)
         }

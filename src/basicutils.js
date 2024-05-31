@@ -47,7 +47,7 @@ export function mimeFromContent(filecontent) {
     if (filecontent.length < 5000) {
       try {
         jsoncontent = JSON.parse(filecontent)
-      } catch (e) {}
+      } catch {}
     } else {
       const s = filecontent.subarray(0, 500)
       jsoncontent = itecur(s, '{') > 3 && itecur(s, '}') > 3 && itecur(s, ',') > 3 ? s : ''
@@ -78,17 +78,17 @@ export function charsetFromContent(filecontent) {
       try {
         filecontent.toString('base64')
         charset = 'charset=us-ascii'
-      } catch (e) {}
+      } catch {}
     else if (charset == '')
       try {
         filecontent.toString('utf8')
         charset = 'charset=utf-8'
-      } catch (e) {}
+      } catch {}
     else if (charset == '')
       try {
         filecontent.toString('ascii')
         charset = 'charset=us-ascii'
-      } catch (e) {}
+      } catch {}
   } else charset = 'charset=binary'
   return charset
 }

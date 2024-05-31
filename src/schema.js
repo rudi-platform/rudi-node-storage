@@ -1,4 +1,3 @@
-/* eslint-disable no-multi-spaces */
 /**
  * Interface for various Json schema syntax and management
  *

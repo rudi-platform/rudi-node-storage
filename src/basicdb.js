@@ -80,7 +80,7 @@ export class BasicFileDB {
       required: ['operation', 'uuid', 'ref'],
     }
   }
-  /* eslint-disable no-multi-spaces */
+
   /**
    * Generate a logger context.
    *
@@ -114,7 +114,6 @@ export class BasicFileDB {
   errorCtx = (message, name, cid, aclStatus) =>
     this.syslog.error(message, this.logid, this.convertContext(name, cid, aclStatus))
 
-  /* eslint-disable no-multi-spaces */
   /**
    * Interface the data info logger in order to describe data sets.
    *
@@ -149,7 +148,7 @@ export class BasicFileDB {
    * @param {function=} none        - An callback with the error if problems while closing.
    * @param {function=} done        - An callback with the entry when done.
    */
-  init(zones, withmongo, none, done) {
+  init(zones, withmongo) {
     if (!withmongo) this.mongodb = null
 
     let defzone = null
@@ -330,7 +329,7 @@ export class BasicFileDB {
     zone.newBasicEntryFromMetadata(metadata, filecontent, aclStatus, mediaAccessMethod, errFct, addStepEntry, addDone)
   }
   commit(zoneName, commitId, aclStatus, none, done) {
-    const here = `${this.className}.commit`
+    // const here = `${this.className}.commit`
 
     if (Object.keys(this.zone_db).length <= 0) {
       this.errorCtx('DB not ready for committing', 'commit_media', zoneName, aclStatus)
@@ -408,19 +407,17 @@ export class BasicFileDB {
         context: context.toJSON(),
         value: entry.toJSON(),
       }
-      const doneFct = (entry) => {
+      const doneFct = () => {
         this.logReq(aclStatus, opdesc)
         if (done) done()
       }
       const errFct = (err) => {
         this.warn(`Could not update DB (add): ${err} with ${jsonToStr(opdesc)}`)
-        doneFct(entry) // We stand at a warning level for Mongo up to now.
+        doneFct() // We stand at a warning level for Mongo up to now.
       }
       if (this.mongodb)
-        this.mongodb.addMedia(entry.toJSON(), errFct, (mongodb) =>
-          this.mongodb.addEvent(opdesc, errFct, (mongodb) => doneFct(entry))
-        )
-      else doneFct(entry)
+        this.mongodb.addMedia(entry.toJSON(), errFct, () => this.mongodb.addEvent(opdesc, errFct, doneFct))
+      else doneFct()
     } catch (err) {
       this.errorCtx(`Invalid media entry: ${err}; entry: ${entry.getCSVline()}`, 'add_media', '-', aclStatus)
       if (none) none(err)
@@ -457,7 +454,7 @@ export class BasicFileDB {
     mediaList['errors'] = errors
     return mediaList
   }
-  /* eslint-enable guard-for-in */
+
   /**
    * Require an access to a media, and returns a connector ID if the access is granted.
    * This function creates a unique connector, and a timer to remove it on time.
@@ -486,7 +483,7 @@ export class BasicFileDB {
 
       const errFct = (err, desc = opdesc) => this.error(`Could not update DB (new): ${err} with ${jsonToStr(desc)}`)
 
-      if (this.mongodb) this.mongodb.addEvent(opdesc, errFct, (mongodb) => {})
+      if (this.mongodb) this.mongodb.addEvent(opdesc, errFct, () => {})
 
       setTimeout(() => this.deleleteFileId(niddesc.fileid, aclStatus, errFct, () => {}), connectorTimeout * 1000)
       return niddesc.fileid

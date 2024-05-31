@@ -9,8 +9,6 @@
 // -------------------------------------------------------------------------------------------------
 import { MongoClient } from 'mongodb'
 
-import { RudiLogger } from '@aqmo.org/rudi_logger' // eslint-disable-line no-unused-vars
-
 /**
  * Basic interface for the storage of LOG events MongoDB.
  */
@@ -48,7 +46,7 @@ export class MongoService {
 
     // console.debug('T [MongoService] mongoServerURL:', this.mongoServerURL)
   }
-  /* eslint-disable no-multi-spaces, indent */
+
   /**
    * Open the Mongo DB using the class level parameters
    * A first collection is create for medias, and a second one for events.
@@ -192,7 +190,7 @@ export class MongoService {
       errFct(err)
     }
   }
-  /* eslint-enable no-multi-spaces, indent */
+
   /**
    * Close the DB interface
    *

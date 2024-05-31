@@ -16,7 +16,6 @@ import { v4 as uuidv4 } from 'uuid'
 // -------------------------------------------------------------------------------------------------
 import { charsetFromContent, mimeFromContent } from './basicutils.js'
 
-/* eslint-disable no-multi-spaces */
 /**
  * Represents a basic media entry.
  * @class
@@ -136,7 +135,7 @@ export class BasicFileEntry {
       required: ['uuid', 'zone', 'context', 'filename', 'mimetype'],
     }
   }
-  /* eslint-enable no-multi-spaces */
+
   /**
    */
   getStorageName = () => (this.abspath ? this.filename : `${this.uuid}_${this.filename}`)

@@ -15,7 +15,7 @@ import { Severity } from '@aqmo.org/rudi_logger'
 // -------------------------------------------------------------------------------------------------
 // Internal dependencies
 // -------------------------------------------------------------------------------------------------
-import { AclDB } from './acl.js' // eslint-disable-line no-unused-vars
+
 import { BasicFileEntry } from './basicfile.js'
 import { BasicUrlEntry } from './basicurl.js'
 import { jsonToStr } from './utils.js'
@@ -72,7 +72,6 @@ class ZoneContext {
   toString = () => jsonToStr(this.toJSON())
 }
 
-/* eslint-disable no-multi-spaces */
 /**
  * Represents a basic zone descriptor.
  * @class
@@ -105,19 +104,15 @@ export class BasicZone {
   init(entrycb, none, done) {
     try {
       mkdirSync(this.dirname, { recursive: true })
-    } catch (err) {
-      if (none) {
-        none(`[${this.name}]: could not create storage dir '${this.dirname}'`)
-      }
+    } catch {
+      if (none) none(`[${this.name}]: could not create storage dir '${this.dirname}'`)
       return
     }
     // For the time being, the operator is static.
     const aclStatus = this.acldb.findUser('admin')
     if (aclStatus.accError) {
       const errd = this.acldb.errDesc(aclStatus.accError)
-      if (none) {
-        none(`[${this.name}][rudiprod] user not initialied: ${errd.accessMsg}`)
-      }
+      if (none) none(`[${this.name}][rudiprod] user not initialied: ${errd.accessMsg}`)
     }
     this.user = aclStatus.user
     this.loadCSV(entrycb, none, done)
@@ -131,7 +126,6 @@ export class BasicZone {
 
   _absPath = (path) => (this.dirname == '' ? '' : this.dirname + '/') + path
 
-  /* eslint-disable no-multi-spaces */
   /**
    * Compute the real file path from the file.
    *
@@ -157,7 +151,7 @@ export class BasicZone {
     try {
       renameSync(stagedName, storageName)
     } catch (err) {
-      console.log('Error: critical failure: could not move ' + stagedName + ' -> ' + storageName)
+      console.error(`Error: critical failure: could not move ${stagedName} -> ${storageName}\n${err}`)
     }
     return storageName
   }
@@ -169,7 +163,7 @@ export class BasicZone {
     try {
       rmSync(stagedName)
     } catch (err) {
-      console.log('Error: critical failure: could not remove ' + stagedName)
+      console.error(`Error: critical failure: could not remove ${stagedName}: ${err}`)
     }
     return true
   }
@@ -182,7 +176,7 @@ export class BasicZone {
     try {
       rmSync(path)
     } catch (err) {
-      console.log('Error: critical failure: could not remove ' + path)
+      console.error(`Error: critical failure: could not remove ${path}: ${err}`)
     }
     return true
   }
@@ -221,7 +215,7 @@ export class BasicZone {
       delete this.staging_db[suid]
       this.db[suid] = stg.entry
       stg.entry.commit(stg)
-      this.saveZoneCSV(none, (path) => done(stg))
+      this.saveZoneCSV(none, () => done(stg))
     }
   }
 
@@ -240,9 +234,7 @@ export class BasicZone {
       const entry = this.db[uuid]
       delete this.db[uuid]
       entry.destroy()
-      this.saveZoneCSV(none, (path) => {
-        done(entry)
-      })
+      this.saveZoneCSV(none, () => done(entry))
     }
   }
 
@@ -309,7 +301,7 @@ export class BasicZone {
         if (this.abspath) entry.abspath = true
         const path = this.getPathFromConnector(entry, needValidation)
         const flag = isAppend ? 'a' : 'w'
-        writeFile(path, filecontent, { flag }, (err, data) => {
+        writeFile(path, filecontent, { flag }, (err) => {
           // TODO: HERE
           if (err) none(`could not write file: ${path}`, 500)
           recordOrStageEntry(entry)
@@ -382,7 +374,7 @@ export class BasicZone {
     const path = this.getPathFromConnector(this)
     const aclStatus = this.acldb.newUserAclStatus(this.user)
     aclStatus.setContext(new ZoneContext(this.acldb, this.user, 'csv_import'))
-    stat(path, (err, stats) => {
+    stat(path, (err) => {
       if (err) return
       readFile(path, { encoding: 'utf8', flag: 'r' }, (err, data) => {
         if (err) {
@@ -416,7 +408,7 @@ export class BasicZone {
     }
 
     if (content != '') {
-      writeFile(path, content, { encoding: 'utf8', flag: 'w' }, (err, data) => {
+      writeFile(path, content, { encoding: 'utf8', flag: 'w' }, (err) => {
         if (err) none(Error(`Could not save DB file ${this.path} for zone ${this.name}: ${err}`))
         else done(path)
       })

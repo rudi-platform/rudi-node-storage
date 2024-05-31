@@ -1,4 +1,3 @@
-/* eslint-disable no-multi-spaces */
 /**
  * The global configuration.
  * @typedef {Object} DEFAULT_CONF

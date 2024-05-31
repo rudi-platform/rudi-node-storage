@@ -99,12 +99,12 @@ export class User {
       try {
         this.privkey = readPrivateKeyFile(keyfile)
         this.acldb.debug(`Private key setup for '${this.name}' from '${keyfile}'`)
-      } catch (err) {}
+      } catch {}
       let pubkey
       try {
         pubkey = readPublicKeyFile(keyfile)
         this.acldb.debug(`Public key setup for '${this.name}' from '${keyfile}'`)
-      } catch (err) {
+      } catch {
         this.acldb.warn(`Couldn't read public key '${keyfile}'`)
       }
       if (pubkey) this.keys.push(pubkey)
@@ -163,11 +163,11 @@ export class User {
         input = input + salt + input
       }
       let hash = null
-      /* eslint-disable no-multi-spaces */
+
       if (pt == '1') hash = createHash('md5')
       else if (pt == '5') hash = createHash('sha256')
       else if (pt == '6') hash = createHash('sha512')
-      /* eslint-enable no-multi-spaces */
+
       if (hash) {
         const data = hash.update(input, 'utf-8')
         input = data.digest('hex')
@@ -217,7 +217,7 @@ export class AclStatus {
       try {
         this.group = this.user.validGroup(gname)
         if (this.group) this.gname = this.group.name
-      } catch (error) {
+      } catch {
         if (!this.accError) this.accError = 'E30'
         this.group = null
       }
@@ -265,7 +265,6 @@ export class AclStatus {
   }
 }
 
-/* eslint-disable no-multi-spaces */
 /* eslint-disable guard-for-in */
 /**
  * @class ACL: defines an ACL entry.
@@ -311,7 +310,7 @@ export class AclDB {
   debug(message, context = null) {
     if (this.syslog) this.syslog.debug(message, 'ac', context)
   }
-  /* eslint-enable no-multi-spaces */
+
   /* eslint-enable guard-for-in */
   newGroup(name, goupId) {
     const ng = new Group(name, goupId)
@@ -364,7 +363,7 @@ export class AclDB {
     if (password && user && !user.checkPassword(password)) user = null
     return new AclStatus(login, gname, user, user ? null : 'E02')
   }
-  /* eslint-disable no-multi-spaces */
+
   forgeJwtFor(sysid, name, gname = 'producer', attributes = {}) {
     let user = null,
       group = null
@@ -398,8 +397,7 @@ export class AclDB {
       return [null, 'E31']
     }
   }
-  /* eslint-enable no-multi-spaces */
-  /* eslint-disable no-multi-spaces */
+
   findIdsFromJwt(value) {
     let aclStatus = null
     try {
@@ -411,7 +409,7 @@ export class AclDB {
       let jwt
       try {
         jwt = tokenStringToJwtObject(value)
-      } catch (e) {
+      } catch {
         return this.newAclError('E21')
       }
       this.debug(`Decoded JWT payload: ${jsonToStr(jwt.payload)}`)
@@ -466,7 +464,7 @@ export class AclDB {
     }
     return aclStatus
   }
-  /* eslint-enable no-multi-spaces */
+
   errDesc(accError) {
     let accessMsg = 'access granted'
     let accessRealm = ''

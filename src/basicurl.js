@@ -13,7 +13,6 @@ import { get as httpsGet } from 'https'
 import { URL } from 'url'
 import { v4 as uuidv4 } from 'uuid'
 
-/* eslint-disable no-multi-spaces */
 /**
  * Represents a basic URL entry.
  * @class
@@ -122,7 +121,7 @@ export class BasicUrlEntry {
       required: ['uuid', 'zone', 'context', 'name', 'url'],
     }
   }
-  /* eslint-enable no-multi-spaces */
+
   /**
    */
   getStorageName() {
@@ -229,14 +228,13 @@ export class BasicUrlEntry {
           }).on('error', (error) => {
             console.error('Error: critical failure: could not load ' + sourceUrl.href + ': ' + error)
             if (none) none('loading media: file error', 500)
-            return
           })
           break
         }
         default:
           if (none) none('loading URL media: protocol not supported (' + sourceUrl.protocol + ')', 400)
       }
-    } catch (e) {
+    } catch {
       if (none) none('loading URL media: content access error', 500)
     }
   }
@@ -249,7 +247,7 @@ export class BasicUrlEntry {
    *                                 Returns the hash, the previous hash, and the file size.
    */
   getRealMd5(none, done) {
-    return this.getFile(this, none, (data, name, charset) => {
+    return this.getFile(this, none, (data) => {
       const hash = createHash('md5').update(data).digest('hex')
       const previousHash = this.md5
       if (hash != previousHash) {
