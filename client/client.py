@@ -8,7 +8,7 @@ import logging
 import jwt # pip PyJWT ; pip privex-pyjwt
 import base64
 
-# openssl req -x509 -nodes -newkey rsa:2048 -keyout private_key.pem -out public_key.pem -subj "/CN=rudiadmin.aqmo.org"
+# openssl req -x509 -nodes -newkey rsa:2048 -keyout private_key.pem -out public_key.pem -subj "/CN=rudi.org"
 
 def dumps(obj, indent = 0, cut=False):
     def isobj(obj): return (isinstance(obj, list) or isinstance(obj, dict))
@@ -266,8 +266,8 @@ def main():
     prefix=r''
     rudimanager = User(r'rudimanager', privkeyfile = r'./adminpriv.pem')
     rudiconsole = User(r'rudiconsole', '1000')
-    rudiadmin = User(r'rudiadmin', password = base64.b64encode(r'sysadminisgreat!'.encode('utf-8')))
-    admin = User(r'admin', password = base64.b64encode(r'sysadminisgreat!'.encode('utf-8')))
+    rudiadmin = User(r'rudiadmin', password = base64.b64encode(r'mdp'.encode('utf-8')))
+    admin = User(r'admin', password = base64.b64encode(r'mdp'.encode('utf-8')))
 
     mcAnonymous = None
     if True:
@@ -366,7 +366,7 @@ def getCookie(pkey = r'adminpriv.pem', login='rudiconsole', uid = '1000', host =
     mcConsole = MediaClient(rudiconsole,host,port,prefix,https)
 
 #PYTHONPATH=./client/ ipython -i -m client -- -i
-#PYTHONPATH=./client/ python  -m client -c "getCookie('./keys/rudimanager_shared.pem','rudiconsole','1000','shared-rudi.aqmo.org',443,True,'/media')"
+#PYTHONPATH=./client/ python  -m client -c "getCookie('./keys/rudimanager_shared.pem','rudiconsole','1000','rudi.org',443,True,'/media')"
 asModule= len(sys.argv) >= 2 and ( sys.argv[1] == '-i' or sys.argv[1] == '-c' )
 print(sys.argv, __name__)
 if __name__ == '__main__':

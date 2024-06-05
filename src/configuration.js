@@ -11,7 +11,7 @@ export const DEFAULT_CONF = {
   server: {
     listening_address: '0.0.0.0',
     listening_port: 8080,
-    server_url: 'https://shared-rudi.aqmo.org',
+    server_url: 'https://<server_domain>',
     server_prefix: '/media/',
     close_timeout: 60 * 20,
   },

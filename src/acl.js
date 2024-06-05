@@ -58,7 +58,7 @@ function idFromStr(name, idstr) {
     id = idstr
     if (isNaN(id) || id < 100 || (id >= 200 && id < G_USER_START_UID))
       if (id != G_ADMIN_UID || name != 'admin') throw Error(`Invalid id for ${name}: not in valid range`)
-    uid = v5(id.toString() + '.media.rudi.aqmo.org', v5.URL)
+    uid = v5(id.toString(), v5.URL)
   } else throw Error(`Invalid id type for ${name}: ${idt}`)
   return [id, uid]
 }
