@@ -51,7 +51,7 @@ export class SchemaSet {
         md5: { description: 'MD5 checksum of the file', type: 'string' },
         size: { description: 'The file size', type: 'integer' },
         date: { description: 'The last modification UTC timestamp', type: 'date-time' },
-        metadata: { description: 'The RUDI metara', $ref: 'rudia-media-db-meta.json' },
+        metadata: { description: 'The RUDI metadata for the media', $ref: 'rudia-media-db-meta.json' },
       },
       required: ['uuid', 'zone', 'context', 'filename', 'mimetype'],
     }
