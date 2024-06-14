@@ -951,8 +951,8 @@ class SignalCleaner {
 const run = () => {
   try {
     const configuration = fetchAndParseArguments(DEFAULT_CONF, './rudi_media_custom.ini')
-    console.info(jsonToStr(configuration, null, 2))
-    // const service = new HttpService(configuration)
+    // console.info(jsonToStr(configuration, null, 2))
+    const service = new HttpService(configuration)
     const sc = new SignalCleaner(configuration.server.close_timeout, service)
     sc.arm()
   } catch (err) {
