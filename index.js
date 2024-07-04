@@ -160,7 +160,7 @@ class HttpService {
     this.httpServer.use((req, res, next) => this._logRequests(req, res, next))
 
     const router = express.Router() // eslint-disable-line new-cap
-    router.use((req, res, next) => this._logRouterRequests(req, res, next))
+    // router.use((req, res, next) => this._logRouterRequests(req, res, next))
     // this.syslog.info(`This server prefix is: ${this.httpPrefix}`)
 
     router.get('/fail', () => {
@@ -331,7 +331,7 @@ class HttpService {
     const name = req.params.name
     const content = this.schemaSet.toJSON(name)
     if (!content) return this.sendAndClose(res, 404, 'Schema not found')
-    this.sendAndClose(res, 200, content)
+    return this.sendAndClose(res, 200, content)
   }
   /**
    * Create a request context.
@@ -381,12 +381,12 @@ class HttpService {
 
     const mediaList = this.db.list(aclStatus)
     this.syslog.debug(`[listMedias] ${aclStatus.uname} => ${mediaList.count} ${mediaList.errors}`, 'http')
-    if (!mediaList) this.sendAndClose(res, 404, { status: 'error', msg: 'media list not available' })
+    if (!mediaList) return this.sendAndClose(res, 404, { status: 'error', msg: 'media list not available' })
     else if ((!aclStatus.uname || aclStatus.uname == '-') && mediaList.count == mediaList.errors) {
       res.set('WWW-Authenticate', 'Basic realm="Missing access rights"')
-      this.sendAndClose(res, 401, { status: 'error', msg: 'access denied' })
+      return this.sendAndClose(res, 401, { status: 'error', msg: 'access denied' })
     } else {
-      this.sendAndClose(res, 200, mediaList)
+      return this.sendAndClose(res, 200, mediaList)
     }
   }
   forgeUserToken(req, res) {
@@ -435,7 +435,7 @@ class HttpService {
    * @param {object} res - the HTTP response.
    */
   postFile(req, res) {
-    this.syslog.debug(`[postFile]${req.originalUrl}`, 'http')
+    this.syslog.debug(`[postFile] ${req.originalUrl}`, 'http')
     const aclStatus = this.ac.getAccessStatus(req, res, 'API')
     if (!this.ac.checkSystemAccessStatus(aclStatus, '-w-'))
       return this.sendAndClose(res, 401, { status: 'error', msg: 'permission refused' })
@@ -638,22 +638,19 @@ class HttpService {
     if (req.params?.uuid) reqUuid = req.params.uuid
     else {
       if (!req.headers?.file_metadata) {
-        this.sendAndClose(res, 400, { status: 'error', msg: 'no meta-data provided' })
-        return
+        return this.sendAndClose(res, 400, { status: 'error', msg: 'no meta-data provided' })
       }
       let metadata = req.headers.file_metadata
       try {
         metadata = JSON.parse(metadata)
       } catch (err) {
         this.syslog.error(`malformed metadata: ${jsonToStr(metadata)}: ${err}`, 'core')
-        this.sendAndClose(res, 400, { status: 'error', msg: 'malformed metadata' })
-        return
+        return this.sendAndClose(res, 400, { status: 'error', msg: 'malformed metadata' })
       }
 
       if (!metadata.media_id) {
         this.syslog.error(`uuid missing in metadata: ${jsonToStr(metadata)}`)
-        this.sendAndClose(res, 400, { status: 'error', msg: 'uuid missing in metadata' })
-        return
+        return this.sendAndClose(res, 400, { status: 'error', msg: 'uuid missing in metadata' })
       }
       reqUuid = metadata.media_id
     }
@@ -661,7 +658,7 @@ class HttpService {
     const accessMode = req.headers['media-access-method']
     if (accessMode == 'Direct') {
       const nid = this.db.get(reqUuid, aclStatus)
-      if (!nid) this.sendAndClose(res, 404, { status: 'error', msg: 'media uuid not found' })
+      if (!nid) return this.sendAndClose(res, 404, { status: 'error', msg: 'media uuid not found' })
       else {
         req.params.fileid = nid
         this.syslog.notice('[media][direct]: ' + reqUuid, 'API')
@@ -681,7 +678,7 @@ class HttpService {
             )
           }
           this.syslog.info(`full read of media: ${reqUuid}`, 'core')
-          this.sendAndClose(res, 200, {
+          return this.sendAndClose(res, 200, {
             status: 'OK',
             md5: hash,
             previous_md5: previousHash,
@@ -691,10 +688,10 @@ class HttpService {
       )
     } else {
       const nid = this.db.get(reqUuid, aclStatus)
-      if (!nid) this.sendAndClose(res, 404, { status: 'error', msg: 'media uuid not found' })
+      if (!nid) return this.sendAndClose(res, 404, { status: 'error', msg: 'media uuid not found' })
       else {
         this.syslog.notice(`[media][access]: ${reqUuid}`, 'API')
-        this.sendAndClose(res, 200, { url: `${this.server}${this.httpPrefix}storage/${nid}` })
+        return this.sendAndClose(res, 200, { url: `${this.server}${this.httpPrefix}storage/${nid}` })
       }
     }
   }
@@ -742,7 +739,7 @@ class HttpService {
     this.db.find(
       fileid,
       aclStatus,
-      () => this.sendAndClose(res, 404, '{"status":"error", "msg":"could not get media content"}'),
+      () => this.sendAndClose(res, 404, { status: 'error', msg: 'could not get media content' }),
       (data, name, mimetype) => {
         this.syslog.info(`full read with connector: ${fileid}`, 'core')
         const compressionMode = req.headers['media-access-compression']

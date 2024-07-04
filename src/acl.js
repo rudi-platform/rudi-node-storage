@@ -8,7 +8,7 @@
 // -------------------------------------------------------------------------------------------------
 // External dependencies
 // -------------------------------------------------------------------------------------------------
-import { createHash } from 'crypto'
+import { createHash, generateKeyPairSync } from 'crypto'
 import { version as getVersion, parse, v4, v5, validate } from 'uuid'
 
 import {
@@ -23,6 +23,7 @@ import {
 // -------------------------------------------------------------------------------------------------
 // Internal dependencies
 // -------------------------------------------------------------------------------------------------
+import { existsSync } from 'fs'
 import { jsonToStr } from './utils.js'
 
 // -------------------------------------------------------------------------------------------------
@@ -95,19 +96,39 @@ export class User {
     this.privkey = null
     this.keys = []
     const keyfile = userDesc[3]
-    if (keyfile && keyfile != '') {
+    if (`${keyfile}`?.endsWith('.pub')) {
+      // Key file is a public key
       try {
-        this.privkey = readPrivateKeyFile(keyfile)
-        this.acldb.debug(`Private key setup for '${this.name}' from '${keyfile}'`)
-      } catch {}
-      let pubkey
-      try {
-        pubkey = readPublicKeyFile(keyfile)
-        this.acldb.debug(`Public key setup for '${this.name}' from '${keyfile}'`)
+        if (!existsSync(keyfile)) {
+          this.acldb.warn(`Public key file not found: '${keyfile}'`)
+          return
+        }
+        const pubkey = readPublicKeyFile(keyfile)
+        this.keys.push(pubkey)
+        this.acldb.debug(`Public key set for '${this.name}' from '${keyfile}'`)
       } catch {
-        this.acldb.warn(`Couldn't read public key '${keyfile}'`)
+        this.acldb.warn(`Couldn't read public key file '${keyfile}'`)
       }
-      if (pubkey) this.keys.push(pubkey)
+    } else {
+      if (keyfile && existsSync(keyfile)) {
+        // Key file is a private key
+        try {
+          this.privkey = readPrivateKeyFile(keyfile)
+          this.acldb.debug(`Private key set for '${this.name}' from '${keyfile}'`)
+          const pubKey = readPublicKeyPem(this.privkey)
+          this.keys.push(pubKey)
+          this.acldb.debug(`Public key set for '${this.name}'`)
+        } catch {
+          this.acldb.warn(`Couldn't read private key file '${keyfile}'`)
+        }
+      } else {
+        // A private key is generated
+        const { publicKey, privateKey } = generateKeyPairSync('ed25519')
+        this.privkey = privateKey
+        this.acldb.debug(`Private key generated for '${this.name}'`)
+        this.keys.push(publicKey)
+        this.acldb.debug(`Public key generated for '${this.name}'`)
+      }
     }
   }
   validGroup(gname) {
@@ -260,7 +281,7 @@ export class AclStatus {
 
   toString() {
     return `ACL:${this.uname}[${this.user ? this.user.id : -1}]:${this.gname}:${this.access}${
-      this.accError ? ' => ' + this.accError : ''
+      this.accError ? ` => ${this.accError}` : ''
     }`
   }
 }

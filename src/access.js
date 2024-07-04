@@ -16,6 +16,8 @@ import { Severity } from '@aqmo.org/rudi_logger'
 // -------------------------------------------------------------------------------------------------
 // Internal dependencies
 // -------------------------------------------------------------------------------------------------
+import { generateKeyPairSync } from 'crypto'
+import { existsSync } from 'fs'
 import { AclDB } from './acl.js'
 import { jsonToStr } from './utils.js'
 
@@ -131,10 +133,14 @@ export class AccessControl {
       users: {},
       groups: {},
     }
-    cfg.media_priv_keyfile = cfg.media_priv_keyfile || './mediapriv.pem'
     try {
       this.authorizedVersion = JSON.parse(jsonToStr(cfg.authorized_version)) // json -> deep-copy
-      this.privkey = readPrivateKeyFile(cfg.media_priv_keyfile)
+      if (existsSync(cfg.media_priv_keyfile)) {
+        this.privkey = readPrivateKeyFile(cfg.media_priv_keyfile)
+      } else {
+        const { privateKey } = generateKeyPairSync('ed25519')
+        this.privkey = privateKey
+      }
       this.acldb = new AclDB(cfg, slogger)
       this.systemAcl = this.acldb.newAcl(cfg.system_acl)
     } catch (err) {
