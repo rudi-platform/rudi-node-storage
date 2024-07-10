@@ -64,7 +64,7 @@ export class MongoService {
     }
 
     if (this.disabled) {
-      this.syslog.warning('[MongoService.open] Connexion disabled')
+      this.syslog.warn('[MongoService.open] Connexion disabled')
       throw new Error('Connexion disabled')
     }
 

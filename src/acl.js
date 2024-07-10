@@ -9,7 +9,7 @@
 // External dependencies
 // -------------------------------------------------------------------------------------------------
 import { createHash, generateKeyPairSync } from 'crypto'
-import { version as getVersion, parse, v4, v5, validate } from 'uuid'
+import { version as getVersion, parse, v4 as uuidv4, v5 as uuidv5, validate } from 'uuid'
 
 import {
   forgeToken,
@@ -47,20 +47,20 @@ function idFromStr(name, idstr) {
     }
   }
   if (idt == 'string') {
-    if (!validate(idstr)) throw Error(`Invalid uuid for ${name}`)
+    if (!validate(idstr)) throw new Error(`Invalid uuid for ${name}`)
     const version = getVersion(idstr)
     const idbytes = parse(idstr)
     uid = idstr
     if (version == 4) {
       id = G_USER_START_UID + (idbytes[10] << 8) + idbytes[11]
-    } else if (version == 5) throw Error(`Cannot revert uid from uuid-v5`)
-    else throw Error(`Invalid uuid version for ${name}`)
+    } else if (version == 5) throw new Error(`Cannot revert uid from uuid-v5`)
+    else throw new Error(`Invalid uuid version for ${name}`)
   } else if (idt == 'number') {
     id = idstr
     if (isNaN(id) || id < 100 || (id >= 200 && id < G_USER_START_UID))
-      if (id != G_ADMIN_UID || name != 'admin') throw Error(`Invalid id for ${name}: not in valid range`)
-    uid = v5(id.toString(), v5.URL)
-  } else throw Error(`Invalid id type for ${name}: ${idt}`)
+      if (id != G_ADMIN_UID || name != 'admin') throw new Error(`Invalid id for ${name}: not in valid range`)
+    uid = uuidv5(id.toString(), uuidv5.URL)
+  } else throw new Error(`Invalid id type for ${name}: ${idt}`)
   return [id, uid]
 }
 
@@ -81,60 +81,59 @@ export class User {
   constructor(acldb, name, userDesc) {
     this.name = name
     this.acldb = acldb
-    if (userDesc.length != 4) throw Error(`Incorrect number of elements in user description ("${name}")`)
-    if (typeof userDesc[1] != 'string') throw Error(`Invalid password type for ${name}`)
-    if (typeof userDesc[2] != 'object') throw Error(`Invalid group list for ${name}`)
-    if (typeof userDesc[3] != 'string') throw Error(`Invalid key file type for ${name}`)
+    if (userDesc.length != 4) throw new Error(`Incorrect number of elements in user description ("${name}")`)
+    if (typeof userDesc[1] != 'string') throw new Error(`Invalid password type for ${name}`)
+    if (typeof userDesc[2] != 'object') throw new Error(`Invalid group list for ${name}`)
+    if (typeof userDesc[3] != 'string') throw new Error(`Invalid key file type for ${name}`)
     ;[this.id, this.uuid] = idFromStr(name, userDesc[0])
     this.password = userDesc[1]
     this.groups = []
     for (const g of userDesc[2]) {
       const group = acldb.findGroup(g)
-      if (!group) throw Error(`Invalid group "${g}" while initializing ${name}`)
+      if (!group) throw new Error(`Invalid group "${g}" while initializing ${name}`)
       this.groups.push(group)
     }
     this.privkey = null
+    this.delegateKey = null
     this.keys = []
     const keyfile = userDesc[3]
-    if (`${keyfile}`?.endsWith('.pub')) {
-      // Key file is a public key
+    if (keyfile) {
+      if (!existsSync(keyfile)) {
+        this.acldb.warn(`Key file not found: '${keyfile}'`)
+        return
+      }
       try {
-        if (!existsSync(keyfile)) {
-          this.acldb.warn(`Public key file not found: '${keyfile}'`)
-          return
-        }
+        // Reading key file as a public key
         const pubkey = readPublicKeyFile(keyfile)
         this.keys.push(pubkey)
         this.acldb.debug(`Public key set for '${this.name}' from '${keyfile}'`)
       } catch {
-        this.acldb.warn(`Couldn't read public key file '${keyfile}'`)
-      }
-    } else {
-      if (keyfile && existsSync(keyfile)) {
-        // Key file is a private key
+        // this.acldb.warn(`Couldn't read key file as a buplic key '${keyfile}'`)
         try {
+          // Reading key file as a private key
           this.privkey = readPrivateKeyFile(keyfile)
           this.acldb.debug(`Private key set for '${this.name}' from '${keyfile}'`)
           const pubKey = readPublicKeyPem(this.privkey)
           this.keys.push(pubKey)
           this.acldb.debug(`Public key set for '${this.name}'`)
-        } catch {
-          this.acldb.warn(`Couldn't read private key file '${keyfile}'`)
+        } catch (err) {
+          this.acldb.warn(`Couldn't read private key file '${keyfile}': ${err}`)
         }
-      } else {
-        // A private key is generated
-        const { publicKey, privateKey } = generateKeyPairSync('ed25519')
-        this.privkey = privateKey
-        this.acldb.debug(`Private key generated for '${this.name}'`)
-        this.keys.push(publicKey)
-        this.acldb.debug(`Public key generated for '${this.name}'`)
       }
+      // } else {
+      //   // A private key is generated
+      //   const { publicKey, privateKey } = generateKeyPairSync('ed25519')
+      //   this.privkey = privateKey
+      //   this.acldb.debug(`Private key generated for '${this.name}'`)
+      //   this.keys.push(publicKey)
+      //   this.acldb.debug(`Public key generated for '${this.name}'`)
+      // }
     }
   }
   validGroup(gname) {
     const group = gname == undefined || gname == null || gname == '-' ? this.groups[0] : this.acldb.findGroup(gname)
 
-    if (!group || this.groups.indexOf(group) == -1) throw Error(`Invalid group "${gname}" for ${this.name}`)
+    if (!group || this.groups.indexOf(group) == -1) throw new Error(`Invalid group "${gname}" for ${this.name}`)
     return group
   }
 
@@ -143,13 +142,33 @@ export class User {
     return access
   }
 
-  forgeDelegatedUserJwt(duser, dgroup, attributes, duration = 300) {
-    if (!this.privkey) throw Error(`No private key defined for "${this.name}"`)
-    if (attributes === undefined || !attributes) attributes = {}
-    const jti = v4()
+  hasDelegation() {
+    for (const group of this.groups) if (group.name == 'delegate' || group.name == 'admin') return true
+    return false
+  }
+
+  forgeDelegatedUserJwt(duser, dgroup, attributes = {}, duration = 300) {
+    if (!this.hasDelegation()) {
+      const err = new Error(
+        `User '${this.name}' must belong to group 'delegate' to be granted the right to forge delegation JWT`
+      )
+      this.acldb.error(err.message)
+      throw err
+    }
+
+    if (!this.delegateKey) {
+      this.acldb.notice(`No delegate key defined for "${this.name}", generating a key pair`)
+      const { publicKey, privateKey } = generateKeyPairSync('ed25519')
+      this.delegateKey = privateKey
+      this.acldb.debug(`Private delegate key generated for '${this.name}'`)
+      this.keys.push(publicKey)
+      this.acldb.debug(`Public delegate key added for '${this.name}'`)
+    }
+
+    const jti = uuidv4()
     const xattr = { name: duser.name, uuid: duser.uuid, group: dgroup.name, ...attributes }
     const token = forgeToken(
-      this.privkey,
+      this.delegateKey,
       { typ: 'jwt' },
       {
         jti: jti,
@@ -204,7 +223,7 @@ export class User {
 class Acl {
   constructor(aclDesc) {
     const err = function (msg) {
-      throw Error(`${msg} in acl ("${jsonToStr(aclDesc)}")`)
+      throw new Error(`${msg} in acl ("${jsonToStr(aclDesc)}")`)
     }
     if (!aclDesc?.core) err('Missing core')
     if (!aclDesc?.users) err('Missing users')
@@ -293,7 +312,7 @@ export class AclStatus {
 export class AclDB {
   constructor(cfg, syslog) {
     this.syslog = syslog
-    if (typeof cfg != 'object' || !cfg.system_groups || !cfg.system_users) throw Error(`Invalid AclDB cfg`)
+    if (typeof cfg != 'object' || !cfg.system_groups || !cfg.system_users) throw new Error(`Invalid AclDB cfg`)
 
     const sg = cfg.system_groups
     const au = cfg.system_users
@@ -310,7 +329,7 @@ export class AclDB {
     } catch (err) {
       const errStr = `Could not initialize ACL DB: ${err}`
       this.error(errStr)
-      throw Error(errStr)
+      throw new Error(errStr)
     }
   }
   log(sev, message, context = null) {
@@ -336,7 +355,7 @@ export class AclDB {
   newGroup(name, goupId) {
     const ng = new Group(name, goupId)
     if (this.groupsByID?.[ng.id])
-      throw Error(`Group id already set ("${ng.id} is in ${this.groupsByID[ng.id].name}" for ${gi})`)
+      throw new Error(`Group id already set ("${ng.id} is in ${this.groupsByID[ng.id].name}" for ${gi})`)
     this.systemGroups[name] = ng
     this.groupsByID[ng.id] = ng
     return ng
@@ -344,7 +363,7 @@ export class AclDB {
   newUser(name, userDesc) {
     const nu = new User(this, name, userDesc)
     if (this.usersByID?.[nu.id])
-      throw Error(`User id already set ("${nu.id} is in ${this.usersByID[nu.id].name}" for ${ui})`)
+      throw new Error(`User id already set ("${nu.id} is in ${this.usersByID[nu.id].name}" for ${ui})`)
     this.systemUsers[name] = nu
     this.usersByID[nu.id] = nu
     return nu
@@ -352,7 +371,7 @@ export class AclDB {
   newAcl(aclconf) {
     const acl = new Acl(aclconf)
     const err = (msg) => {
-      throw Error(`${msg} in acl ("${jsonToStr(aclconf)}")`)
+      throw new Error(`${msg} in acl ("${jsonToStr(aclconf)}")`)
     }
     if (!this.systemUsers?.[acl.owner]) err(`Users ${this.owner} not found`)
     for (const ui in acl.users) if (!this.systemUsers?.[ui]) err(`Users ${ui} not found`)
@@ -424,7 +443,7 @@ export class AclDB {
     try {
       const jwtStr = `${value}`
       if (!RegExp(getJwtRegex()).exec(jwtStr)) {
-        this.syslog.warning(`Input token is not a JWT: ${jwtStr}`)
+        this.syslog.warn(`Input token is not a JWT: ${jwtStr}`)
         return this.newAclError('E20')
       }
       let jwt

@@ -242,7 +242,7 @@ export class BasicZone {
     const ctx = new ZoneContext(this.acldb, aclStatus.user, 'zone_list')
     aclStatus.setContext(ctx)
     aclStatus.setAcl(this.zoneAcl)
-    if (aclStatus.refused('r--')) throw Error('Access denied')
+    if (aclStatus.refused('r--')) throw new Error('Access denied')
 
     const content = []
     for (const ei of Object.keys(this.db)) {
@@ -334,12 +334,12 @@ export class BasicZone {
     try {
       let [urlmd5, uuid, filetype, encoding, date, sizedate] = descline.split(';')
       let [filename, mimetype] = filetype.split(':')
-      if (sizedate === undefined) throw Error('Could not parse ' + descline)
+      if (sizedate === undefined) throw new Error('Could not parse ' + descline)
       date = new Date(parseInt(date) * 1000)
 
       aclStatus.setAcl(this.zoneAcl)
       aclStatus.context.opType = 'zone_add'
-      if (aclStatus.refused('-w-')) throw Error('Access denied')
+      if (aclStatus.refused('-w-')) throw new Error('Access denied')
       aclStatus.context.opType = 'zone_commit'
       // if (aclStatus.refused('-wx')) needValidation = true;
       // TODO: read ACL from filesystem
@@ -357,7 +357,7 @@ export class BasicZone {
       }
       this.db[entry.uuid] = entry
     } catch (err) {
-      throw Error('invalid meta-data: ' + err + ' value: ' + descline)
+      throw new Error('invalid meta-data: ' + err + ' value: ' + descline)
     }
     return entry
   }
