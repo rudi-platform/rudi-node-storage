@@ -877,7 +877,7 @@ function parseIniMultiligne(iniFileContent) {
  * @param {object} confFilename - the defaut init file
  */
 function fetchAndParseArguments(confDefault, defaultConfFilename) {
-  const confFilename = ARGV.ini || defaultConfFilename
+  const confFilename = ARGV.ini || ARGV.conf || defaultConfFilename
 
   let configuration = confDefault
   try {
