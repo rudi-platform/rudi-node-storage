@@ -25,7 +25,7 @@ import { WRITE_OPT_APPEND } from './src/basiczone.js'
 import { DEFAULT_CONF } from './src/configuration.js'
 import { MongoService } from './src/db.js'
 import { SchemaSet } from './src/schema.js'
-import { getArgv, jsonToStr } from './src/utils.js'
+import { getArgv, jsonToStr, pathJoin } from './src/utils.js'
 
 // -------------------------------------------------------------------------------------------------
 // Constants
@@ -61,6 +61,10 @@ class HttpService {
         this.syslog.error(`An error happened during initialization: ${jsonToStr(err)}`)
       })
   }
+
+  getUrl(...suffix) {
+    return pathJoin(this.server, this.httpPrefix, ...suffix)
+  }
   /**
    * What we want is a prefix that is either '/' or '/something/'
    * The prefix is here normalized to make sure it adopts this convention.
@@ -75,7 +79,7 @@ class HttpService {
   async _initHttpService(configuration) {
     this.httpServer = express()
 
-    const schemaURL = `${this.server}${this.httpPrefix}schema`
+    const schemaURL = this.getUrl(schema)
     const schemaBase = `${configuration.schemas.schema_basename}`
     const contextRef = `${schemaBase}${configuration.schemas.schema_context}`
     const metaRef = `${schemaBase}${configuration.schemas.schema_meta}`
@@ -691,7 +695,7 @@ class HttpService {
       if (!nid) return this.sendAndClose(res, 404, { status: 'error', msg: 'media uuid not found' })
       else {
         this.syslog.notice(`[media][access]: ${reqUuid}`, 'API')
-        return this.sendAndClose(res, 200, { url: `${this.server}${this.httpPrefix}storage/${nid}` })
+        return this.sendAndClose(res, 200, { url: this.getUrl('storage', nid) })
       }
     }
   }
