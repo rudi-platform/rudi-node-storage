@@ -79,7 +79,7 @@ class HttpService {
   async _initHttpService(configuration) {
     this.httpServer = express()
 
-    const schemaURL = this.getUrl(schema)
+    const schemaURL = this.getUrl('schema')
     const schemaBase = `${configuration.schemas.schema_basename}`
     const contextRef = `${schemaBase}${configuration.schemas.schema_context}`
     const metaRef = `${schemaBase}${configuration.schemas.schema_meta}`
