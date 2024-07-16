@@ -892,6 +892,7 @@ function fetchAndParseArguments(confDefault, defaultConfFilename) {
   }
   // CLI option '--revision' => git hash
   if (ARGV.revision) configuration.logging.revision = ARGV.revision.slice(0, 40)
+  if (ARGV.hash) configuration.logging.revision = ARGV.hash.slice(0, 40)
 
   // CLI option '--url' => public URL
   if (ARGV.url) configuration.server.server_url = ARGV.url
