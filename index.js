@@ -885,12 +885,18 @@ function fetchAndParseArguments(confDefault, defaultConfFilename) {
   } catch (err) {
     console.error('warning: configuration file ignored: ' + err)
   }
-
+  // CLI option '-p' => port
   if (ARGV.p) {
     const np = parseInt(ARGV.p, 10)
     if (!isNaN(np)) configuration.server.port = np
   }
+  // CLI option '--revision' => git hash
   if (ARGV.revision) configuration.logging.revision = ARGV.revision.slice(0, 40)
+
+  // CLI option '--url' => public URL
+  if (ARGV.url) configuration.server.server_url = ARGV.url
+
+  // CLI option '-l' => log folder
   if (ARGV.l) {
     const logFolder = ARGV.l.slice(0, 60)
     configuration.log_local.directory = logFolder.endsWith('/') ? logFolder : `${logFolder}/`
