@@ -62,9 +62,8 @@ class HttpService {
       })
   }
 
-  getUrl(...suffix) {
-    return pathJoin(this.server, this.httpPrefix, ...suffix)
-  }
+  getUrl = (...suffix) => pathJoin(this.server, this.httpPrefix, ...suffix)
+
   /**
    * What we want is a prefix that is either '/' or '/something/'
    * The prefix is here normalized to make sure it adopts this convention.
@@ -177,6 +176,7 @@ class HttpService {
       router.get('/logs', (req, res) => this.logweb.logContent(req, res))
       router.get('/logs/:name', (req, res) => this.logweb.logFile(req, res))
     }
+    router.get('/url', (req, res) => res.send(this.getUrl()))
     router.post('/jwt/forge', (req, res) => this.forgeUserToken(req, res))
     router.get('/storage/:fileid', (req, res) => this.fileService(req, res))
     router.post('/post', (req, res) => this.postFile(req, res))
@@ -312,6 +312,7 @@ class HttpService {
     res.type('text/plain')
     res.end(this.revision)
   }
+
   /**
    * Serves the default page.
    * @param {object} req - the HTTP request
