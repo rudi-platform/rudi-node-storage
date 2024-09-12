@@ -7,19 +7,19 @@
   "dependencies": {
     "@aqmo.org/jwt-lib": "^1.1.12",
     "@aqmo.org/rudi_logger": "^1.1.6",
-    "express": "^4.19.2",
+    "express": "^4.21.0",
     "ini": "^5.0.0",
     "magic-bytes.js": "^1.10.0",
     "md5": "^2.3.0",
     "minimist": "^1.2.8",
-    "mongodb": "^6.8.0",
+    "mongodb": "^6.8.1",
     "uuid": "^10.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@babel/eslint-parser": "^7.25.1",
     "@babel/preset-env": "^7.25.4",
-    "eslint": "^9.9.1",
+    "eslint": "^9.10.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.2.1",
     "eslint-plugin-unused-imports": "^4.1.3",
