@@ -59,7 +59,7 @@ export const DEFAULT_CONF = {
   },
   logging: {
     revision: '-',
-    app_name: 'media',
+    app_name: 'node-storage',
   },
   log_server: {
     path: '127.0.0.1',
