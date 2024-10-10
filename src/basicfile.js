@@ -209,13 +209,13 @@ export class BasicFileEntry {
       if (none) none('loading media: source missing in context', 404)
       return
     }
-    readFile(idesc.source, { flag: 'r' }, function (err, data) {
+    readFile(idesc.source, { flag: 'r' }, (err, data) => {
       if (err) {
         console.error('Error: critical failure: could not load ' + idesc.source)
         if (none) none('loading media: file error', 500)
         return
       }
-      if (done) done(data, idesc.filename, idesc.type)
+      if (done) this.getRealMd5(none, (hash, _, size) => done(data, idesc.filename, idesc.type, size, hash))
     })
   }
   /**

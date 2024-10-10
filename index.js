@@ -129,17 +129,16 @@ class HttpService {
     this.syslog.error(`An error happened on ${req.method} ${req.url}: ${err}`)
     console.error('[Local dump]', err)
 
-    if (res.headersSent) {
-      return
-    }
-    // res.status(500)
-    // res.render('error', { time: now.getTime(), error: err })
-    res.status(500).json({
-      error: `An error was thrown, please contact the Admin with the information bellow`,
-      message: err.message,
-      time: now.getTime(),
-    })
+    return (
+      res.headersSent ||
+      res.status(500).json({
+        error: `An error was thrown, please contact the Admin with the information bellow`,
+        message: err.message,
+        time: now.getTime(),
+      })
+    )
   }
+
   _logRequests(req, reply, next) {
     this.syslog.info(`Request <= ${req.method} ${req.url}`)
     next()
@@ -745,7 +744,7 @@ class HttpService {
       fileid,
       aclStatus,
       () => this.sendAndClose(res, 404, { status: 'error', msg: 'could not get media content' }),
-      (data, name, mimetype) => {
+      (data, name, mimetype, size, md5) => {
         this.syslog.info(`full read with connector: ${fileid}`, 'core')
         const compressionMode = req.headers['media-access-compression']
         const content = data
@@ -765,6 +764,8 @@ class HttpService {
           })
         } else {
           res.type(mimetype)
+          res.setHeader('Content-Length', size)
+          res.setHeader('Content-Digest', md5)
           res.write(content)
           res.status(200).end()
         }
