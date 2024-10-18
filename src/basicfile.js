@@ -209,14 +209,26 @@ export class BasicFileEntry {
       if (none) none('loading media: source missing in context', 404)
       return
     }
+    console.log('T idesc.source:', idesc.source)
+    console.log('T idesc.hash:', this.md5)
+    console.log('T idesc.size:', this.size)
     readFile(idesc.source, { flag: 'r' }, (err, data) => {
       if (err) {
         console.error('Error: critical failure: could not load ' + idesc.source)
         if (none) none('loading media: file error', 500)
         return
       }
+      const hash = createHash('md5').update(data).digest('hex')
+      const previousHash = this.md5
+      if (hash != previousHash) {
+        this.md5 = hash
+        this.size = data.byteLength
+      }
+      console.log('T idesc.hash:', this.md5)
+      console.log('T idesc.size:', this.size)
+      console.log('T data.size:', data.byteLength)
       if (done) {
-        this.getRealMd5(none, (hash, _, size) => done(data, idesc.filename, idesc.type, size, hash))
+        done(data, idesc.filename, idesc.type, this.size, this.md5)
       }
     })
   }
@@ -240,7 +252,7 @@ export class BasicFileEntry {
       const previousHash = this.md5
       if (hash != previousHash) {
         this.md5 = hash
-        this.size = data.length
+        this.size = data.byteLength
       }
       if (done) done(hash, previousHash, this.size)
     })
@@ -260,7 +272,7 @@ export class BasicFileEntry {
     const previousHash = this.md5
     if (hash != previousHash) {
       this.md5 = hash
-      this.size = data.length
+      this.size = data.byteLength
     }
     if (done) return done(this.md5, previousHash, this.size)
     return { md5: this.md5, previous_hash: previousHash, size: this.size }
