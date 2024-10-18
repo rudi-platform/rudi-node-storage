@@ -559,7 +559,7 @@ export class BasicFileDB {
         this.errorCtx(`could not load file: ${err}`, 'get_media', fileid, aclStatus)
         if (none) none(err, code)
       },
-      done
+      done()
     )
   }
   /**
