@@ -212,7 +212,6 @@ export class BasicUrlEntry {
           }).on('error', (error) => {
             console.error('Error: critical failure: could not load ' + sourceUrl.href + ': ' + error)
             if (none) none('loading media: file error', 500)
-            return
           })
           break
         }

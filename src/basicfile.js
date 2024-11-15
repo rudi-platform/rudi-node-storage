@@ -209,9 +209,6 @@ export class BasicFileEntry {
       if (none) none('loading media: source missing in context', 404)
       return
     }
-    // console.log('T idesc.source:', idesc.source)
-    // console.log('T idesc.hash:', this.md5)
-    // console.log('T idesc.size:', this.size)
     readFile(idesc.source, { flag: 'r' }, (err, data) => {
       if (err) {
         console.error('Error: critical failure: could not load ' + idesc.source)
@@ -224,9 +221,6 @@ export class BasicFileEntry {
         this.md5 = hash
         this.size = data.byteLength
       }
-      console.log('T idesc.hash:', this.md5)
-      console.log('T idesc.size:', this.size)
-      console.log('T data.size:', data.byteLength)
       if (done) {
         done(data, idesc.filename, idesc.type, this.size, this.md5)
       }
