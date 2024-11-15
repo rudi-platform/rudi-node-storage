@@ -904,8 +904,8 @@ function fetchAndParseArguments(confDefault, defaultConfFilename) {
     if (!isNaN(np)) configuration.server.port = np
   }
   // CLI option '--revision' => git hash
-  if (ARGV.revision) configuration.logging.revision = ARGV.revision.slice(0, 40)
-  if (ARGV.hash) configuration.logging.revision = ARGV.hash.slice(0, 40)
+  const revision = String(ARGV.revision || ARGV.hash).slice(0, 7)
+  configuration.logging.revision = revision
 
   // CLI option '--url' => public URL
   if (ARGV.url) configuration.server.server_url = ARGV.url

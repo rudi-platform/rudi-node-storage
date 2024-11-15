@@ -58,6 +58,6 @@ export const omit = (obj, key) => {
   return rest
 }
 
-const ARGV = omit(minimist(process.argv), '_')
+const ARGV = omit(minimist(process.argv, { string: ['hash', 'revision'] }), '_')
 console.debug('CLI options:', ARGV)
 export const getArgv = (opt) => (opt ? ARGV[opt] : ARGV)
