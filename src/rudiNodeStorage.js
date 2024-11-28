@@ -309,7 +309,7 @@ class HttpService {
   getRevision(req, res) {
     res.statusCode = 200
     res.type('text/plain')
-    res.end(this.revision)
+    res.end(this.revision?.slice(1, 7))
   }
 
   /**
