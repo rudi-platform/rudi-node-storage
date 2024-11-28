@@ -31,7 +31,7 @@
   },
   "scripts": {
     "start": "npx nodemon run-rudinode-storage.js",
-    "debug": "npx nodemon run-rudinode-storage.js -p 3201 -l './_logs' --revision 'devO' --ini ./rudi_storage_custom.ini",
+    "debug": "npx nodemon run-rudinode-storage.js -p 3201 -l './_logs' --revision \"$(git rev-parse  HEAD)\" --ini ./rudi_storage_custom.ini",
     "debug_ini": "npx nodemon run-rudinode-storage.js --ini local.ini",
     "docker": "./node_modules/.bin/nodemon run-rudinode-storage.js -p ${L_PORT} -l ${L_LOGNAME}",
     "test": "echo \"Error: no test specified\" && exit 1",

@@ -7,6 +7,7 @@
 // -------------------------------------------------------------------------------------------------
 // External dependencies
 // -------------------------------------------------------------------------------------------------
+import { execSync } from 'child_process'
 import express from 'express'
 import { readFileSync } from 'fs'
 import { parse as iniParse } from 'ini'
@@ -307,9 +308,12 @@ class HttpService {
    * @param {object} res - the HTTP response.
    */
   getRevision(req, res) {
-    res.statusCode = 200
-    res.type('text/plain')
-    res.end(this.revision?.slice(1, 7))
+    try {
+      const git_hash = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' })
+      return this.sendAndClose(res, 200, git_hash?.slice(1, 7))
+    } catch {
+      return this.sendAndClose(res, 200, this.revision?.slice(1, 7))
+    }
   }
 
   /**
@@ -904,8 +908,15 @@ function fetchAndParseArguments(confDefault, defaultConfFilename) {
     if (!isNaN(np)) configuration.server.port = np
   }
   // CLI option '--revision' => git hash
-  const revision = String(ARGV.revision || ARGV.hash).slice(0, 7)
-  configuration.logging.revision = revision
+  let hash = String(ARGV.revision || ARGV.hash)
+  if (!hash) {
+    try {
+      hash = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' })
+    } catch {
+      hash = 'n/a'
+    }
+  }
+  configuration.logging.revision = hash.slice(0, 7)
 
   // CLI option '--url' => public URL
   if (ARGV.url) configuration.server.server_url = ARGV.url
