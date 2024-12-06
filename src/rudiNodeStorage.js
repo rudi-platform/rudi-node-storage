@@ -199,6 +199,7 @@ class HttpService {
     router.options('/:uuid', (req, res) => this.optionCors(req, res))
 
     this.httpServer.use(this.httpPrefix, router)
+    this.httpServer.use('/media/', router) // Legacy
     this.listen = this.httpServer.listen(this.port, this.netInterface)
 
     // Launching message
@@ -309,8 +310,8 @@ class HttpService {
    */
   getRevision(req, res) {
     try {
-      const git_hash = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' })
-      return this.sendAndClose(res, 200, git_hash?.slice(1, 7))
+      const gitHash = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' })
+      return this.sendAndClose(res, 200, gitHash?.slice(1, 7))
     } catch {
       return this.sendAndClose(res, 200, this.revision?.slice(1, 7))
     }
