@@ -921,8 +921,8 @@ function fetchAndParseArguments(confDefault, defaultConfFilename) {
 
   // CLI option '--url' => public URL
   if (ARGV.url) configuration.server.server_url = ARGV.url
-  else if (process.env.MAANGER_PUBLIC_URL) {
-    configuration.server.server_url = process.env.MAANGER_PUBLIC_URL
+  else if (process.env.STORAGE_PUBLIC_URL) {
+    configuration.server.server_url = process.env.STORAGE_PUBLIC_URL
   }
 
   // CLI option '-l' => log folder
