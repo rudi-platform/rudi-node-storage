@@ -7,24 +7,24 @@
   "dependencies": {
     "@aqmo.org/jwt-lib": "^1.1.13",
     "@aqmo.org/rudi_logger": "^1.1.6",
-    "express": "^4.21.1",
+    "express": "^4.21.2",
     "ini": "^5.0.0",
     "magic-bytes.js": "^1.10.0",
     "md5": "^2.3.0",
     "minimist": "^1.2.8",
-    "mongodb": "^6.10.0",
+    "mongodb": "^6.11.0",
     "uuid": "^11.0.3"
   },
   "devDependencies": {
     "@babel/core": "^7.26.0",
     "@babel/eslint-parser": "^7.25.9",
     "@babel/preset-env": "^7.26.0",
-    "eslint": "^9.15.0",
+    "eslint": "^9.16.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.2.1",
     "eslint-plugin-unused-imports": "^4.1.4",
     "nodemon": "^3.1.7",
-    "prettier": "^3.3.3"
+    "prettier": "^3.4.2"
   },
   "couldHaveDependencies": {
     "unix-dgram": "^2.0.4"
@@ -40,4 +40,4 @@
   },
   "author": "Laurent Morin",
   "license": "EUPL-1.2"
-}
+}ncu

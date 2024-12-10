@@ -922,7 +922,7 @@ function fetchAndParseArguments(confDefault, defaultConfFilename) {
   // CLI option '--url' => public URL
   if (ARGV.url) configuration.server.server_url = ARGV.url
   else if (process.env.STORAGE_PUBLIC_URL) {
-    configuration.server.server_url = process.env.STORAGE_PUBLIC_URL
+    configuration.server.server_url = process.env.STORAGE_PUBLIC_URLcd.america.america
   }
 
   // CLI option '-l' => log folder
