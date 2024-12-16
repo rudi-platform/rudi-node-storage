@@ -199,7 +199,7 @@ class HttpService {
     router.options('/:uuid', (req, res) => this.optionCors(req, res))
 
     this.httpServer.use(this.httpPrefix, router)
-    this.httpServer.use('/media/', router) // Legacy
+    this.httpServer.use('/media', router) // Legacy
     this.listen = this.httpServer.listen(this.port, this.netInterface)
 
     // Launching message
