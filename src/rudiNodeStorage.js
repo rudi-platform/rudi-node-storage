@@ -171,7 +171,7 @@ class HttpService {
     })
     router.get('/', (req, res) => this.root(req, res))
     router.get('/favicon.ico', (req, res) => this.favicon(req, res))
-    router.get(/\/(revision|hash)/, (req, res) => this.getRevision(req, res))
+    router.get(/^\/(revision|hash)/, (req, res) => this.getRevision(req, res))
     if (this.logweb) {
       router.get('/logs', (req, res) => this.logweb.logContent(req, res))
       router.get('/logs/:name', (req, res) => this.logweb.logFile(req, res))
@@ -310,10 +310,10 @@ class HttpService {
    */
   getRevision(req, res) {
     try {
-      const gitHash = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' })
-      return this.sendAndClose(res, 200, gitHash?.slice(1, 7))
+      const gitHash = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim().slice(0, 7)
+      return res.send(gitHash)
     } catch {
-      return this.sendAndClose(res, 200, this.revision?.slice(1, 7))
+      return res.send(this.revision?.slice(0, 7))
     }
   }
 
@@ -912,7 +912,7 @@ function fetchAndParseArguments(confDefault, defaultConfFilename) {
   let hash = String(ARGV.revision || ARGV.hash)
   if (!hash) {
     try {
-      hash = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' })
+      hash = execSync('git rev-parse --short HEAD', { encoding: 'utf-8' }).trim()
     } catch {
       hash = 'n/a'
     }
