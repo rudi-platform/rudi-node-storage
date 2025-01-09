@@ -16,7 +16,7 @@ import { BasicFileEntry } from './basicfile.js'
 import { BasicUrlEntry } from './basicurl.js'
 import { WRITE_OPT_APPEND } from './basiczone.js'
 import { MongoService } from './db.js'
-import { DownloadService } from './httpDownloadService'
+import { DownloadService } from './httpDownloadService.js'
 import { SchemaSet } from './schema.js'
 import { jsonToStr, pathJoin } from './utils.js'
 
