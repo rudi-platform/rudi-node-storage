@@ -1,14 +1,14 @@
 ![](logo.png)
 
-# RUDI Media Driver - The media connector manager for RUDI
+# RUDI Storage Driver - The media connector manager for RUDI
 
-The RUDI media driver interface media file access between the the RUDI Productor manager
+The RUDI Storage driver interface media file access between the the RUDI Productor manager
 (managing metadata entries for an open-data producer), and the storage system
 [typically IRODS](#https://irods.org/).
 
 ---
 
-The Media driver core feature is to provide access to media files
+The Storage driver core feature is to provide access to media files
 associated to data published via the RUDI open-data framework. It is
 currently extended with a logging system, and an isolation mechanism.
 
@@ -47,10 +47,10 @@ The API is the following :
 
 - _POST_ https://<server*domain>/media/post [in header: *file-metadata*: Json description ]
   The file-metadata json must contain a field \_media_id*, and should contain
-  the standard [RUDI media-data](https://app.swaggerhub.com/apis/OlivierMartineau/RUDI-PRODUCER/1.2.0#/Media)
+  the standard [RUDI Storage-data](https://app.swaggerhub.com/apis/OlivierMartineau/RUDI-PRODUCER/1.2.0#/Media)
   An account with write access is required.
 
-The following RUDI media-data can be typically provided:
+The following RUDI Storage-data can be typically provided:
 
 - "media*id": (\_mandatory*) An uuid-v4 unique identifier
 - "media*type": (\_optional*) should specify "FILE", as defined in the standard specification
@@ -68,7 +68,7 @@ curl -u 'rudiprod:xxxxxxxxxxxxxxxx'  -H 'file_metadata:{"media_name":"mon_nom","
 
 A special extension is available in order to treat of URL instead of a file. In that case, no content is provided and some specific media-data are required:
 
-- "media*type": (\_mandatory*) must specify "INDIRECT" (it is an extension of the default value "FILE" defined in the standard RUDI media-data specification)
+- "media*type": (\_mandatory*) must specify "INDIRECT" (it is an extension of the default value "FILE" defined in the standard RUDI Storage-data specification)
 - "url": (_mandatory_), a properly formed URL
 - "access*date": (\_optional*), the last validated access date (in the past)
 - "expire*date": (\_optional*), a date after the access is invalid (in the future)
@@ -210,7 +210,7 @@ consoleData= false
 directory = ./_logs/
 
 [logging]
-app_name = RudiMedia-
+app_name = RudiStorage-
 #revision: 'release'
 
 ```
@@ -237,15 +237,15 @@ Example:
     {
       "date": "2021-05-09T14:08:40.686Z",
       "size": 109192,
-      "name": "RudiMedia-1620569320362.jslog",
-      "url": "https://<server_domain>/media/logs/RudiMedia-1620569320362.jslog"
+      "name": "RudiStorage-1620569320362.jslog",
+      "url": "https://<server_domain>/media/logs/RudiStorage-1620569320362.jslog"
     }
   ]
 }
 ```
 
 To get access to the file management log for a given period, use the provided url:
-https://<server_domain>/media/logs/RudiMedia-XXXX.jslog
+https://<server_domain>/media/logs/RudiStorage-XXXX.jslog
 
 All access to the log data require an account with read access.
 

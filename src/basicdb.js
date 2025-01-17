@@ -48,8 +48,8 @@ export class BasicFileDB {
    */
   static eventSchema(contextRef) {
     return {
-      title: 'The RUDI media DB event Schema',
-      description: 'The descriptor of an event associated to a RUDI media DB access.',
+      title: 'The RUDI Storage DB event Schema',
+      description: 'The descriptor of an event associated to a RUDI Storage DB access.',
       type: 'object',
       properties: {
         operation: {

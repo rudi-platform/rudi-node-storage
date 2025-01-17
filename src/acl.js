@@ -137,10 +137,7 @@ export class User {
     return group
   }
 
-  accessMask(acl, group) {
-    const access = acl.access(this, group)
-    return access
-  }
+  accessMask = (acl, group) => acl.access(this, group)
 
   hasDelegation() {
     for (const group of this.groups) if (group.name == 'delegate' || group.name == 'admin') return true

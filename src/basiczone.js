@@ -58,8 +58,10 @@ class ZoneContext {
     this.auth.userId = uuid
     this.auth.access = access
     const [message] = this.acldb.errDesc(accError)
-    const sev = accError ? Severity.Warning : Severity.Informational
-    this.acldb.log(sev, '[' + this.auth.userName + ']:' + this.opType + ': ' + message, this.errContext(0))
+    if (accError) {
+      const sev = accError ? Severity.Warning : Severity.Informational
+      this.acldb.log(sev, '[' + this.auth.userName + ']:' + this.opType + ': ' + message, this.errContext(0))
+    }
   }
 
   toJSON = () => ({
@@ -400,7 +402,7 @@ export class BasicZone {
       if (!line || line == '') continue
       const entry = this.newBasicEntryFromCsv(line, aclStatus)
       if (entrycb) entrycb(aclStatus, this, entry)
-      this.syslog.debug(`new entry: ${jsonToStr(entry)}`)
+      // this.syslog.debug(`new entry: ${jsonToStr(entry)}`)
     }
     this.syslog.debug(`CSV loaded: ${path}`)
   }

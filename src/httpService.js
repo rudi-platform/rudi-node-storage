@@ -188,7 +188,7 @@ export class HttpService {
 
     // Launching message
     this.syslog.info(
-      `RUDI Media server listening on ${this.netInterface}${this.port ? ':' + this.port : ''}${this.httpPrefix}`
+      `RUDI Storage server listening on ${this.netInterface}${this.port ? ':' + this.port : ''}${this.httpPrefix}`
     )
   }
 
@@ -199,8 +199,8 @@ export class HttpService {
    */
   static contextSchema() {
     return {
-      title: 'The RUDI media DB context Schema',
-      description: 'The descriptor of context associated to a RUDI media DB access.',
+      title: 'The RUDI Storage DB context Schema',
+      description: 'The descriptor of context associated to a RUDI Storage DB access.',
       type: 'object',
       properties: {
         source: {
@@ -236,7 +236,7 @@ export class HttpService {
    */
   static metaSchema() {
     return {
-      title: 'The RUDI media DB metadata Schema',
+      title: 'The RUDI Storage DB metadata Schema',
       description: 'The descriptor shall use the RUDI standard scheme.',
       type: 'object',
       properties: {
@@ -336,7 +336,7 @@ export class HttpService {
     if (!this.ac.checkSystemAccessStatus(aclStatus, '---')) return
     if (req?.headers?.file_metadata) return this.media(req, res)
 
-    return this.sendAndClose(res, 400, { status: 'error', msg: `Rudi media access driver, access restricted` })
+    return this.sendAndClose(res, 400, { status: 'error', msg: `RUDI Storage access driver, access restricted` })
   }
 
   /**

@@ -73,7 +73,7 @@ export const DEFAULT_CONF = {
   },
   log_local: {
     directory: './_logs/',
-    prefix: 'RudiMedia-',
+    prefix: 'RudiStorage-',
     console: true,
     consoleData: false,
     logRotationSec: 8 * 60 * 60, // 8 hours.

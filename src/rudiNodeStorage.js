@@ -1,5 +1,5 @@
 /**
- * RUDI media access driver for media data.
+ * RUDI Storage access driver for media data.
  *
  * @author: Laurent Morin
  * @version: 1.0.0

@@ -86,8 +86,8 @@ export class BasicFileEntry {
    */
   static fileSchema(contextRef, metaRef) {
     return {
-      title: 'The RUDI media DB file Schema',
-      description: 'The descriptor of a file associated to a RUDI media.',
+      title: 'The RUDI Storage DB file Schema',
+      description: 'The descriptor of a file associated to a RUDI Storage.',
       type: 'object',
       properties: {
         uuid: {
