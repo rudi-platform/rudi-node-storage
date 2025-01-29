@@ -21,7 +21,11 @@ import { SchemaSet } from './schema.js'
 import { jsonToStr, pathJoin } from './utils.js'
 
 const MAX_FILE_SIZE = 500e6
-
+const ERRORS = {
+  400: 'Bad Request',
+  401: 'Forbidden',
+  404: 'Not Found',
+}
 /**
  * The code express based HTTP server.
  * The web server creates the media db, and serves:
@@ -110,30 +114,26 @@ export class HttpService {
     // console.error(now, `[Express default error handler]`, err)
     this.syslog.error(`An error happened on ${req.method} ${req.url}: ${err}`)
     console.error('[Local dump]', err)
-
-    return (
-      res.headersSent ||
-      res.status(500).json({
+    if (!res.headersSent)
+      return res.status(500).json({
         error: `An error was thrown, please contact the Admin with the information bellow`,
         message: err.message,
         time: now.getTime(),
       })
-    )
   }
 
   _logRequests(req, reply, next) {
     this.syslog.info(`Request <= ${req.method} ${req.url}`)
-    next()
 
     reply.on('finish', () => {
       if (reply.statusCode < 400) {
         this.syslog.info(`=> OK ${reply.statusCode}: ${req.method} ${req.originalUrl}`)
         // console.debug(res)
       } else {
-        // console.error(res)
         this.syslog.warn(`ERR ${reply.statusCode} ${reply.statusMessage} > ${req.method} ${req.originalUrl}`)
       }
     })
+    next()
   }
 
   _logRouterRequests(req, reply, next) {
@@ -179,8 +179,11 @@ export class HttpService {
     router.options('/:uuid', (req, res) => this.optionCors(req, res))
 
     this.storageApp.use((req, res, next) => this._logRequests(req, res, next))
+    this.storageApp.use(express.json())
+
     this.storageApp.use(this.httpPrefix, router)
     this.storageApp.use('/media', router) // Legacy
+
     this.httpServer = this.storageApp.listen(this.port, this.netInterface)
 
     // This line should stay at the end: it handles the uncaught errors
@@ -392,7 +395,16 @@ export class HttpService {
    */
   sendAndClose(res, code, msg) {
     res.header('Access-Control-Allow-Origin', '*')
+    if (code >= 400) {
+      res.statusMessage = ERRORS[code] ?? ''
+      if (msg?.msg) res.statusMessage += `: ${msg.msg}`
+      res.message = res.statusMessage
+    }
+    this.syslog.debug(
+      `sending reply: headersSent=${res.headersSent} / code=${code} / msg=${jsonToStr(msg)} / statusMessage=${res.statusMessage}`
+    )
     res.status(code).json(msg)
+    this.syslog.debug(`reply sent: headersSent=${res.headersSent}`)
   }
 
   sendOK = (res) => this.sendAndClose(res, 200, { status: 'OK' })
@@ -424,31 +436,27 @@ export class HttpService {
         status: 'error',
         msg: 'application/json Content-Type expected',
       })
-
+    this.syslog.debug(`[forgeUserToken] ${jsonToStr(req.body)}`)
     // Get the config
-    const body = []
-    req.on('data', (chunk) => body.push(chunk))
-    req.on('end', () => {
-      let userDesc = Buffer.concat(body).toString()
-      try {
-        userDesc = JSON.parse(userDesc)
-      } catch {
-        return this.sendAndClose(res, 400, { status: 'error', msg: 'malformed application/json' })
-      }
-      if (!userDesc) return this.sendAndClose(res, 400, { status: 'error', msg: 'malformed application/json' })
-      if (!userDesc.user_id && userDesc.user_id !== 0)
-        return this.sendAndClose(res, 400, { status: 'error', msg: 'missing user_id' })
-      if (!userDesc.user_name) return this.sendAndClose(res, 400, { status: 'error', msg: 'missing user_name' })
-      if (!userDesc.group_name) userDesc.group_name = null
+    let userDesc
+    try {
+      userDesc = req.body
+    } catch {
+      return this.sendAndClose(res, 400, { status: 'error', msg: 'malformed application/json' })
+    }
+    if (!userDesc) return this.sendAndClose(res, 400, { status: 'error', msg: 'malformed application/json' })
+    if (!userDesc.user_id && userDesc.user_id !== 0)
+      return this.sendAndClose(res, 400, { status: 'error', msg: 'missing user_id' })
+    if (!userDesc.user_name) return this.sendAndClose(res, 400, { status: 'error', msg: 'missing user_name' })
+    if (!userDesc.group_name) userDesc.group_name = null
 
-      const jwt = this.ac.forgeJwt(aclStatus, userDesc.user_id, userDesc.user_name, userDesc.group_name)
-      if (!jwt) return
-      else {
-        this.syslog.info(`forged token for ${userDesc.user_name}:${userDesc.group_name || '-'}`, 'core')
-        res.setHeader('cookie', 'rudi.media.auth=' + jwt)
-        res.status(200).json({ status: 'OK', token: jwt })
-      }
-    })
+    const jwt = this.ac.forgeJwt(aclStatus, userDesc.user_id, userDesc.user_name, userDesc.group_name)
+    if (!jwt) return
+    else {
+      this.syslog.info(`forged token for ${userDesc.user_name}:${userDesc.group_name || '-'}`, 'core')
+      res.setHeader('cookie', 'rudi.media.auth=' + jwt)
+      res.status(200).json({ status: 'OK', token: jwt })
+    }
   }
 
   /**
@@ -479,15 +487,11 @@ export class HttpService {
 
     // Bufferize file data
     const chunkSize = 65536 * 4
-    const contentLength = req.headers['Content-Length'] || req.headers['content-length']
+    const contentLength = req.headers['Content-Length'] ?? req.headers['content-length']
     const fileSize = metadata.file_size || parseInt(contentLength) || chunkSize
-    // TODO: shouldAppend -> check actual file size + size of the new file bit
     if (fileSize > MAX_FILE_SIZE) {
       this.syslog.error(`file too large, use a different upload method: ${jsonToStr(metadata)}`)
-      return this.sendAndClose(res, 400, {
-        status: 'error',
-        msg: 'file too large, use a different upload method',
-      })
+      return this.sendAndClose(res, 400, { status: 'error', msg: 'file too large, use a different upload method' })
     }
 
     res.header('Access-Control-Allow-Origin', '*')
@@ -495,7 +499,7 @@ export class HttpService {
     res.write('[ ')
 
     // Bufferize file data
-    const dwnld = new DownloadService(chunkSize, fileSize)
+    const dwnld = new DownloadService(chunkSize, fileSize, this.syslog)
     res.write('{ "status": "download" }, ')
     const update = (size) => res.write(`{"status":"upload_status", "size":${size}}, `)
     req.on('readable', () => dwnld.read(req, update))
@@ -503,7 +507,7 @@ export class HttpService {
     // Build the entry, Close the request
     req.on('end', () => {
       const data = dwnld.finish()
-      this.syslog.debug(`content: ${data.length}`, 'core')
+      this.syslog.debug(`[postFile.end] content.length: ${data.length}`, 'core')
       const mediaAccessMethod = req?.headers?.['media-access-method']
       this.db.addEntry(
         metadata,
@@ -531,7 +535,7 @@ export class HttpService {
       zoneName,
       commitUuid,
       aclStatus,
-      (err, code) => this.sendAndClose(res, code || 400, { status: 'error', msg: `${err}` }),
+      (err, code) => this.sendAndClose(res, code ?? 400, { status: 'error', msg: `${err}` }),
       () => this.sendOK(res)
     )
 
@@ -561,43 +565,36 @@ export class HttpService {
    * @param {object} req - the HTTP request
    * @param {object} res - the HTTP response.
    */
-  commitMedia = async (req, res) => {
+  commitMedia(req, res) {
     this.syslog.debug('[commitMedia]' + req.originalUrl, 'http')
     const aclStatus = this.ac.getAccessStatus(req, res, 'API')
     if (!this.ac.checkSystemAccessStatus(aclStatus, '--x')) return
 
     let commitUuid = '-'
     let zoneName = '-'
-
     if (req.query?.zone_name && req.query.commit_uuid) {
+      // this.syslog.debug('[commitMedia] query: ' + jsonToStr(req.query))
       zoneName = req.query.zone_name
       commitUuid = req.query.commit_uuid
       return this.processCommit(res, zoneName, commitUuid, aclStatus)
     }
 
     if (req.headers?.media_commit) {
+      // this.syslog.debug('[commitMedia] media_commit: ' + jsonToStr(req.headers?.media_commit))
       const metadata = req.headers.media_commit
       return this.processJsonAndCommit(res, metadata, aclStatus)
     }
 
-    let metadata = req.body
-    // Bufferize file data
-    const contentLength = req.headers['Content-Length'] || req.headers['content-length']
-    const size = parseInt(contentLength) || 4096
-    const dwnld = new DownloadService(4096, size)
-    req.on('readable', () => dwnld.read(req))
-    // Build the entry, Close the request
-    req.on('end', () => {
-      metadata = dwnld.finish().toString('utf-8')
-      this.processJsonAndCommit(res, metadata, aclStatus)
-    })
+    const commitInfo = jsonToStr(req.body)
+    this.syslog.debug('[commitMedia] commitInfo: ' + commitInfo)
+    return this.processJsonAndCommit(res, commitInfo, aclStatus)
   }
 
   processDelete = (res, uuid, aclStatus) =>
     this.db.mdelete(
       uuid,
       aclStatus,
-      (err, code) => this.sendAndClose(res, code || 400, { status: 'error', msg: `${err}` }),
+      (err, code) => this.sendAndClose(res, code ?? 400, { status: 'error', msg: `${err}` }),
       () => {
         this.syslog.notice(`[deleteMedia] ${uuid}`, 'API')
         this.sendOK(res)
@@ -639,7 +636,7 @@ export class HttpService {
         // Bufferize file data
         const contentLength = req.headers['Content-Length'] || req.headers['content-length']
         const size = parseInt(contentLength) || 4096
-        const dwnld = new DownloadService(4096, size)
+        const dwnld = new DownloadService(4096, size, this.syslog)
         req.on('readable', () => dwnld.read(req))
         // Build the entry, Close the request
         req.on('end', () => {
@@ -784,12 +781,12 @@ export class HttpService {
       gzip(data, (err, buffer) => {
         if (err) {
           res.type('application/octet-stream')
-          res.setHeader('Content-Length', content.byteLength)
+          res.setHeader('Content-Length', content.byteLength ?? size)
           res.setHeader('Content-Digest', md5)
           res.write(content)
         } else {
           res.setHeader('Content-Disposition', `attachment; filename="${name}.gz"`)
-          res.setHeader('Content-Length', buffer.byteLength)
+          res.setHeader('Content-Length', buffer.byteLength ?? size)
           res.type('application/gzip')
           res.write(buffer)
         }

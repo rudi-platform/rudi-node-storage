@@ -280,7 +280,6 @@ export class BasicFileDB {
    * @param {buffer}    filecontent   - The raw file content
    * @param {function=} none          - An optional callback with the error if meta-data are malformed
    * @param {function=} done          - An optional callback with the entry when done.
-   * @param {Boolean}   shouldAppend  - true if the file content should be appened to the existing file
    */
   addEntry(metadata, aclStatus, filecontent, mediaAccessMethod, none, done) {
     if (!metadata) {
@@ -337,8 +336,9 @@ export class BasicFileDB {
 
     zone.newBasicEntryFromMetadata(metadata, filecontent, aclStatus, mediaAccessMethod, errFct, addStepEntry, addDone)
   }
+
   commit(zoneName, commitId, aclStatus, none, done) {
-    // const here = `${this.className}.commit`
+    const here = `${this.className}.commit`
 
     if (Object.keys(this.zone_db).length <= 0) {
       this.errorCtx('DB not ready for committing', 'commit_media', zoneName, aclStatus)
@@ -370,6 +370,7 @@ export class BasicFileDB {
       commitDone
     )
   }
+
   mdelete(uuid, aclStatus, none, done) {
     if (!this.db?.[uuid]) {
       const errstr = `media ${uuid} not found`
@@ -385,7 +386,7 @@ export class BasicFileDB {
       this.logEntry(zone, 'delete_media', aclStatus, entry, none, done)
     }
 
-    zone.deleteEntry(
+    return zone.deleteEntry(
       aclStatus,
       uuid,
       (err, code) => {

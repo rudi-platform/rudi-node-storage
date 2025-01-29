@@ -106,7 +106,7 @@ export class BasicZone {
     this.syslog = logger
   }
 
-  async init(entrycb) {
+  init(entrycb) {
     try {
       mkdirSync(this.dirname, { recursive: true })
     } catch {
@@ -211,14 +211,12 @@ export class BasicZone {
     const ctx = new ZoneContext(this.acldb, aclStatus.user, 'zone_commit')
     aclStatus.setContext(ctx)
     aclStatus.setAcl(this.zoneAcl)
-    if (aclStatus.refused('--x')) {
-      none('Access denied', 401)
-      return
-    }
+    if (aclStatus.refused('--x')) return none('Access denied', 401)
 
-    if (!this.staging_db?.[suid])
-      none(`could not commit file: ${this.staging_trash?.[suid] ? 'time exceeded' : 'entry not found'}.`, 400)
-    else {
+    if (!this.staging_db?.[suid]) {
+      if (this.staging_trash?.[suid]) return none('could not commit file: time exceeded', 400)
+      return none('could not commit file: entry not found', 404)
+    } else {
       const stg = this.staging_db[suid]
       delete this.staging_db[suid]
       this.db[suid] = stg.entry
@@ -232,12 +230,11 @@ export class BasicZone {
     aclStatus.setContext(ctx)
     aclStatus.setAcl(this.zoneAcl)
     if (aclStatus.refused('-wx')) {
-      none('Access denied', 401)
-      return
+      return none('Access denied', 401)
     }
 
     if (!this.db?.[uuid]) {
-      none('could not delete file: entry not found.', 404)
+      return none('could not delete file: entry not found.', 404)
     } else {
       const entry = this.db[uuid]
       delete this.db[uuid]
@@ -378,7 +375,7 @@ export class BasicZone {
    * @param {function=} none    - An optional callback with the error if no CSV was found.
    * @param {function=} done    - An optional callback with the DB when done.
    */
-  async loadCSV(entrycb) {
+  loadCSV(entrycb) {
     const path = this.getPathFromConnector(this)
     const aclStatus = this.acldb.newUserAclStatus(this.user)
     aclStatus.setContext(new ZoneContext(this.acldb, this.user, 'csv_import'))

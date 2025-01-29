@@ -322,7 +322,7 @@ export class AclDB {
       for (const ui in au) this.newUser(ui, au[ui])
 
       // Object.entries(cfg.system_groups).forEach((group) => this.newGroup(group[0], group[1]))
-      // Object.entries(cfg.system_users).forEach((user) => this.newUser(user[0], user[1]))
+      // Object.entries(this.systemUsers).forEach((user) => this.syslog.debug(jsonToStr(user)))
     } catch (err) {
       const errStr = `Could not initialize ACL DB: ${err}`
       this.error(errStr)
