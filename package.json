@@ -1,6 +1,6 @@
 {
   "name": "rudi-node-storage",
-  "version": "2.5.0",
+  "version": "2.6.0",
   "description": "",
   "main": "run-rudinode-storage.js",
   "type": "module",
