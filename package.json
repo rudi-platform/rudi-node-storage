@@ -5,26 +5,29 @@
   "main": "run-rudinode-storage.js",
   "type": "module",
   "dependencies": {
-    "@aqmo.org/jwt-lib": "^1.1.14",
+    "@aqmo.org/jwt-lib": "^1.1.15",
     "@aqmo.org/rudi_logger": "^1.1.6",
     "express": "^4.22.1",
-    "ini": "^5.0.0",
-    "magic-bytes.js": "^1.12.1",
+    "ini": "^6.0.0",
+    "ip-address": "^10.2.0",
+    "magic-bytes.js": "^1.13.0",
     "md5": "^2.3.0",
     "minimist": "^1.2.8",
     "mongodb": "6.9.0",
-    "uuid": "^11.1.0"
+    "path-to-regexp": "^8.4.2",
+    "qs": "^6.15.1",
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.28.6",
+    "@babel/core": "^7.29.0",
     "@babel/eslint-parser": "^7.28.6",
-    "@babel/preset-env": "^7.28.6",
-    "eslint": "^9.39.2",
+    "@babel/preset-env": "^7.29.3",
+    "eslint": "^9.39.4",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
-    "eslint-plugin-unused-imports": "^4.3.0",
-    "nodemon": "^3.1.11",
-    "prettier": "^3.8.0"
+    "eslint-plugin-unused-imports": "^4.4.1",
+    "nodemon": "^3.1.14",
+    "prettier": "^3.8.3"
   },
   "couldHaveDependencies": {
     "unix-dgram": "^2.0.4"
