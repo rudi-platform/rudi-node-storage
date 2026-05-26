@@ -8,7 +8,7 @@
     "@aqmo.org/jwt-lib": "^1.1.15",
     "@aqmo.org/rudi_logger": "^1.1.6",
     "express": "^4.22.2",
-    "ini": "^6.0.0",
+    "ini": "^7.0.0",
     "ip-address": "^10.2.0",
     "magic-bytes.js": "^1.13.0",
     "md5": "^2.3.0",
