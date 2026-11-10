@@ -27,24 +27,26 @@
     "mongodb": "6.9.0",
     "path-to-regexp": "^8.4.2",
     "proxy-addr": "^2.0.8",
-    "qs": "^6.16.1",
+    "qs": "^6.17.1",
     "uuid": "^14.0.3"
   },
   "devDependencies": {
-    "@babel/core": "^8.0.7",
+    "@babel/core": "^8.1.0",
     "@babel/eslint-parser": "^8.0.7",
     "@babel/preset-env": "^8.0.7",
     "chokidar": "^5.0.0",
-    "eslint": "^10.13.0",
+    "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.7",
     "eslint-plugin-unused-imports": "^4.4.1",
-    "globals": "^17.13.0",
+    "globals": "^17.14.0",
+    "minimatch": "^11.0.5",
     "nodemon": "^3.1.14",
     "prettier": "^3.9.10"
   },
   "overrides": {
-    "chokidar": "$chokidar"
+    "chokidar": "$chokidar",
+    "minimatch": "$minimatch"
   },
   "couldHaveDependencies": {
     "unix-dgram": "^2.0.4"
